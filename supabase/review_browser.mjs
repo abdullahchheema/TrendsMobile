@@ -186,6 +186,28 @@ try{
   fs.writeFileSync(path.join(output,'report-checks.json'),JSON.stringify(reportChecks,null,2));
   if(!reportChecks.passed)process.exitCode=1;
  }
+ let customerEntryChecks={};
+ if(phase==='after'){
+  await cdp('Emulation.setDeviceMetricsOverride',{width:1365,height:1000,deviceScaleFactor:1,mobile:false});
+  await navigate(base+'/desk/point-of-sale');
+  customerEntryChecks.pos=await evaluate("(()=>{const field=document.querySelector('[name=customer_name]');if(!field)return false;field.value='QA New Customer Without Selecting';const typed=field.type==='text'&&field.required&&field.maxLength===180&&field.checkValidity()&&!document.querySelector('select[name=customer]');field.value='';const blankBlocked=!field.checkValidity();field.value='محمد علی';return typed&&blankBlocked&&field.checkValidity()&&Boolean(document.getElementById(field.getAttribute('list')));})()");
+  const checked=[];
+  for(const kind of ['Sales Invoice','Payment Entry','Mobile Exchange','Warranty Claim','Mobile Intake']){
+   await navigate(base+'/documents/'+encodeURIComponent(kind)+'/new/');
+   const fieldName=kind==='Mobile Intake'?'trade_in_customer_name':'customer_name';
+   const result=await evaluate("(()=>{const field=document.querySelector('[name="+fieldName+"]');if(!field)return false;field.value='QA New Customer Without Selecting';return field.type==='text'&&field.maxLength===180&&field.checkValidity()&&Boolean(document.getElementById(field.getAttribute('list')))&&!document.querySelector('select[name=customer],select[name=trade_in_customer]');})()");
+   checked.push({kind,passed:result});
+   if(kind==='Sales Invoice'){
+    const height=await evaluate('Math.min(document.documentElement.scrollHeight,10000)');
+    const screenshot=await cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:1365,height,scale:1}});
+    fs.writeFileSync(path.join(output,'typed-customer-sales-form.png'),Buffer.from(screenshot.data,'base64'));
+   }
+  }
+  customerEntryChecks.forms=checked;
+  customerEntryChecks.passed=customerEntryChecks.pos&&checked.every(check=>check.passed);
+  fs.writeFileSync(path.join(output,'customer-entry-checks.json'),JSON.stringify(customerEntryChecks,null,2));
+  if(!customerEntryChecks.passed)process.exitCode=1;
+ }
  let deviceChecks=null;
  if(process.argv.includes('--device-tests')){
   const waitFor=async expression=>{for(let i=0;i<100;i++){if(await evaluate(expression))return true;await pause(100);}return false;};
@@ -216,7 +238,7 @@ try{
   await cdp('Emulation.setEmulatedMedia',{media:''});await cdp('Emulation.setDeviceMetricsOverride',{width:1365,height:1000,deviceScaleFactor:1,mobile:false});
   const injection=await cdp('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{const observer=new MutationObserver(()=>{const root=document.getElementById('pos');if(root){root.dataset.shiftOpen='true';observer.disconnect();}});observer.observe(document,{childList:true,subtree:true});})();`});
   await navigate(base+'/desk/point-of-sale');await waitFor(`window.covisonConnection?.reachable===true`);
-  const prepare=()=>evaluate(`(()=>{const items=JSON.parse(document.getElementById('pos-data').textContent);const phone=items.find(p=>p.serialized);const field=document.getElementById('pos-search');field.value=phone.barcode.split(' ')[0];field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));const form=document.getElementById('pos-cart');for(const name of ['customer','seller','handler']){const select=form.querySelector('[name='+name+']');select.value=Array.from(select.options).find(o=>o.value)?.value||'';}form.elements.discount_value.value='1.25';form.elements.discount_value.dispatchEvent(new Event('change'));return document.querySelectorAll('.cart-row').length===1;})()`);
+  const prepare=()=>evaluate(`(()=>{const items=JSON.parse(document.getElementById('pos-data').textContent);const phone=items.find(p=>p.serialized);const field=document.getElementById('pos-search');field.value=phone.barcode.split(' ')[0];field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));const form=document.getElementById('pos-cart');form.elements.customer_name.value='QA Typed Customer';for(const name of ['seller','handler']){const select=form.querySelector('[name='+name+']');select.value=Array.from(select.options).find(o=>o.value)?.value||'';}form.elements.discount_value.value='1.25';form.elements.discount_value.dispatchEvent(new Event('change'));return document.querySelectorAll('.cart-row').length===1;})()`);
   const exactScan=await prepare();
   await evaluate(`(()=>{const items=JSON.parse(document.getElementById('pos-data').textContent);const field=document.getElementById('pos-search');field.value=items.find(p=>p.serialized).barcode.split(' ')[0];field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));})()`);
   const duplicateScan=await evaluate(`document.querySelectorAll('.cart-row').length===1&&document.querySelector('.cart-row input').value==='1'`);
@@ -248,14 +270,14 @@ try{
   deviceChecks={server_probe:serverProbe,scanner_input:scanTest,printer_layouts:paperChecks,exact_pos_scan:exactScan,serialized_duplicate_scan_blocked:duplicateScan,online_submit_available:onlineInitially,disconnected_submit_blocked:offlineBlocked&&noOfflinePost,uncertain_result_shown:uncertainResult,pending_editor_frozen:frozenEditor,retry_recovered:retryRecovered,retry_payload_identical:mockPosts.length>=2&&mockPosts[0]===mockPosts[1],validation_allows_edit:validationShown&&safeUnlock,mocked_pos_requests:mockPosts.length,real_pos_requests:0,wan_block_rule_verified:wanBlocked&&externalRequests.includes('192.0.2.1'),wan_requests_blocked:externalRequests,physical_hardware_tested:false};
   deviceChecks.passed=serverProbe&&scanTest&&paperChecks.every(p=>p.passed)&&exactScan&&duplicateScan&&onlineInitially&&offlineBlocked&&noOfflinePost&&uncertainResult&&frozenEditor&&retryRecovered&&mockPosts[0]===mockPosts[1]&&validationShown&&safeUnlock&&mockPosts.length===3&&deviceChecks.wan_block_rule_verified;
   const captured=JSON.parse(mockPosts[0]||'{}');const cashRetry=captured.payments?.[0]?.cash_tendered==='5000.50';const pricingRetry=captured.adjustments?.discount_type==='amount'&&captured.adjustments?.discount_value==='1.25'&&captured.adjustments?.tax_rule==='';
-  Object.assign(deviceChecks,{cash_change_preview:cashPreview.correct,exact_paisa_arithmetic:cashPreview.decimalExact,split_row_cleared:cashPreview.cleared,bank_cash_hidden_disabled:cashPreview.bankDisabled&&cashPreview.bankHidden,bank_cash_disabled_after_validation:bankStillDisabled,cash_payload_retained:cashRetry,invoice_adjustments_retained:pricingRetry,cash_mobile_no_page_overflow:cashMobile});
-  deviceChecks.passed=deviceChecks.passed&&cashPreview.correct&&cashPreview.decimalExact&&cashPreview.cleared&&cashPreview.bankDisabled&&cashPreview.bankHidden&&bankStillDisabled&&cashRetry&&cashMobile&&pricingRetry;
+  Object.assign(deviceChecks,{cash_change_preview:cashPreview.correct,exact_paisa_arithmetic:cashPreview.decimalExact,split_row_cleared:cashPreview.cleared,bank_cash_hidden_disabled:cashPreview.bankDisabled&&cashPreview.bankHidden,bank_cash_disabled_after_validation:bankStillDisabled,cash_payload_retained:cashRetry,typed_customer_retained:captured.customer_name==='QA Typed Customer'&&!('customer' in captured),invoice_adjustments_retained:pricingRetry,cash_mobile_no_page_overflow:cashMobile});
+  deviceChecks.passed=deviceChecks.passed&&cashPreview.correct&&cashPreview.decimalExact&&cashPreview.cleared&&cashPreview.bankDisabled&&cashPreview.bankHidden&&bankStillDisabled&&cashRetry&&cashMobile&&pricingRetry&&deviceChecks.typed_customer_retained;
   fs.writeFileSync(path.join(output,'device-checks.json'),JSON.stringify(deviceChecks,null,2));if(!deviceChecks.passed)process.exitCode=1;
  }
  await navigate(base+'/desk/mobile-shop');
  await evaluate(`(()=>{document.querySelector('form[action="/logout/"]').requestSubmit();return true;})()`);
  for(let i=0;i<100;i++){if(await evaluate('location.pathname')==='/login/'){signedIn=false;break;}await pause(100);}
- result={phase,headless_browser:true,existing_browser_profile_used:false,business_transactions_changed:false,report_checks:reportChecks,device_checks:deviceChecks,return_form_checks:returnFormChecks,fund_form_checks:fundFormChecks,journal_form_checks:journalFormChecks,screens,exceptions,report_filter_refresh_retained:filterRetained,pos_cart_interaction:posCartInteraction,pos_cart_details:posCartDetails,mobile_menu_interaction:mobileMenuInteraction,owner_session_signed_out:!signedIn};
+ result={phase,headless_browser:true,existing_browser_profile_used:false,business_transactions_changed:false,customer_entry_checks:customerEntryChecks,report_checks:reportChecks,device_checks:deviceChecks,return_form_checks:returnFormChecks,fund_form_checks:fundFormChecks,journal_form_checks:journalFormChecks,screens,exceptions,report_filter_refresh_retained:filterRetained,pos_cart_interaction:posCartInteraction,pos_cart_details:posCartDetails,mobile_menu_interaction:mobileMenuInteraction,owner_session_signed_out:!signedIn};
  fs.writeFileSync(path.join(output,process.argv.includes('--interactions-only')?'interactions.json':'review.json'),JSON.stringify(result,null,2));
  if(phase==='after'&&(!filterRetained||!posCartInteraction||!mobileMenuInteraction||exceptions.length||screens.some(s=>s.pageOverflow||s.mobile?.pageOverflow||s.errorPage)))process.exitCode=1;
  console.log(JSON.stringify({phase,screens:screens.length,desktop_overflow:screens.filter(s=>s.pageOverflow).map(s=>s.path),mobile_overflow:screens.filter(s=>s.mobile?.pageOverflow).map(s=>s.path),page_errors:screens.filter(s=>s.errorPage).map(s=>s.path),javascript_exceptions:exceptions,report_filter_refresh_retained:filterRetained,pos_cart_interaction:posCartInteraction,pos_cart_details:posCartDetails,mobile_menu_interaction:mobileMenuInteraction,owner_session_signed_out:!signedIn},null,2));

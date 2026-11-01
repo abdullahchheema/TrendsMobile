@@ -33,6 +33,8 @@ results={}
 for path in paths:
     page=client.open(base+path)
     assert page.status==200,path
+    if path=='/desk/point-of-sale':
+        content=page.read().decode();assert 'name="customer_name"' in content and '<select name="customer"' not in content,'POS customer typing control is missing.'
     results[path]=page.status
 for path in re.findall(r'(?:src|href)="(/static/[^"]+)"',html):
     assert client.open(base+path).status==200;results[path]=200

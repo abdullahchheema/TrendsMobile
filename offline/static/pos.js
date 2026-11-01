@@ -67,7 +67,7 @@
    try{totals();}catch(problem){error.textContent=problem.message;return;}
    const values=new FormData(form);
    let payments;try{payments=window.covisonPayments.read(form);}catch(problem){error.textContent=problem.message;return;}
-   pending={request_key:root.dataset.requestKey,branch:root.dataset.branch,customer:values.get('customer'),seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate})=>({product,device,warehouse,quantity,rate})),adjustments:adjustments(),payments};
+   pending={request_key:root.dataset.requestKey,branch:root.dataset.branch,customer_name:values.get('customer_name'),seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate})=>({product,device,warehouse,quantity,rate})),adjustments:adjustments(),payments};
   }
   sending=true;error.textContent='';lockEditor();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);

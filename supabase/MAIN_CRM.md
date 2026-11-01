@@ -20,6 +20,10 @@ python3 supabase/control.py ps
 
 The protected server environment records `COVISON_MAIN_CRM_ENABLED=1` and a pinned `COVISON_MAIN_APP_IMAGE` after promotion. `control.py` then includes `compose.main.yaml`, exposing loopback and the configured private IPv4 address at port 8080 while retaining the 8081 alias. A generic Frappe startup command is not the selected startup path.
 
+## Customer entry
+
+Customer fields accept typed names with optional suggestions. New names are saved with the draft or POS transaction; existing names reuse their accounts. See [Customer entry guide](../offline/CUSTOMER_ENTRY_GUIDE.md).
+
 ## Reports
 
 Open **All reports** in the sidebar or <http://localhost:8080/reports/>. The catalogue includes the 13 original mobile-shop reports, Stock Ledger and three financial statements. Original shop-facing labels and staff shortcuts are restored. Filters, date presets, row search, sorting, scoped source links, totals, CSV export and Print / Save PDF are described in [REPORTS.md](REPORTS.md).

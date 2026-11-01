@@ -23,7 +23,7 @@ from .report_filters import ReportFilters,defaults as report_defaults
 from . import report_catalog,report_presentation
 from . import setup as shop_setup
 from . import fund_transfers as funds
-from . import journals
+from . import journals,customer_names
 from .fund_transfer_forms import FundTransferForm
 from .journal_forms import JournalForm,JournalRows
 from .setup_forms import CreateShopForm,PostingAccountsForm,PaymentMethods,payment_mapping,StaffSetupForm,AccountSetupForm
@@ -242,8 +242,10 @@ def create_document(request,kind,pk=None):
                     list(Branch.objects.select_for_update(no_key=True).filter(pk__in=places).order_by('pk'))
                     current=Document.objects.select_for_update(no_key=True).get(pk=pk)
                     if current.status!='Draft' or current.branch_id!=original_branch_id:raise ValidationError('This draft was posted or changed while editing. Reload it before saving.')
+                else:Branch.objects.select_for_update(no_key=True).get(pk=form.cleaned_data['branch'].pk)
                 draft=form.save(commit=False);draft.kind=kind;services.authorize(request.user,draft)
                 if not draft.code:draft.code=services.code('COV')
+                form.apply_customers(draft,request.user)
                 form.apply_data(draft)
                 if not access.costs(request.user) and draft.kind in services.BUY:raise PermissionDenied
                 draft.save()
@@ -564,8 +566,9 @@ def pos_checkout(request):
         data=json.loads(request.body);branch=get_object_or_404(access.branches(request.user),pk=data['branch'])
         access.require(request.user,branch,'can_sell')
         def perform():
+            Branch.objects.select_for_update(no_key=True).get(pk=branch.pk)
             if not Document.objects.filter(branch=branch,kind='POS Opening Entry',status='Submitted',state='Open',posted_by=request.user).exists():raise ValidationError('Start your POS shift first.')
-            customer=Party.objects.get(pk=data['customer'],kind='Customer',enabled=True)
+            customer=customer_names.resolve(data['customer_name'],request.user) if 'customer_name' in data else Party.objects.get(pk=data['customer'],kind='Customer',enabled=True)
             seller=Staff.objects.get(pk=data['seller']);handler=Staff.objects.get(pk=data['handler']) if data.get('handler') else None
             doc=services.new_doc('POS Invoice',branch,customer=customer,seller=seller)
             adjustments=data.get('adjustments',{})

@@ -4,6 +4,8 @@ from django.utils import timezone
 from .models import *
 from .access import branches,manager,costs
 from .services import balances,till_balance
+from . import customer_names
+from .customer_widgets import CustomerNameInput
 
 DATE=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'})
 DETAIL_FIELDS=['manufacturer_serial','regional_version','market_description','display_condition','biometrics','camera_test','charging_test',
@@ -24,7 +26,7 @@ def detail_field(key,initial=''):
     return forms.CharField(required=False,initial=initial,widget=forms.Textarea(attrs={'rows':2}) if key in ('repair_history','included_accessories','inspection_notes','pta_notes') else forms.TextInput)
 
 def sections(form):
-    groups=[('Shop, transaction and staff',['branch','posting_date','customer','supplier','warehouse','reference','buyer','seller','handler','till','purchase_source','trade_in_customer','seller_phone']),
+    groups=[('Shop, transaction and staff',['branch','posting_date','customer','customer_name','supplier','warehouse','reference','buyer','seller','handler','till','purchase_source','trade_in_customer','trade_in_customer_name','seller_phone']),
         ('Cash count and settlement',['opening_float','counted_cash','difference_notes','mode','transaction_reference','direction','amount','sales_invoice','purchase_invoice','target_warehouse']),
         ('Invoice discount and sales tax',['invoice_discount_type','invoice_discount_value','sales_tax_rule']),
         ('Device identity and PTA',['device_type','manufacturer_serial','regional_version','market_description','imei_1','pta_status_1','verified_on_1','evidence_1','imei_2','pta_status_2','verified_on_2','evidence_2','pta_notes']),
@@ -177,6 +179,18 @@ class DocumentForm(forms.ModelForm):
             if 'seller' in self.fields:
                 self.fields['seller'].queryset=Staff.objects.filter(pk=self.instance.seller_id);self.fields['seller'].required=False
             if 'customer' in self.fields:self.fields['customer'].queryset=Party.objects.filter(pk=self.instance.customer_id)
+        self.typed_customers={}
+        if not self.instance.is_return:
+            for field in ('customer','trade_in_customer'):
+                if field not in self.fields:continue
+                name_field=field+'_name';self.typed_customers[field]=name_field
+                self.fields[field].widget=forms.HiddenInput()
+                existing=getattr(self.instance,field,None) if field=='customer' else None
+                if field=='trade_in_customer' and self.instance.data.get(field):
+                    existing=Party.objects.filter(pk=self.instance.data[field],kind='Customer').first()
+                self.fields[name_field]=forms.CharField(label='Customer name' if field=='customer' else 'Trade-in customer name',required=False,max_length=180,
+                    initial=existing.name if existing else '',widget=CustomerNameInput(attrs={'autocomplete':'off','placeholder':'Type customer name','required':kind in ('Sales Invoice','POS Invoice') and field=='customer'}),
+                    help_text='Type a new name to add a customer, or an existing name to reuse their account.')
         self.sections=sections(self)
     def clean(self):
         result=super().clean()
@@ -185,17 +199,37 @@ class DocumentForm(forms.ModelForm):
             for name in ('warehouse','buyer','seller','handler','reference'):
                 value=result.get(name)
                 if value and value.branch_id!=branch.pk:self.add_error(name,'Select a record from this transaction’s shop.')
-        if self.kind=='Mobile Intake' and result.get('purchase_source')=='Customer Trade-In' and not result.get('trade_in_customer'):
-            self.add_error('trade_in_customer','Select the customer trading in this phone.')
+        for field,name_field in self.typed_customers.items():
+            name=result.get(name_field,'')
+            if name:
+                try:
+                    result[name_field]=customer_names.clean_name(name)
+                    result[field]=customer_names.find(name,result.get(field))
+                except ValidationError as error:self.add_error(name_field,error)
+            elif name_field in self.data:result[field]=None
+        if self.kind in ('Sales Invoice','POS Invoice') and not self.instance.is_return and not result.get('customer') and not result.get('customer_name'):
+            self.add_error('customer_name','Enter a customer name.')
+        if self.kind=='Payment Entry' and result.get('customer_name') and result.get('supplier'):
+            self.add_error('customer_name','Enter a customer or select a supplier, not both.')
+        if self.kind=='Mobile Intake' and result.get('purchase_source')=='Customer Trade-In' and not (result.get('trade_in_customer') or result.get('trade_in_customer_name')):
+            self.add_error('trade_in_customer_name','Enter the customer trading in this phone.')
         if self.kind=='Stock Entry':
             source=result.get('warehouse');target=result.get('target_warehouse')
             if source and target and source.pk==target.pk:self.add_error('target_warehouse','Select a different destination warehouse.')
             if target and branch and target.branch_id!=branch.pk and not result.get('notes','').strip():self.add_error('notes','Record the reason for this inter-shop transfer.')
         return result
+    def apply_customers(self,doc,user):
+        for field,name_field in self.typed_customers.items():
+            name=self.cleaned_data.get(name_field)
+            if name:
+                customer=customer_names.resolve(name,user,self.cleaned_data.get(field))
+                self.cleaned_data[field]=customer
+                if field=='customer':doc.customer=customer
+
     def apply_data(self,doc):
         values=self.cleaned_data
         extras={name:(str(value.pk) if hasattr(value,'pk') else value.isoformat() if hasattr(value,'isoformat') else str(value) if isinstance(value,Decimal) else value)
-            for name,value in values.items() if name not in self._meta.fields and not name.startswith(('count_','note_'))}
+            for name,value in values.items() if name not in self._meta.fields and name not in self.typed_customers.values() and not name.startswith(('count_','note_'))}
         extras['reference']=extras.pop('transaction_reference','')
         if self.kind=='Mobile Intake':
             doc.data=dict(purchase_source=extras.get('purchase_source'),trade_in_customer=extras.get('trade_in_customer'),
