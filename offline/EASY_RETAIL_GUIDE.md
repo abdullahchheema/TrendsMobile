@@ -23,22 +23,14 @@ Stock, the supplier bill and any payment are saved together. Each phone keeps it
 
 Existing shift and cash-count controls still apply. If an old shift is open, reconcile it before recording payments. New Sale also supports shop-level payments when no shift is open.
 
-## Demo shop
+## Sales & Accounts
 
-Open **Demo shop practice** from the dashboard. It selects a separate training shop with labelled sample records. New training transactions keep the demo label. Existing shops and historical accounts are not overwritten.
+Open **Sales & Accounts** from the dashboard or sidebar. It uses your selected operating shop and its posted records. Choose a shop and date range, then click **Show accounts**.
 
-The starting example contains six purchases, four sales, cash/bank receipts, customer credit, supplier payments and a paid shop expense:
+Sales, costs and net profit use the selected period. Customer and supplier dues are taken from their ledgers through the selected end date. Advances and credits are shown separately, so they are not confused with money still owed. The report links keep the selected shop and dates.
 
-| Figure | PKR |
-| --- | ---: |
-| Purchases of stock | 500,000 |
-| Sales | 295,000 |
-| Cost of sold phones | 245,000 |
-| Shop expense | 10,000 |
-| Net profit | 40,000 |
-| Customers still owe | 110,000 |
-| Still owed to suppliers | 380,000 |
-| Remaining stock value | 255,000 |
-| Cash and bank balance | 55,000 |
+New Sale and Buy Stock are normal operating features: a successful save immediately records stock, invoices, payments and outstanding balances in the main database. They are available for every permitted shop; no separate demo module is required.
 
-The training page links directly to its sales, purchases, customer/supplier balances, Profit & Loss, Balance Sheet and Trial Balance. These figures change when further training entries are posted. Run the seed command again safely: it does not duplicate the starting records.
+Previously generated sample entries keep their source information in record history. Those entries are not verification that a physical purchase, sale or payment actually happened. Actual business activity should be entered using the shop’s real names, prices and payments.
+
+Choosing an existing phone, variant, customer or supplier from initial data does not automatically mark a new operating-shop transaction as demo. Its initial-record provenance is retained under Record history. Explicit sample-shop transactions keep their original labels.

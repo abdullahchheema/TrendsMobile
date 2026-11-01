@@ -6,7 +6,11 @@ export async function checkEasyRetail({cdp,evaluate,navigate,base,output,isolate
  const result={isolated_database_submissions:0};
  const capture=async name=>{const dimensions=await evaluate('({width:innerWidth,height:Math.min(document.documentElement.scrollHeight,10000)})');const shot=await cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,...dimensions,scale:1}});fs.writeFileSync(path.join(output,name),Buffer.from(shot.data,'base64'));};
  await cdp('Emulation.setDeviceMetricsOverride',{width:1365,height:1000,deviceScaleFactor:1,mobile:false});
- await navigate(base+'/training/');
+ await navigate(base+'/sales-accounts/');
+ result.liveWorkspace=await evaluate("document.querySelector('h1').textContent==='Sales & Accounts'&&!document.body.textContent.includes('Demo shop practice')");
+ await capture('sales-and-accounts.png');
+ const sampleShop=await evaluate("Array.from(document.querySelector('[name=branch]').options).find(option=>option.textContent.includes('DEMO Mobile Shop'))?.value");
+ if(sampleShop)await navigate(base+'/sales-accounts/?branch='+encodeURIComponent(sampleShop));
  result.demoReconciles=await evaluate("document.body.textContent.includes('40,000.00')&&document.body.textContent.includes('110,000.00')&&document.body.textContent.includes('380,000.00')");
  const purchaseUrl=await evaluate("document.querySelector('.app-main a[href*=\"/entry/purchase/\"]').getAttribute('href')");
  const saleUrl=await evaluate("document.querySelector('.app-main a[href*=\"/entry/sale/\"]').getAttribute('href')");
@@ -42,7 +46,7 @@ export async function checkEasyRetail({cdp,evaluate,navigate,base,output,isolate
   const receipt=await evaluate("document.querySelector('a[href^=\"/receipt/\"]')?.getAttribute('href')");
   if(receipt){await navigate(base+receipt);result.receiptPtaOnly=await evaluate("document.body.textContent.includes('Non-PTA')&&!/IMEI/i.test(document.body.innerText)");}
  }
- result.passed=result.demoReconciles&&result.purchaseControls&&result.mobilePurchase&&(!isolated||(result.purchaseSaved&&result.saleSaved&&result.saleAutofill&&result.mobileSale&&result.receiptPtaOnly));
+ result.passed=result.liveWorkspace&&result.demoReconciles&&result.purchaseControls&&result.mobilePurchase&&(!isolated||(result.purchaseSaved&&result.saleSaved&&result.saleAutofill&&result.mobileSale&&result.receiptPtaOnly));
  fs.writeFileSync(path.join(output,'easy-retail-checks.json'),JSON.stringify(result,null,2));
  return result;
 }

@@ -45,4 +45,4 @@ The repository also retains [the original upstream Frappe Docker README](docs/FR
 
 Report navigation, dates, financial statements and exports: [Reports guide](supabase/REPORTS.md).
 
-Daily staff guide: [Simple counter entry](offline/EASY_RETAIL_GUIDE.md). Use **Demo shop practice** for labelled sample sales, purchases and profit reports.
+Daily staff guide: [Simple counter entry](offline/EASY_RETAIL_GUIDE.md). Use **Sales & Accounts** for the selected shop’s posted sales, purchases, balances and profit reports.

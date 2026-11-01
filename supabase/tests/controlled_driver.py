@@ -15,7 +15,7 @@ context=json.loads(Path('/tmp/demo-context.json').read_text())
 assert connection.settings_dict['NAME']==context['database'] and context['database'].startswith('covison_demo_')
 run_id=context['run_id'];checks=[];records={};findings=[]
 today=str(timezone.localdate())
-branch=Branch.objects.get(code='PK-001')
+branch=Branch.objects.get(code='PK-001');branch.demo_batch='CONTROLLED-'+run_id;branch.save()
 store=Warehouse.objects.get(code='Stores - TM')
 counter=Warehouse.objects.get(code='Demo Display Counter - TM')
 buyer=Staff.objects.get(name='Usman Khan');seller=Staff.objects.get(name='Ali Hassan');cashier=Staff.objects.get(name='Ayesha Malik')

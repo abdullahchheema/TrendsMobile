@@ -7,7 +7,7 @@ from django.shortcuts import render,redirect,get_object_or_404
 from django.utils import timezone
 from .models import Device,Document,Branch,LedgerEntry
 from . import access,services,easy_retail
-from .easy_forms import EasyEntryForm
+from .easy_forms import EasyEntryForm,SalesAccountsForm
 
 
 class InvalidEntry(Exception):pass
@@ -52,19 +52,38 @@ def done(request,pk):
 
 
 @login_required
-def training(request):
-    from . import financial_reports
-    from .management.commands.seed_easy_demo import BATCH
-    from django.db.models import Sum
+def sales_accounts(request):
+    from datetime import date
+    from . import financial_reports,reports as reporting
+    from .views import selected_branch
     from django.urls import reverse
     from urllib.parse import urlencode
-    branch=get_object_or_404(access.branches(request.user),code='COV-DEMO')
+    branch=selected_branch(request.user,request.GET.get('branch'))
+    if not branch:return redirect('setup')
     if not access.costs(request.user):return redirect('dashboard')
-    docs=Document.objects.filter(branch=branch,status='Submitted');today=timezone.localdate()
-    _,rows=financial_reports.run('Profit and Loss Statement',Branch.objects.filter(pk=branch.pk),today.replace(year=2000,month=1,day=1),today)
+    filters=request.GET.copy();filters.setdefault('branch',str(branch.pk));filters.setdefault('from_date','2000-01-01');filters.setdefault('to_date',str(timezone.localdate()))
+    form=SalesAccountsForm(filters,user=request.user,branch=branch)
+    if not form.is_valid():return render(request,'sales_accounts.html',dict(title='Sales & Accounts',branch=branch,form=form),status=400)
+    values=form.cleaned_data;branch=values['branch']
+    start=values.get('from_date') or date(2000,1,1);end=values.get('to_date') or timezone.localdate()
+    try:_,rows=financial_reports.run('Profit and Loss Statement',Branch.objects.filter(pk=branch.pk),start,end)
+    except ValidationError as error:
+        form.add_error(None,error);return render(request,'sales_accounts.html',dict(title='Sales & Accounts',branch=branch,form=form),status=400)
     summary=dict(financial_reports.summary('Profit and Loss Statement',rows))
+    params={'branch':str(branch.pk),'to_date':str(end)}
+    _,receivables=reporting.run('Accounts Receivable',request.user,params)
+    _,payables=reporting.run('Accounts Payable',request.user,params)
     totals=dict(sales=summary['Income'],expenses=summary['Expenses'],profit=summary['Net profit / loss'],
-        customers=docs.filter(kind__in=['Sales Invoice','POS Invoice']).aggregate(total=Sum('outstanding'))['total'] or 0,
-        suppliers=docs.filter(kind='Purchase Invoice').aggregate(total=Sum('outstanding'))['total'] or 0)
-    reports=[dict(name=name,url=reverse('report',args=[name])+'?'+urlencode({'branch':str(branch.pk),'from_date':'2000-01-01','to_date':str(today)})) for name in ('Sales Register','Purchase Register','Accounts Receivable','Accounts Payable','Profit and Loss Statement','Balance Sheet','Trial Balance')]
-    return render(request,'training.html',dict(title='Demo shop practice',branch=branch,totals=totals,reports=reports))
+        customers=sum((max(row['Outstanding'],0) for row in receivables),services.ZERO),
+        suppliers=sum((max(row['Outstanding'],0) for row in payables),services.ZERO),
+        customer_credit=sum((-min(row['Outstanding'],0) for row in receivables),services.ZERO),
+        supplier_credit=sum((-min(row['Outstanding'],0) for row in payables),services.ZERO))
+    reports=[dict(name=name,url=reverse('report',args=[name])+'?'+urlencode({**params,'from_date':str(start)})) for name in ('Sales Register','Purchase Register','Accounts Receivable','Accounts Payable','Profit and Loss Statement','Balance Sheet','Trial Balance')]
+    return render(request,'sales_accounts.html',dict(title='Sales & Accounts',branch=branch,form=form,totals=totals,reports=reports,from_date=start,to_date=end))
+
+
+@login_required
+def training(request):
+    from django.urls import reverse
+    from urllib.parse import urlencode
+    return redirect(reverse('sales_accounts')+('?' +urlencode(request.GET) if request.GET else ''))

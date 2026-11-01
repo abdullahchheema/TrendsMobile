@@ -118,7 +118,7 @@ class EasyDemo(TestCase):
         self.assertEqual(docs.filter(kind='Sales Invoice').aggregate(total=Sum('total'))['total'],295000)
         self.assertEqual(docs.filter(kind='Sales Invoice').aggregate(total=Sum('outstanding'))['total'],110000)
         self.assertEqual(docs.filter(kind='Purchase Invoice').aggregate(total=Sum('outstanding'))['total'],380000)
-        response=self.client.get(reverse('training'));self.assertContains(response,'40,000.00');self.assertContains(response,'110,000.00');self.assertContains(response,'380,000.00')
+        response=self.client.get(reverse('sales_accounts'),{'branch':str(branch.pk)});self.assertContains(response,'40,000.00');self.assertContains(response,'110,000.00');self.assertContains(response,'380,000.00')
         self.assertFalse(Document.objects.filter(branch=self.branch).exists())
     def test_demo_seed_is_idempotent_and_dry_run_leaves_no_records(self):
         self.seed(dry_run=True);self.assertFalse(Branch.objects.filter(code='COV-DEMO').exists())
@@ -131,9 +131,9 @@ class EasyDemo(TestCase):
         self.seed();branch=Branch.objects.get(code='COV-DEMO')
         for kind in ('sale','purchase'):
             response=self.client.get(reverse('easy_entry',args=[kind]),{'branch':str(branch.pk)})
-            self.assertContains(response,'DEMO SHOP')
+            self.assertContains(response,'Record origin');self.assertNotContains(response,'Practice entries')
             for target in ('sale','purchase'):self.assertContains(response,reverse('easy_entry',args=[target])+'?branch='+str(branch.pk))
     def test_reports_label_training_data_and_real_shop_filter_excludes_it(self):
         self.seed();url=reverse('report',args=['Profit and Loss Statement'])
-        self.assertContains(self.client.get(url),'includes demonstration entries')
-        self.assertNotContains(self.client.get(url,{'branch':str(self.branch.pk)}),'includes demonstration entries')
+        self.assertContains(self.client.get(url),'generated as sample entries')
+        self.assertNotContains(self.client.get(url,{'branch':str(self.branch.pk)}),'generated as sample entries')

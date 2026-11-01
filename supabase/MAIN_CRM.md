@@ -22,7 +22,7 @@ The protected server environment records `COVISON_MAIN_CRM_ENABLED=1` and a pinn
 
 ## Simple counter entry
 
-Use **New Sale** and **Buy Stock** for one-save retail entry. Phone records use PTA / Non-PTA status and stock references. The separate **Demo shop practice** includes reconciled sample sales, purchases, credit balances and profit. See [Simple counter guide](../offline/EASY_RETAIL_GUIDE.md).
+Use **New Sale** and **Buy Stock** for one-save retail entry. Phone records use PTA / Non-PTA status and stock references. **Sales & Accounts** shows the selected operating shop’s posted sales, credit balances and profit. See [Simple counter guide](../offline/EASY_RETAIL_GUIDE.md).
 
 ## Customer entry
 

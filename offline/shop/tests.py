@@ -73,7 +73,7 @@ class Workflows(TestCase):
     def test_partial_and_split_checkout(self):
         _,_,device=self.intake();doc=s.checkout(self.sale(device),self.user,[dict(mode='Cash',amount='20000'),dict(mode='Bank Transfer',amount='15000',reference='BANK-REF')],self.handler)
         self.assertEqual(doc.outstanding,30000);device.refresh_from_db();self.assertEqual(device.status,'Sold')
-        self.assertEqual(doc.linked.filter(kind='Payment Entry').count(),2);self.assertEqual(doc.demo_batch,'TEST-DEMO');self.assert_balanced()
+        self.assertEqual(doc.linked.filter(kind='Payment Entry').count(),2);self.assertFalse(doc.demo_batch);self.assertIn('TEST-DEMO',doc.data['initial_record_batches']);self.assert_balanced()
     def test_failed_second_payment_rolls_back_whole_sale(self):
         _,_,device=self.intake();doc=self.sale(device)
         with self.assertRaises(ValidationError):s.checkout(doc,self.user,[dict(mode='Cash',amount='30000'),dict(mode='Bank Transfer',amount='20000')],self.handler)
@@ -249,7 +249,7 @@ class Workflows(TestCase):
     def test_receipt_is_frozen_and_demo_labelled(self):
         _,_,device=self.intake();doc=s.checkout(self.sale(device),self.user,[],None)
         self.client.force_login(self.user);response=self.client.get(reverse('receipt',args=[doc.pk]))
-        self.assertContains(response,'DEMONSTRATION DATA');self.assertNotContains(response,imei(1));self.assertContains(response,'Stock ref');self.assertContains(response,'Original warranty')
+        self.assertNotContains(response,'DEMONSTRATION DATA');self.assertNotContains(response,imei(1));self.assertContains(response,'Stock ref');self.assertContains(response,'Original warranty')
 
 class Concurrency(TransactionTestCase):
     def test_two_database_sessions_cannot_sell_same_phone(self):

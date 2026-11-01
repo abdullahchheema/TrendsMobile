@@ -43,7 +43,7 @@ try{
  const nav=await evaluate(`Array.from(document.querySelectorAll('.sidebar a')).map(a=>a.getAttribute('href')).filter(p=>p&&p.startsWith('/'))`);
  const device=await evaluate(`document.querySelector('a[href^="/device/"]')?.getAttribute('href')`);
  const paths=[...new Set(['/desk/mobile-shop','/desk/point-of-sale',...nav,...['Mobile Intake','Purchase Receipt','Purchase Invoice','Sales Invoice','Payment Entry','Stock Entry','Mobile Exchange','Warranty Claim','Mobile Daily Closing','POS Opening Entry','POS Closing Entry'].map(k=>'/documents/'+encodeURIComponent(k)+'/new/'),'/master/Till/new/','/master/Mobile%20Staff/new/','/master/Item/new/',device].filter(Boolean))];
- if(nav.includes('/entry/purchase/'))paths.push('/training/');
+
  if(nav.includes('/setup/')){
   await navigate(base+'/setup/');
   const finance=await evaluate(`document.querySelector('a[href$="/finance/"]')?.getAttribute('href')`);

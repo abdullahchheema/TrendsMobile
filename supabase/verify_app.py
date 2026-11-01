@@ -15,7 +15,7 @@ html=response.read().decode();assert 'Mobile Shop Dashboard' in html and 'COV-PH
 for name in ('SUPABASE_SECRET_KEY','COVISON_APP_DB_PASSWORD','COVISON_CRM_OWNER_PASSWORD'):
     assert env[name] not in html,'A private value appeared in HTML.'
 health=json.loads(client.open(base+'/health/').read());assert health['database']=='Supabase PostgreSQL' and health['authentication']=='Supabase Auth'
-paths=['/entry/sale/','/entry/purchase/','/training/','/desk/query-report/Profit%20and%20Loss%20Statement','/desk/query-report/Balance%20Sheet','/desk/query-report/Trial%20Balance','/reports/','/desk/query-report/Stock%20Ledger','/desk/mobile-shop','/desk/point-of-sale','/settings/','/accounts/','/account/password/']
+paths=['/entry/sale/','/entry/purchase/','/sales-accounts/','/desk/query-report/Profit%20and%20Loss%20Statement','/desk/query-report/Balance%20Sheet','/desk/query-report/Trial%20Balance','/reports/','/desk/query-report/Stock%20Ledger','/desk/mobile-shop','/desk/point-of-sale','/settings/','/accounts/','/account/password/']
 paths += ['/device-check/','/device-check/print/?paper=58','/device-check/print/?paper=80','/device-check/print/?paper=a4']
 paths += ['/documents/Stock%20Entry/new/']
 paths += ['/fund-transfers/','/fund-transfers/new/']

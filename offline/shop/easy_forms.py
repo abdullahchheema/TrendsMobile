@@ -7,6 +7,18 @@ from . import access,easy_retail,services
 from .customer_widgets import CustomerNameInput
 
 
+class SalesAccountsForm(forms.Form):
+    def __init__(self,*args,user,branch,**kwargs):
+        super().__init__(*args,**kwargs)
+        self.fields['branch']=forms.ModelChoiceField(label='Shop',queryset=access.branches(user),initial=branch)
+        self.fields['from_date']=forms.DateField(label='Sales from',required=False,initial='2000-01-01',widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
+        self.fields['to_date']=forms.DateField(label='Through / balances as of',required=False,initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
+    def clean(self):
+        data=super().clean()
+        if data.get('from_date') and data.get('to_date') and data['from_date']>data['to_date']:raise forms.ValidationError('The start date must be before or equal to the end date.')
+        return data
+
+
 class EasyEntryForm(forms.Form):
     def __init__(self,*args,user,branch,kind,phone=None,**kwargs):
         super().__init__(*args,**kwargs);self.kind=kind

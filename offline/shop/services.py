@@ -467,10 +467,16 @@ def submit(doc,user):
         post(doc)
     elif doc.kind=='Mobile Exchange':raise ValidationError('Use the dedicated exchange settlement action.')
     else:raise ValidationError('Unsupported transaction type.')
+    origins=set()
     for line in doc.lines.select_related('product','device'):
-        if line.device and line.device.demo_batch:doc.demo_batch=doc.demo_batch or line.device.demo_batch
-        elif line.product.demo_batch:doc.demo_batch=doc.demo_batch or line.product.demo_batch
-    doc.demo_batch=doc.demo_batch or (doc.customer.demo_batch if doc.customer else '') or (doc.supplier.demo_batch if doc.supplier else '')
+        if line.device and line.device.demo_batch:origins.add(line.device.demo_batch)
+        if line.product.demo_batch:origins.add(line.product.demo_batch)
+    for party in (doc.customer,doc.supplier):
+        if party and party.demo_batch:origins.add(party.demo_batch)
+    if origins:doc.data['initial_record_batches']=sorted(origins)
+    # A master record's origin must not put a new operating-shop transaction
+    # into demo mode. Only an explicit transaction/shop mode does that.
+    doc.demo_batch=doc.demo_batch or doc.branch.demo_batch
     balanced(doc);doc.status='Submitted';doc.save();audit(user,'Submit',doc)
     return doc
 
