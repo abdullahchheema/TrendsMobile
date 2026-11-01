@@ -1,0 +1,86 @@
+{
+  "doctype": "DocType",
+  "name": "Mobile IMEI",
+  "module": "Mobile Shop",
+  "engine": "InnoDB",
+  "field_order": [
+    "imei",
+    "mobile_device"
+  ],
+  "fields": [
+    {
+      "fieldname": "imei",
+      "label": "IMEI",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "mobile_device",
+      "label": "Mobile Device",
+      "fieldtype": "Data",
+      "reqd": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1
+    },
+    {
+      "role": "Stock Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1
+    },
+    {
+      "role": "Mobile Shop Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1
+    },
+    {
+      "role": "Sales User",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Purchase User",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Stock User",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Mobile Salesperson",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Mobile Purchaser",
+      "read": 1,
+      "report": 1
+    }
+  ],
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "autoname": "field:imei"
+}

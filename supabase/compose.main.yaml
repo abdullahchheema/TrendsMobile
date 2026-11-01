@@ -1,0 +1,9 @@
+# Loaded only after this installation is explicitly promoted as the main CRM.
+services:
+  crm-web:
+    image: "${COVISON_MAIN_APP_IMAGE:-covison/erp-supabase:development}"
+  crm-proxy:
+    ports: !override
+      - "127.0.0.1:${COVISON_MAIN_PORT:-8080}:80"
+      - "${COVISON_BIND_ADDRESS}:${COVISON_MAIN_PORT:-8080}:80"
+      - "${COVISON_BIND_ADDRESS}:8081:81"

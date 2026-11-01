@@ -1,0 +1,11 @@
+const activeFilters=new URLSearchParams(window.location.search);document.querySelectorAll('.cov-filters select').forEach(select=>{if(activeFilters.has(select.name))select.value=activeFilters.get(select.name);});
+document.querySelectorAll('input[name="imei_1"],input[name="imei_2"]').forEach(field=>field.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();const fields=[...field.form.elements].filter(e=>!e.disabled&&e.type!=='hidden'&&e.tagName!=='BUTTON');const next=fields[fields.indexOf(field)+1];next?.focus();}));
+document.addEventListener('click',e=>{
+ if(e.target.closest('[data-print]'))window.print();
+ if(e.target.closest('[data-add-line]')){const total=document.getElementById('id_lines-TOTAL_FORMS');const template=document.getElementById('empty-line');document.querySelector('#line-items tbody').insertAdjacentHTML('beforeend',template.innerHTML.replaceAll('__prefix__',total.value));total.value=Number(total.value)+1;}
+ if(e.target.closest('[data-add-payment]')){const form=e.target.closest('form');if(form.dataset.paymentLocked==='true')return;const body=form.querySelector('[data-payment-rows]');const row=body.firstElementChild.cloneNode(true);row.querySelectorAll('input').forEach(i=>i.value='');body.append(row);window.covisonPayments?.refresh(form);}
+});
+
+const menuToggle=document.querySelector('[data-menu-toggle]');const mainNavigation=document.getElementById('main-navigation');function closeMenu(){mainNavigation?.classList.remove('is-open');menuToggle?.setAttribute('aria-expanded','false');}menuToggle?.addEventListener('click',()=>{const open=mainNavigation.classList.toggle('is-open');menuToggle.setAttribute('aria-expanded',String(open));});document.addEventListener('keydown',event=>{if(event.key==='Escape')closeMenu();});document.querySelector('.app-main')?.addEventListener('click',closeMenu);
+
+document.querySelector('[data-add-method]')?.addEventListener('click',()=>{const total=document.getElementById('id_methods-TOTAL_FORMS');const template=document.getElementById('empty-method');document.querySelector('[data-method-rows]').insertAdjacentHTML('beforeend',template.innerHTML.replaceAll('__prefix__',total.value));total.value=Number(total.value)+1;});

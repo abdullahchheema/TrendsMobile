@@ -1,0 +1,68 @@
+{
+  "doctype": "DocType",
+  "name": "Mobile Shop Settings",
+  "module": "Mobile Shop",
+  "engine": "InnoDB",
+  "field_order": [
+    "shop_phone",
+    "shop_address",
+    "receipt_terms",
+    "urdu_receipt_note",
+    "ageing_days"
+  ],
+  "fields": [
+    {
+      "fieldname": "shop_phone",
+      "label": "Receipt Contact Number",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "shop_address",
+      "label": "Receipt Address",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "receipt_terms",
+      "label": "Default Receipt / Checking Warranty Terms",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "urdu_receipt_note",
+      "label": "Optional Urdu Receipt Note",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "ageing_days",
+      "label": "Slow Stock Threshold (Days)",
+      "fieldtype": "Int",
+      "default": 30,
+      "reqd": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 0,
+      "cancel": 0
+    },
+    {
+      "role": "Mobile Shop Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 0,
+      "cancel": 0
+    }
+  ],
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "issingle": 1
+}

@@ -1,0 +1,12 @@
+server/.env
+server/.env.*
+!server/.env.example
+server/volumes/db/data/
+server/volumes/storage/
+server/volumes/snippets/
+server/volumes/functions/.env
+private/
+backups/
+artifacts/*.log
+__pycache__/
+*.pyc

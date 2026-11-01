@@ -1,0 +1,169 @@
+{
+  "doctype": "DocType",
+  "name": "Mobile Exchange",
+  "module": "Mobile Shop",
+  "engine": "InnoDB",
+  "field_order": [
+    "company",
+    "customer",
+    "purchase_receipt",
+    "sales_invoice",
+    "currency",
+    "incoming_value",
+    "outgoing_value",
+    "net_difference",
+    "settlement_direction",
+    "notes",
+    "purchase_invoice",
+    "journal_entry",
+    "payment_entry",
+    "settlement_status"
+  ],
+  "fields": [
+    {
+      "fieldname": "company",
+      "label": "Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "customer",
+      "label": "Customer",
+      "fieldtype": "Link",
+      "options": "Customer",
+      "reqd": 1
+    },
+    {
+      "fieldname": "purchase_receipt",
+      "label": "Incoming Phone Purchase Receipt",
+      "fieldtype": "Link",
+      "options": "Purchase Receipt",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "sales_invoice",
+      "label": "Outgoing Phone Sales Invoice",
+      "fieldtype": "Link",
+      "options": "Sales Invoice",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "fieldname": "currency",
+      "label": "Currency",
+      "fieldtype": "Link",
+      "options": "Currency",
+      "read_only": 1
+    },
+    {
+      "fieldname": "incoming_value",
+      "label": "Incoming Phone Value",
+      "fieldtype": "Currency",
+      "options": "currency",
+      "read_only": 1
+    },
+    {
+      "fieldname": "outgoing_value",
+      "label": "Outgoing Phone Value",
+      "fieldtype": "Currency",
+      "options": "currency",
+      "read_only": 1
+    },
+    {
+      "fieldname": "net_difference",
+      "label": "Net Difference Before Settlement",
+      "fieldtype": "Currency",
+      "options": "currency",
+      "read_only": 1
+    },
+    {
+      "fieldname": "settlement_direction",
+      "label": "Settlement Direction",
+      "fieldtype": "Data",
+      "read_only": 1
+    },
+    {
+      "fieldname": "notes",
+      "label": "Notes",
+      "fieldtype": "Small Text",
+      "description": "Settle offsets the posted customer and supplier invoices, then records the actual difference paid. Review both invoices first."
+    },
+    {
+      "fieldname": "purchase_invoice",
+      "label": "Incoming Purchase Invoice",
+      "fieldtype": "Link",
+      "options": "Purchase Invoice"
+    },
+    {
+      "fieldname": "journal_entry",
+      "label": "Posted Exchange Offset",
+      "fieldtype": "Link",
+      "options": "Journal Entry",
+      "read_only": 1
+    },
+    {
+      "fieldname": "payment_entry",
+      "label": "Posted Difference Payment",
+      "fieldtype": "Link",
+      "options": "Payment Entry",
+      "read_only": 1
+    },
+    {
+      "fieldname": "settlement_status",
+      "label": "Settlement Status",
+      "fieldtype": "Select",
+      "options": "Not Settled\nSettled\nReversed / Review",
+      "default": "Not Settled",
+      "read_only": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 0,
+      "cancel": 0
+    },
+    {
+      "role": "Mobile Shop Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 0,
+      "cancel": 0
+    },
+    {
+      "role": "Mobile Cashier",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 0,
+      "cancel": 0
+    },
+    {
+      "role": "Accounts Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 0,
+      "cancel": 0
+    }
+  ],
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "autoname": "COV-EX-.#####",
+  "title_field": "customer"
+}

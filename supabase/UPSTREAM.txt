@@ -1,0 +1,4 @@
+Official Supabase self-hosting release self-hosted/v0.8.3
+Commit bc27d2661edd09a5d0b8d76ce33da6d4071a756e
+Source https://github.com/supabase/supabase/tree/self-hosted/v0.8.3/docker
+Upstream files are retained; Covison changes are in compose.covison.yaml.

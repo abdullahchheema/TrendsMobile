@@ -1,0 +1,293 @@
+{
+  "doctype": "Sidebar",
+  "name": "Mobile Shop",
+  "title": "Mobile Shop",
+  "module": "Mobile Shop",
+  "app": "covison_erp",
+  "header_icon": "\ud83d\udcf1",
+  "standard": 1,
+  "items": [
+    {
+      "type": "Link",
+      "label": "Open POS",
+      "link_type": "Page",
+      "link_to": "point-of-sale"
+    },
+    {
+      "type": "Link",
+      "label": "Dashboard",
+      "link_type": "Page",
+      "link_to": "mobile-shop"
+    },
+    {
+      "type": "Section Break",
+      "label": "Phones",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Phone Inventory",
+      "link_type": "DocType",
+      "link_to": "Mobile Device",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Models",
+      "link_type": "DocType",
+      "link_to": "Mobile Model",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Variants & Accessories",
+      "link_type": "DocType",
+      "link_to": "Item",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Buy",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Buy a Phone",
+      "link_type": "DocType",
+      "link_to": "Mobile Intake",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Purchase Receipts",
+      "link_type": "DocType",
+      "link_to": "Purchase Receipt",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Supplier Bills / Expenses",
+      "link_type": "DocType",
+      "link_to": "Purchase Invoice",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Sell / POS",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Sales & Returns",
+      "link_type": "DocType",
+      "link_to": "Sales Invoice",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "POS",
+      "link_type": "Page",
+      "link_to": "point-of-sale",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Exchanges",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Phone Exchanges",
+      "link_type": "DocType",
+      "link_to": "Mobile Exchange",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Customers & Suppliers",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Customers",
+      "link_type": "DocType",
+      "link_to": "Customer",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Suppliers",
+      "link_type": "DocType",
+      "link_to": "Supplier",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Payments & Expenses",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Payments / Advances",
+      "link_type": "DocType",
+      "link_to": "Payment Entry",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Daily Closing",
+      "link_type": "DocType",
+      "link_to": "Mobile Daily Closing",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "POS Shifts",
+      "link_type": "DocType",
+      "link_to": "POS Closing Entry",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Staff",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Staff Names",
+      "link_type": "DocType",
+      "link_to": "Mobile Staff",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Staff Activity",
+      "link_type": "Report",
+      "link_to": "Staff Activity",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Staff Summary",
+      "link_type": "Report",
+      "link_to": "Staff Summary",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Warranty",
+      "collapsible": 1,
+      "keep_closed": 0
+    },
+    {
+      "type": "Link",
+      "label": "Warranty / Returns",
+      "link_type": "DocType",
+      "link_to": "Warranty Claim",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Reports",
+      "collapsible": 1,
+      "keep_closed": 1
+    },
+    {
+      "type": "Link",
+      "label": "Phone Stock",
+      "link_type": "Report",
+      "link_to": "Mobile Inventory",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Stock Age & Prices",
+      "link_type": "Report",
+      "link_to": "Mobile Stock Ageing",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Device Profit",
+      "link_type": "Report",
+      "link_to": "Device Profit",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Device Costs & Margin",
+      "link_type": "Report",
+      "link_to": "Mobile Device Economics",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Customer Balances",
+      "link_type": "Report",
+      "link_to": "Accounts Receivable",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Supplier Balances",
+      "link_type": "Report",
+      "link_to": "Accounts Payable",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "General Ledger",
+      "link_type": "Report",
+      "link_to": "General Ledger",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Purchase Register",
+      "link_type": "Report",
+      "link_to": "Purchase Register",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Sales Register",
+      "link_type": "Report",
+      "link_to": "Sales Register",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Payment Ledger",
+      "link_type": "Report",
+      "link_to": "Payment Ledger",
+      "child": 1
+    },
+    {
+      "type": "Link",
+      "label": "Stock Balance",
+      "link_type": "Report",
+      "link_to": "Stock Balance",
+      "child": 1
+    },
+    {
+      "type": "Section Break",
+      "label": "Settings",
+      "collapsible": 1,
+      "keep_closed": 1
+    },
+    {
+      "type": "Link",
+      "label": "Shop Settings",
+      "link_type": "DocType",
+      "link_to": "Mobile Shop Settings",
+      "child": 1
+    }
+  ]
+}

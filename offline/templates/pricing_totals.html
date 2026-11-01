@@ -1,0 +1,6 @@
+{% if doc.data.pricing.version == 1 %}<div class="invoice-pricing">
+<p>Item subtotal {{ doc.currency }} {{ doc.data.pricing.subtotal|floatformat:2 }}</p>
+<p>Invoice discount {{ doc.currency }} {{ doc.data.pricing.discount|floatformat:2 }}</p>
+<p>Net sales before tax {{ doc.currency }} {{ doc.data.pricing.net_total|floatformat:2 }}</p>
+<p>{% if doc.data.pricing.tax_name %}{{ doc.data.pricing.tax_name }} ({{ doc.data.pricing.tax_rate|floatformat:'-4' }}%){% else %}No tax added{% endif %} · {{ doc.currency }} {{ doc.data.pricing.tax_total|floatformat:2 }}</p>
+</div>{% endif %}

@@ -1,0 +1,7 @@
+.env
+backups/
+imports/
+staticfiles/
+__pycache__/
+*.pyc
+LOCAL-LOGIN.txt

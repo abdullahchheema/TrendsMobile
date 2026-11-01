@@ -1,0 +1,92 @@
+version: 2
+# Check every day, including weekends, without waiting for releases to age.
+# Dependabot requires at least 24 hours between scheduled runs.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: "0 6 * * *"
+    cooldown:
+      exclude:
+        - "*"
+    groups:
+      actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: images/bench
+    schedule:
+      interval: cron
+      cronjob: "0 6 * * *"
+    cooldown:
+      exclude:
+        - "*"
+
+  - package-ecosystem: docker-compose
+    directory: /overrides
+    schedule:
+      interval: cron
+      cronjob: "0 6 * * *"
+    cooldown:
+      exclude:
+        - "*"
+    allow:
+      - dependency-name: nginxproxy/acme-companion
+      - dependency-name: nginxproxy/nginx-proxy
+      - dependency-name: traefik
+    groups:
+      proxy-images:
+        patterns:
+          - nginxproxy/acme-companion
+          - nginxproxy/nginx-proxy
+          - traefik
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: "0 6 * * *"
+    cooldown:
+      exclude:
+        - "*"
+    groups:
+      python-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: cron
+      cronjob: "0 6 * * *"
+    cooldown:
+      exclude:
+        - "*"
+    groups:
+      docs-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: cron
+      cronjob: "0 6 * * *"
+    cooldown:
+      exclude:
+        - "*"
+    groups:
+      pre-commit-hooks:
+        patterns:
+          - "*"

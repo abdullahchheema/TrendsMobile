@@ -1,0 +1,8 @@
+.env
+__pycache__
+*.pyc
+backups
+imports
+staticfiles
+artifacts
+LOCAL-LOGIN.txt

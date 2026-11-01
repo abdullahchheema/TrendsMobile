@@ -1,0 +1,96 @@
+{
+  "doctype": "DocType",
+  "name": "Mobile Model",
+  "module": "Mobile Shop",
+  "engine": "InnoDB",
+  "field_order": [
+    "model_name",
+    "brand",
+    "description"
+  ],
+  "fields": [
+    {
+      "fieldname": "model_name",
+      "label": "Model",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "unique": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "brand",
+      "label": "Brand",
+      "fieldtype": "Link",
+      "options": "Brand",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "description",
+      "label": "Description",
+      "fieldtype": "Small Text"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1
+    },
+    {
+      "role": "Stock Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1
+    },
+    {
+      "role": "Mobile Shop Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "report": 1,
+      "export": 1,
+      "print": 1,
+      "email": 1
+    },
+    {
+      "role": "Sales User",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Purchase User",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Stock User",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Mobile Salesperson",
+      "read": 1,
+      "report": 1
+    },
+    {
+      "role": "Mobile Purchaser",
+      "read": 1,
+      "report": 1
+    }
+  ],
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "autoname": "field:model_name",
+  "title_field": "model_name"
+}

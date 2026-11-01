@@ -1,0 +1,19 @@
+{
+  "status": "awaiting_client_instructions",
+  "provided_by": null,
+  "instruction_reference": null,
+  "effective_date": null,
+  "categories": [
+    {"category": "new_phones", "treatment": "pending", "rate_percent": null, "prices_include_tax": null, "invoice_label": null, "shop_codes": [], "reference": null},
+    {"category": "used_refurbished_phones", "treatment": "pending", "rate_percent": null, "prices_include_tax": null, "invoice_label": null, "shop_codes": [], "reference": null},
+    {"category": "accessories_spare_parts", "treatment": "pending", "rate_percent": null, "prices_include_tax": null, "invoice_label": null, "shop_codes": [], "reference": null},
+    {"category": "repairs_services", "treatment": "pending", "rate_percent": null, "prices_include_tax": null, "invoice_label": null, "shop_codes": [], "reference": null},
+    {"category": "supplier_purchases_input_tax", "treatment": "pending", "rate_percent": null, "prices_include_tax": null, "invoice_label": null, "shop_codes": [], "reference": null}
+  ],
+  "mixed_rate_invoices_required": null,
+  "withholding_required": null,
+  "government_invoice_integration_required": null,
+  "additional_invoice_fields_or_reports": null,
+  "approved_calculation_examples": [],
+  "notes": "Unanswered worksheet only. This file is not loaded by the CRM and does not configure or approve any tax rule."
+}

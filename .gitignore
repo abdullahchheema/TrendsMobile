@@ -1,0 +1,63 @@
+# Environment Variables
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Local credentials, business data and generated verification output
+**/LOCAL-LOGIN.txt
+**/SERVER-LOGIN.txt
+**/private/
+**/backups/
+**/artifacts/
+*.sqlite3
+*.sqlite3-*
+*.dump
+*.sql.gz
+*.log
+*.pem
+*.key
+*.bak
+*.old
+.DS_Store
+
+# Build output and local Python environments
+dist/
+build/
+*.egg-info/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mounted volume
+sites
+
+development/*
+!development/README.md
+!development/installer.py
+!development/apps-example.json
+!development/vscode-example/
+
+# Pycharm
+.idea
+
+# VS Code
+.vscode/**
+!.vscode/extensions.json
+
+# VS Code devcontainer
+.devcontainer
+*.code-workspace
+
+# Python
+*.pyc
+__pycache__
+venv
+
+# NodeJS
+node_modules
+
+# VitePress
+**/.vitepress/dist
+**/.vitepress/cache

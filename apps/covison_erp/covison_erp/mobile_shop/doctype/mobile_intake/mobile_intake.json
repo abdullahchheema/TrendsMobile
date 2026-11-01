@@ -1,0 +1,449 @@
+{
+  "doctype": "DocType",
+  "name": "Mobile Intake",
+  "module": "Mobile Shop",
+  "engine": "InnoDB",
+  "field_order": [
+    "seller_tab",
+    "company",
+    "supplier",
+    "purchase_source",
+    "trade_in_customer",
+    "seller_phone",
+    "posting_date",
+    "warehouse",
+    "phone_section",
+    "item_code",
+    "currency",
+    "purchase_price",
+    "imei_1",
+    "imei_2",
+    "manufacturer_serial",
+    "regional_version",
+    "market_description",
+    "device_type",
+    "condition_grade",
+    "battery_health",
+    "battery_health_checked",
+    "inspection_status",
+    "inspection_date",
+    "display_condition",
+    "biometrics",
+    "camera_test",
+    "charging_test",
+    "carrier_lock",
+    "activation_lock",
+    "sim_configuration",
+    "audio_test",
+    "network_test",
+    "repair_history",
+    "included_accessories",
+    "inspection_notes",
+    "verification_tab",
+    "pta_status",
+    "pta_verified_on",
+    "pta_verified_by",
+    "pta_evidence",
+    "pta_status_2",
+    "pta_verified_on_2",
+    "pta_evidence_2",
+    "pta_notes",
+    "pricing_tab",
+    "asking_price",
+    "minimum_price",
+    "wholesale_price",
+    "warranty_days",
+    "warranty_terms",
+    "disclosed_faults",
+    "links_section",
+    "purchase_receipt",
+    "mobile_device",
+    "amended_from"
+  ],
+  "fields": [
+    {
+      "fieldname": "seller_tab",
+      "label": "1. Seller & Purchase",
+      "fieldtype": "Tab Break"
+    },
+    {
+      "fieldname": "company",
+      "label": "Company",
+      "fieldtype": "Link",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "supplier",
+      "label": "Seller / Supplier",
+      "fieldtype": "Link",
+      "options": "Supplier",
+      "reqd": 1
+    },
+    {
+      "fieldname": "purchase_source",
+      "label": "Purchase Source",
+      "fieldtype": "Select",
+      "options": "Distributor\nDealer\nIndividual Seller\nCustomer Trade-In",
+      "default": "Individual Seller",
+      "reqd": 1
+    },
+    {
+      "fieldname": "trade_in_customer",
+      "label": "Exchange Customer",
+      "fieldtype": "Link",
+      "options": "Customer",
+      "depends_on": "eval:doc.purchase_source=='Customer Trade-In'",
+      "mandatory_depends_on": "eval:doc.purchase_source=='Customer Trade-In'"
+    },
+    {
+      "fieldname": "seller_phone",
+      "label": "Seller Phone",
+      "fieldtype": "Data",
+      "description": "Use the seller contact number; do not collect identity documents unless your shop requires them."
+    },
+    {
+      "fieldname": "posting_date",
+      "label": "Purchase Date",
+      "fieldtype": "Date",
+      "default": "Today",
+      "reqd": 1
+    },
+    {
+      "fieldname": "warehouse",
+      "label": "Receiving Shop / Warehouse",
+      "fieldtype": "Link",
+      "options": "Warehouse",
+      "reqd": 1
+    },
+    {
+      "fieldname": "phone_section",
+      "label": "2. Phone & Inspection",
+      "fieldtype": "Tab Break"
+    },
+    {
+      "fieldname": "item_code",
+      "label": "Model / Product Variant",
+      "fieldtype": "Link",
+      "options": "Item",
+      "reqd": 1
+    },
+    {
+      "fieldname": "currency",
+      "label": "Currency",
+      "fieldtype": "Link",
+      "options": "Currency",
+      "default": "PKR",
+      "read_only": 1
+    },
+    {
+      "fieldname": "purchase_price",
+      "label": "Agreed Purchase Price (PKR)",
+      "fieldtype": "Currency",
+      "options": "currency",
+      "reqd": 1
+    },
+    {
+      "fieldname": "imei_1",
+      "label": "IMEI 1",
+      "fieldtype": "Data",
+      "description": "Enter the actual 15-digit IMEI from the phone."
+    },
+    {
+      "fieldname": "imei_2",
+      "label": "IMEI 2",
+      "fieldtype": "Data",
+      "description": "Leave blank for a single-IMEI phone."
+    },
+    {
+      "fieldname": "manufacturer_serial",
+      "label": "Manufacturer Serial Number",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "regional_version",
+      "label": "Regional Version",
+      "fieldtype": "Data"
+    },
+    {
+      "fieldname": "market_description",
+      "label": "Seller / Market Description",
+      "fieldtype": "Data",
+      "description": "Seller wording such as JV; independent of verified carrier lock and PTA results."
+    },
+    {
+      "fieldname": "device_type",
+      "label": "Phone Type",
+      "fieldtype": "Select",
+      "options": "New\nUsed\nRefurbished",
+      "default": "Used"
+    },
+    {
+      "fieldname": "condition_grade",
+      "label": "Condition",
+      "fieldtype": "Select",
+      "options": "Not Inspected\nExcellent\nVery Good\nGood\nFair\nFor Parts",
+      "default": "Not Inspected"
+    },
+    {
+      "fieldname": "battery_health",
+      "label": "Battery Health (%)",
+      "fieldtype": "Percent"
+    },
+    {
+      "fieldname": "battery_health_checked",
+      "label": "Battery Health Recorded",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "inspection_status",
+      "label": "Inspection Status",
+      "fieldtype": "Select",
+      "options": "Pending\nPassed\nRepair Needed\nFailed",
+      "default": "Pending"
+    },
+    {
+      "fieldname": "inspection_date",
+      "label": "Inspection Date",
+      "fieldtype": "Date"
+    },
+    {
+      "fieldname": "display_condition",
+      "label": "Display",
+      "fieldtype": "Select",
+      "options": "Not Checked\nOriginal / Working\nReplaced / Working\nDefective",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "biometrics",
+      "label": "Face ID / Touch ID",
+      "fieldtype": "Select",
+      "options": "Not Checked\nWorking\nNot Working\nNot Applicable",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "camera_test",
+      "label": "Cameras",
+      "fieldtype": "Select",
+      "options": "Not Checked\nPassed\nFailed",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "charging_test",
+      "label": "Charging",
+      "fieldtype": "Select",
+      "options": "Not Checked\nPassed\nFailed",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "carrier_lock",
+      "label": "Carrier Lock",
+      "fieldtype": "Select",
+      "options": "Not Checked\nFactory Unlocked\nCarrier Locked",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "activation_lock",
+      "label": "Activation Lock / iCloud",
+      "fieldtype": "Select",
+      "options": "Not Checked\nOff\nOn",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "sim_configuration",
+      "label": "SIM Configuration",
+      "fieldtype": "Select",
+      "options": "Not Checked\nPhysical SIM\nPhysical SIM + eSIM\nDual Physical SIM\neSIM Only",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "audio_test",
+      "label": "Speaker / Microphone",
+      "fieldtype": "Select",
+      "options": "Not Checked\nPassed\nFailed",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "network_test",
+      "label": "Calls / Mobile Network",
+      "fieldtype": "Select",
+      "options": "Not Checked\nPassed\nFailed",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "repair_history",
+      "label": "Repairs / Replaced Parts",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "included_accessories",
+      "label": "Included Accessories",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "inspection_notes",
+      "label": "Inspection Notes",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "verification_tab",
+      "label": "3. PTA Verification",
+      "fieldtype": "Tab Break"
+    },
+    {
+      "fieldname": "pta_status",
+      "label": "PTA Status \u2014 IMEI 1",
+      "fieldtype": "Select",
+      "options": "Not Checked\nCompliant\nNon-compliant\nBlocked\nUnknown",
+      "default": "Not Checked"
+    },
+    {
+      "fieldname": "pta_verified_on",
+      "label": "Verified On",
+      "fieldtype": "Date"
+    },
+    {
+      "fieldname": "pta_verified_by",
+      "label": "Verified By",
+      "fieldtype": "Link",
+      "options": "User"
+    },
+    {
+      "fieldname": "pta_evidence",
+      "label": "Verification Evidence",
+      "fieldtype": "Attach"
+    },
+    {
+      "fieldname": "pta_status_2",
+      "label": "PTA Status \u2014 IMEI 2",
+      "fieldtype": "Select",
+      "options": "Not Checked\nCompliant\nNon-compliant\nBlocked\nUnknown",
+      "default": "Not Checked",
+      "depends_on": "eval:doc.imei_2"
+    },
+    {
+      "fieldname": "pta_verified_on_2",
+      "label": "IMEI 2 Verified On",
+      "fieldtype": "Date",
+      "depends_on": "eval:doc.imei_2"
+    },
+    {
+      "fieldname": "pta_evidence_2",
+      "label": "IMEI 2 Verification Evidence",
+      "fieldtype": "Attach",
+      "depends_on": "eval:doc.imei_2"
+    },
+    {
+      "fieldname": "pta_notes",
+      "label": "Verification Notes",
+      "fieldtype": "Small Text",
+      "description": "Record the official result; this form does not perform an online PTA lookup."
+    },
+    {
+      "fieldname": "pricing_tab",
+      "label": "4. Selling Prices & Warranty",
+      "fieldtype": "Tab Break"
+    },
+    {
+      "fieldname": "asking_price",
+      "label": "Asking Price",
+      "fieldtype": "Currency",
+      "options": "currency"
+    },
+    {
+      "fieldname": "minimum_price",
+      "label": "Minimum Selling Price",
+      "fieldtype": "Currency",
+      "options": "currency"
+    },
+    {
+      "fieldname": "wholesale_price",
+      "label": "Wholesale Price",
+      "fieldtype": "Currency",
+      "options": "currency"
+    },
+    {
+      "fieldname": "warranty_days",
+      "label": "Shop Warranty (Days)",
+      "fieldtype": "Int",
+      "default": 0
+    },
+    {
+      "fieldname": "warranty_terms",
+      "label": "Device Checking / Warranty Terms",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "disclosed_faults",
+      "label": "Faults Disclosed to Buyer",
+      "fieldtype": "Small Text"
+    },
+    {
+      "fieldname": "links_section",
+      "label": "Posted Records",
+      "fieldtype": "Section Break"
+    },
+    {
+      "fieldname": "purchase_receipt",
+      "label": "Purchase Receipt",
+      "fieldtype": "Link",
+      "options": "Purchase Receipt",
+      "read_only": 1,
+      "no_copy": 1
+    },
+    {
+      "fieldname": "mobile_device",
+      "label": "Phone in Stock",
+      "fieldtype": "Link",
+      "options": "Mobile Device",
+      "read_only": 1,
+      "no_copy": 1
+    },
+    {
+      "fieldname": "amended_from",
+      "label": "Amended From",
+      "fieldtype": "Link",
+      "options": "Mobile Intake",
+      "read_only": 1,
+      "no_copy": 1
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 1,
+      "cancel": 1
+    },
+    {
+      "role": "Mobile Shop Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 1,
+      "cancel": 1
+    },
+    {
+      "role": "Mobile Purchaser",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "print": 1,
+      "report": 1,
+      "submit": 1,
+      "cancel": 0
+    }
+  ],
+  "track_changes": 1,
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "autoname": "COV-BUY-.#####",
+  "is_submittable": 1
+}
