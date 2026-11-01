@@ -20,6 +20,10 @@ python3 supabase/control.py ps
 
 The protected server environment records `COVISON_MAIN_CRM_ENABLED=1` and a pinned `COVISON_MAIN_APP_IMAGE` after promotion. `control.py` then includes `compose.main.yaml`, exposing loopback and the configured private IPv4 address at port 8080 while retaining the 8081 alias. A generic Frappe startup command is not the selected startup path.
 
+## Simple counter entry
+
+Use **New Sale** and **Buy Stock** for one-save retail entry. Phone records use PTA / Non-PTA status and stock references. The separate **Demo shop practice** includes reconciled sample sales, purchases, credit balances and profit. See [Simple counter guide](../offline/EASY_RETAIL_GUIDE.md).
+
 ## Customer entry
 
 Customer fields accept typed names with optional suggestions. New names are saved with the draft or POS transaction; existing names reuse their accounts. See [Customer entry guide](../offline/CUSTOMER_ENTRY_GUIDE.md).

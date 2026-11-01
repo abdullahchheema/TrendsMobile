@@ -46,7 +46,7 @@ def document(user,pk):
     return doc
 def selected_branch(user,value=None):
     places=access.branches(user)
-    try:branch=places.filter(pk=value).first() if value else places.first()
+    try:branch=places.filter(pk=value).first() if value else places.exclude(code='COV-DEMO').first() or places.first()
     except (ValueError,ValidationError):raise Http404('Invalid shop.')
     if value and not branch:raise Http404('Shop not available.')
     return branch
@@ -71,7 +71,7 @@ def device_print_test(request):
     access.staff(request.user)
     paper=request.GET.get('paper','80')
     if paper not in ('58','80','a4'):raise Http404
-    return render(request,'device_print_test.html',{'paper':paper,'sample_imei':'990000190000010'})
+    return render(request,'device_print_test.html',{'paper':paper,'sample_stock':'PHONE-DEMO-001'})
 
 @login_required
 def dashboard(request):
@@ -81,10 +81,10 @@ def dashboard(request):
     all_devices=list(devices);available=[d for d in all_devices if d.status=='Available']
     search=request.GET.get('search','').strip().lower();status=request.GET.get('status','Available')
     rows=[d for d in all_devices if (status=='All' or d.status==status) and (not request.GET.get('model') or str(d.product.model_id)==request.GET['model'])
-        and (not request.GET.get('condition') or d.condition==request.GET['condition']) and (not request.GET.get('pta_status') or any(i.pta_status==request.GET['pta_status'] for i in d.imeis.all()))
-        and (not search or any(search in str(v).lower() for v in [d.code,d.product.name,d.product.storage,d.product.colour]+[i.number for i in d.imeis.all()]))]
+        and (not request.GET.get('condition') or d.condition==request.GET['condition']) and (not request.GET.get('pta_status') or d.pta_status==request.GET['pta_status'])
+        and (not search or any(search in str(v).lower() for v in [d.code,d.product.name,d.product.storage,d.product.colour]))]
     summary=dict(available=len(available),stock_value=sum((d.purchase_cost for d in available),Decimal(0)),
-        pending=sum(d.inspection_status!='Passed' for d in available),missing=sum(not d.imeis.filter(slot=1).exists() for d in available),
+        pending=sum(d.inspection_status!='Passed' for d in available),missing=sum(d.pta_status=='Not recorded' for d in available),
         sold_today=sum(d.status=='Sold' and d.sold_on==timezone.localdate() for d in all_devices))
     groups={}
     for d in rows:
@@ -93,8 +93,8 @@ def dashboard(request):
         groups[key]['phones'].append(d)
     for g in groups.values():g['min']=min(d.asking_price for d in g['phones']);g['max']=max(d.asking_price for d in g['phones'])
     query=request.GET.copy();query.pop('view',None)
-    return render(request,'dashboard.html',dict(title='Mobile Shop',devices=rows,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,
-        models=PhoneModel.objects.order_by('name'),demo=any(d.demo_batch for d in all_devices)))
+    return render(request,'dashboard.html',dict(title='Mobile Shop',devices=rows,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
+        demo_shop=access.branches(request.user).filter(code='COV-DEMO').first(),models=PhoneModel.objects.order_by('name'),demo=any(d.demo_batch for d in all_devices)))
 
 @login_required
 def collection(request,kind):
@@ -193,7 +193,6 @@ def device_edit(request,pk):
                 for name in form._meta.fields:
                     if name in values:setattr(locked,name,values[name])
                 locked.details.update({name:values[name] for name in DETAIL_FIELDS});locked.full_clean();locked.save()
-                services.update_imeis(locked,[dict(number=values[f'imei_{slot}'],pta_status=values[f'pta_status_{slot}'],verified_on=values[f'verified_on_{slot}'],evidence=values.get(f'evidence_{slot}')) for slot in (1,2)],request.user)
                 Audit.objects.create(user=request.user,action='Update device',details={'device':str(obj.pk)})
             messages.success(request,'Device details saved.');return redirect('collection',kind='Mobile Device')
         except (ValidationError,IntegrityError) as e:form.add_error(None,error_text(e))
@@ -469,6 +468,9 @@ def report(request,name):
             writer.writerow([("'"+value) if isinstance(value,str) and value.startswith(('=','+','-','@','\t','\r')) else value for value in (row[c] for c in columns)])
         return response
     presentation=report_presentation.context(name,columns,rows,form.params(),scoped(request.user),scoped_devices(request.user),request.user)
+    included=access.branches(request.user)
+    if form.cleaned_data.get('branch'):included=included.filter(pk=form.cleaned_data['branch'].pk)
+    presentation['includes_training']=included.filter(code='COV-DEMO').exists()
     applied=[dict(label=form.fields[key].label or key.replace('_',' ').title(),value=str(value)) for key,value in form.cleaned_data.items() if value not in (None,'',False) and key not in ('sort_by','sort_dir')]
     return render(request,'report.html',dict(title=report_catalog.label(name),filter_form=form,columns=columns,rows=[[r.get(c,'') for c in columns] for r in rows],query=request.GET.urlencode(),statement_summary=statement_summary,inventory_report=name in ('Mobile Inventory','Mobile Stock Ageing','Mobile Device Economics'),applied_filters=applied,**presentation))
 
@@ -548,7 +550,7 @@ def pos(request):
     items=[]
     for d in scoped_devices(request.user).filter(warehouse__branch=branch,status='Available').select_related('product','warehouse').prefetch_related('imeis'):
         items.append(dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),code=d.code,
-            name=d.product.name,rate=str(d.asking_price),stock=1,barcode=' '.join(i.number for i in d.imeis.all()),barcodes=[i.number for i in d.imeis.all()],warehouse_name=d.warehouse.name,serialized=True))
+            name=d.product.name,rate=str(d.asking_price),stock=1,pta_status=d.pta_status,barcode=d.code,barcodes=[d.code],warehouse_name=d.warehouse.name,serialized=True))
     for p in Product.objects.filter(enabled=True,serialized=False):
         for warehouse in Warehouse.objects.filter(branch=branch,enabled=True):
             qty,_=services.on_hand(p,warehouse)
@@ -568,7 +570,7 @@ def pos_checkout(request):
         def perform():
             Branch.objects.select_for_update(no_key=True).get(pk=branch.pk)
             if not Document.objects.filter(branch=branch,kind='POS Opening Entry',status='Submitted',state='Open',posted_by=request.user).exists():raise ValidationError('Start your POS shift first.')
-            customer=customer_names.resolve(data['customer_name'],request.user) if 'customer_name' in data else Party.objects.get(pk=data['customer'],kind='Customer',enabled=True)
+            customer=customer_names.resolve(data['customer_name'],request.user,demo_batch=branch.demo_batch) if 'customer_name' in data else Party.objects.get(pk=data['customer'],kind='Customer',enabled=True)
             seller=Staff.objects.get(pk=data['seller']);handler=Staff.objects.get(pk=data['handler']) if data.get('handler') else None
             doc=services.new_doc('POS Invoice',branch,customer=customer,seller=seller)
             adjustments=data.get('adjustments',{})
@@ -578,7 +580,10 @@ def pos_checkout(request):
             for row in data['items']:
                 device=get_object_or_404(scoped_devices(request.user),pk=row['device']) if row.get('device') else None
                 place=Warehouse.objects.get(pk=row['warehouse'],branch=branch)
-                product=Product.objects.get(pk=row['product'],enabled=True)
+                product=Product.objects.select_for_update().get(pk=row['product'],enabled=True)
+                if device and 'pta_status' in row:
+                    if row['pta_status'] not in ('PTA','Non-PTA'):raise ValidationError('Choose PTA or Non-PTA for each phone.')
+                    device=Device.objects.select_for_update().get(pk=device.pk);device.pta_status=row['pta_status'];device.save(update_fields=['pta_status','modified'])
                 Line.objects.create(document=doc,product=product,device=device,warehouse=place,
                     quantity=services.quantity(row['quantity']),rate=services.money(row['rate']))
             return services.checkout(doc,request.user,data.get('payments',[]),handler)

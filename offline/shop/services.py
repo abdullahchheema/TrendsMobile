@@ -149,7 +149,9 @@ def open_date(doc):
     if Document.objects.filter(branch=doc.branch,kind='Mobile Daily Closing',status='Submitted',posting_date__gte=doc.posting_date).exists():
         raise ValidationError('This accounting date has already been closed. Ask a manager to review it.')
 
-def new_doc(kind,branch,**values):return Document.objects.create(kind=kind,branch=branch,code=code({'Sales Invoice':'SALE','POS Invoice':'POS','Purchase Receipt':'RECEIPT','Purchase Invoice':'BILL','Payment Entry':'PAY','Journal Entry':'JOURNAL'}.get(kind,'COV')),**values)
+def new_doc(kind,branch,**values):
+    values.setdefault('demo_batch',branch.demo_batch)
+    return Document.objects.create(kind=kind,branch=branch,code=code({'Sales Invoice':'SALE','POS Invoice':'POS','Purchase Receipt':'RECEIPT','Purchase Invoice':'BILL','Payment Entry':'PAY','Journal Entry':'JOURNAL'}.get(kind,'COV')),**values)
 
 def copy_lines(source,target):
     for line in source.lines.all():
@@ -168,10 +170,8 @@ def on_hand(product,warehouse):
     return result['q'] or ZERO,result['v'] or ZERO
 
 def snapshot(device):
-    return dict(device=device.code,imei_1=next((i.number for i in device.imeis.all() if i.slot==1),''),
-        imei_2=next((i.number for i in device.imeis.all() if i.slot==2),''),condition=device.condition,
-        battery=device.battery if device.battery_checked else None,pta=[dict(slot=i.slot,status=i.pta_status) for i in device.imeis.all()],
-        faults=device.faults,warranty_days=device.warranty_days,warranty_terms=device.warranty_terms)
+    return dict(device=device.code,condition=device.condition,battery=device.battery if device.battery_checked else None,
+        pta_status=device.pta_status,faults=device.faults,warranty_days=device.warranty_days,warranty_terms=device.warranty_terms)
 
 @transaction.atomic
 def update_imeis(device,values,user):
@@ -217,6 +217,7 @@ def _receive(doc):
             device=Device(code=code('PHONE'),branch=doc.branch,product=line.product,warehouse=line.warehouse or doc.warehouse,
                 purchase_cost=line.rate,received_on=doc.posting_date,demo_batch=doc.demo_batch,
                 device_type=attrs.get('device_type','Used'),condition=attrs.get('condition','Not Inspected'),
+                pta_status=attrs.get('pta_status','Not recorded'),
                 inspection_status=attrs.get('inspection_status','Pending'),inspection_date=attrs.get('inspection_date') or None,
                 battery_checked=bool(attrs.get('battery_checked')),battery=int(attrs.get('battery') or 0),
                 asking_price=money(attrs.get('asking_price')),minimum_price=money(attrs.get('minimum_price')),
@@ -255,7 +256,6 @@ def _sale(doc):
             device=Device.objects.select_for_update().get(pk=line.device_id);seen.add(device.pk)
             if device.product_id!=line.product_id:raise ValidationError('Phone does not match the selected variant.')
             if device.status!='Available' or device.warehouse_id!=(line.warehouse_id or doc.warehouse_id):raise ValidationError('This exact phone is no longer available in that warehouse.')
-            if not device.imeis.filter(slot=1).exists():raise ValidationError('Register the phone IMEI before selling.')
             if money(allocations[line.pk]['net'])<device.minimum_price and not manager(doc.posted_by):raise PermissionDenied('A manager must approve a price below the minimum, including invoice discounts.')
             cost=device.purchase_cost;line.snapshot=snapshot(device)
             device.status='Sold';device.warehouse=None;device.customer=doc.customer;device.sale=doc
@@ -402,8 +402,6 @@ def submit(doc,user):
     if doc.kind=='Mobile Intake':
         assigned(doc,'buyer','can_buy')
         if doc.lines.count()!=1 or not doc.lines.first().product.serialized:raise ValidationError('A phone intake requires one serialized phone variant.')
-        imeis=doc.data.get('device',{}).get('imeis',[])
-        if not imeis or not imeis[0].get('number'):raise ValidationError('Enter the phone’s actual primary IMEI before receiving it.')
         receipt=new_doc('Purchase Receipt',doc.branch,supplier=doc.supplier,warehouse=doc.warehouse,buyer=doc.buyer,
             posting_date=doc.posting_date,data=doc.data.copy(),demo_batch=doc.demo_batch)
         copy_lines(doc,receipt);receipt=submit(receipt,user)

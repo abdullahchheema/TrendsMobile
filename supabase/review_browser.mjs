@@ -1,5 +1,6 @@
 // Isolated headless browser QA. Never reads an existing browser profile.
 import fs from 'node:fs';
+import {checkEasyRetail} from './easy_browser_checks.mjs';
 import path from 'node:path';
 import os from 'node:os';
 import {spawn} from 'node:child_process';
@@ -42,6 +43,7 @@ try{
  const nav=await evaluate(`Array.from(document.querySelectorAll('.sidebar a')).map(a=>a.getAttribute('href')).filter(p=>p&&p.startsWith('/'))`);
  const device=await evaluate(`document.querySelector('a[href^="/device/"]')?.getAttribute('href')`);
  const paths=[...new Set(['/desk/mobile-shop','/desk/point-of-sale',...nav,...['Mobile Intake','Purchase Receipt','Purchase Invoice','Sales Invoice','Payment Entry','Stock Entry','Mobile Exchange','Warranty Claim','Mobile Daily Closing','POS Opening Entry','POS Closing Entry'].map(k=>'/documents/'+encodeURIComponent(k)+'/new/'),'/master/Till/new/','/master/Mobile%20Staff/new/','/master/Item/new/',device].filter(Boolean))];
+ if(nav.includes('/entry/purchase/'))paths.push('/training/');
  if(nav.includes('/setup/')){
   await navigate(base+'/setup/');
   const finance=await evaluate(`document.querySelector('a[href$="/finance/"]')?.getAttribute('href')`);
@@ -55,7 +57,7 @@ try{
  const firstSale=await evaluate(`Array.from(document.querySelectorAll('tbody tr')).filter(r=>r.innerText.includes('Submitted')).map(r=>r.querySelector('a')?.getAttribute('href')).find(Boolean)`);
  const saleLinks=await evaluate(`Array.from(document.querySelectorAll('tbody tr')).filter(r=>r.innerText.includes('Submitted')).map(r=>r.querySelector('a')?.getAttribute('href')).filter(Boolean).slice(0,50)`);
  if(firstSale){await navigate(base+firstSale);receipt=await evaluate(`document.querySelector('a[href^="/receipt/"]')?.getAttribute('href')`);paths.push(firstSale);if(receipt)paths.push(receipt,receipt+'?paper=a4',receipt+'?paper=58');}
- for(const link of saleLinks){await navigate(base+link);const hasImei=await evaluate(`Array.from(document.querySelectorAll('td small')).some(e=>/[0-9]{15}/.test(e.textContent))`);if(hasImei){phoneReceipt=await evaluate(`document.querySelector('a[href^="/receipt/"]')?.getAttribute('href')`);if(phoneReceipt&&phoneReceipt!==receipt)paths.push(phoneReceipt);break;}}
+ for(const link of saleLinks){await navigate(base+link);const hasImei=await evaluate(`Array.from(document.querySelectorAll('td small')).some(e=>/Stock ref/.test(e.textContent))`);if(hasImei){phoneReceipt=await evaluate(`document.querySelector('a[href^="/receipt/"]')?.getAttribute('href')`);if(phoneReceipt&&phoneReceipt!==receipt)paths.push(phoneReceipt);break;}}
  const screens=[];
  for(const [index,route] of (process.argv.includes('--interactions-only')?[]:paths).entries()){
   await cdp('Emulation.setDeviceMetricsOverride',{width:1365,height:1000,deviceScaleFactor:1,mobile:false});
@@ -208,6 +210,8 @@ try{
   fs.writeFileSync(path.join(output,'customer-entry-checks.json'),JSON.stringify(customerEntryChecks,null,2));
   if(!customerEntryChecks.passed)process.exitCode=1;
  }
+ const easyChecks=phase==='after'&&nav.includes('/entry/purchase/')?await checkEasyRetail({cdp,evaluate,navigate,base,output,isolated:process.argv.includes('--isolated-transactions')}):null;
+ if(easyChecks&&!easyChecks.passed)process.exitCode=1;
  let deviceChecks=null;
  if(process.argv.includes('--device-tests')){
   const waitFor=async expression=>{for(let i=0;i<100;i++){if(await evaluate(expression))return true;await pause(100);}return false;};
@@ -226,7 +230,7 @@ try{
   await navigate(base+'/device-check/');
   const wanBlocked=await evaluate(`fetch('http://192.0.2.1/covison-wan-block-test').then(()=>false,()=>true)`);
   const serverProbe=await waitFor(`document.querySelector('[data-server-status]')?.dataset.reachable==='true'`);
-  const scanTest=await evaluate(`(()=>{const field=document.getElementById('scanner-check');field.value='990000190000010';field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));return document.getElementById('scanner-result').textContent.includes('check digit valid');})()`);
+  const scanTest=await evaluate(`(()=>{const field=document.getElementById('scanner-check');field.value='PHONE-DEMO-001';field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));return document.getElementById('scanner-result').textContent.includes('input and Enter suffix received');})()`);
   const paperChecks=[];
   for(const [paper,width] of [['58',220],['80',303],['a4',794]]){
    await cdp('Emulation.setDeviceMetricsOverride',{width,height:1123,deviceScaleFactor:1,mobile:false});
@@ -238,9 +242,9 @@ try{
   await cdp('Emulation.setEmulatedMedia',{media:''});await cdp('Emulation.setDeviceMetricsOverride',{width:1365,height:1000,deviceScaleFactor:1,mobile:false});
   const injection=await cdp('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{const observer=new MutationObserver(()=>{const root=document.getElementById('pos');if(root){root.dataset.shiftOpen='true';observer.disconnect();}});observer.observe(document,{childList:true,subtree:true});})();`});
   await navigate(base+'/desk/point-of-sale');await waitFor(`window.covisonConnection?.reachable===true`);
-  const prepare=()=>evaluate(`(()=>{const items=JSON.parse(document.getElementById('pos-data').textContent);const phone=items.find(p=>p.serialized);const field=document.getElementById('pos-search');field.value=phone.barcode.split(' ')[0];field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));const form=document.getElementById('pos-cart');form.elements.customer_name.value='QA Typed Customer';for(const name of ['seller','handler']){const select=form.querySelector('[name='+name+']');select.value=Array.from(select.options).find(o=>o.value)?.value||'';}form.elements.discount_value.value='1.25';form.elements.discount_value.dispatchEvent(new Event('change'));return document.querySelectorAll('.cart-row').length===1;})()`);
+  const prepare=()=>evaluate(`(()=>{const items=JSON.parse(document.getElementById('pos-data').textContent);const phone=items.find(p=>p.serialized);const field=document.getElementById('pos-search');field.value=phone.code;field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));const form=document.getElementById('pos-cart');form.elements.customer_name.value='QA Typed Customer';const pta=document.querySelector('.cart-row select');pta.value='Non-PTA';pta.dispatchEvent(new Event('change'));for(const name of ['seller','handler']){const select=form.querySelector('[name='+name+']');select.value=Array.from(select.options).find(o=>o.value)?.value||'';}form.elements.discount_value.value='1.25';form.elements.discount_value.dispatchEvent(new Event('change'));return document.querySelectorAll('.cart-row').length===1;})()`);
   const exactScan=await prepare();
-  await evaluate(`(()=>{const items=JSON.parse(document.getElementById('pos-data').textContent);const field=document.getElementById('pos-search');field.value=items.find(p=>p.serialized).barcode.split(' ')[0];field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));})()`);
+  await evaluate(`(()=>{const items=JSON.parse(document.getElementById('pos-data').textContent);const field=document.getElementById('pos-search');field.value=items.find(p=>p.serialized).code;field.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));})()`);
   const duplicateScan=await evaluate(`document.querySelectorAll('.cart-row').length===1&&document.querySelector('.cart-row input').value==='1'`);
   const prepareCash=()=>evaluate(`(()=>{const form=document.getElementById('pos-cart'),row=form.querySelector('[data-payment-rows] tr');row.querySelector('[name=payment_mode]').value='Cash';row.querySelector('[name=payment_amount]').value='4500.25';row.querySelector('[name=payment_tendered]').value='5000.50';window.covisonPayments.refresh(form);const correct=row.querySelector('[data-cash-change]').textContent.includes('500.25');form.querySelector('[data-add-payment]').click();const bank=form.querySelector('[data-payment-rows]').lastElementChild;const cleared=bank.querySelector('[name=payment_tendered]').value==='';bank.querySelector('[name=payment_mode]').value=Array.from(bank.querySelector('[name=payment_mode]').options).find(o=>o.value!=='Cash').value;bank.querySelector('[name=payment_amount]').value='1000';bank.querySelector('[name=payment_reference]').value='QA-BANK';window.covisonPayments.refresh(form);return {correct,cleared,bankDisabled:bank.querySelector('[name=payment_tendered]').disabled,bankHidden:bank.querySelector('[data-cash-input]').hidden,decimalExact:window.covisonPayments.cents('0.10')+window.covisonPayments.cents('0.20')===30};})()`);
   const cashPreview=await prepareCash();
@@ -270,14 +274,14 @@ try{
   deviceChecks={server_probe:serverProbe,scanner_input:scanTest,printer_layouts:paperChecks,exact_pos_scan:exactScan,serialized_duplicate_scan_blocked:duplicateScan,online_submit_available:onlineInitially,disconnected_submit_blocked:offlineBlocked&&noOfflinePost,uncertain_result_shown:uncertainResult,pending_editor_frozen:frozenEditor,retry_recovered:retryRecovered,retry_payload_identical:mockPosts.length>=2&&mockPosts[0]===mockPosts[1],validation_allows_edit:validationShown&&safeUnlock,mocked_pos_requests:mockPosts.length,real_pos_requests:0,wan_block_rule_verified:wanBlocked&&externalRequests.includes('192.0.2.1'),wan_requests_blocked:externalRequests,physical_hardware_tested:false};
   deviceChecks.passed=serverProbe&&scanTest&&paperChecks.every(p=>p.passed)&&exactScan&&duplicateScan&&onlineInitially&&offlineBlocked&&noOfflinePost&&uncertainResult&&frozenEditor&&retryRecovered&&mockPosts[0]===mockPosts[1]&&validationShown&&safeUnlock&&mockPosts.length===3&&deviceChecks.wan_block_rule_verified;
   const captured=JSON.parse(mockPosts[0]||'{}');const cashRetry=captured.payments?.[0]?.cash_tendered==='5000.50';const pricingRetry=captured.adjustments?.discount_type==='amount'&&captured.adjustments?.discount_value==='1.25'&&captured.adjustments?.tax_rule==='';
-  Object.assign(deviceChecks,{cash_change_preview:cashPreview.correct,exact_paisa_arithmetic:cashPreview.decimalExact,split_row_cleared:cashPreview.cleared,bank_cash_hidden_disabled:cashPreview.bankDisabled&&cashPreview.bankHidden,bank_cash_disabled_after_validation:bankStillDisabled,cash_payload_retained:cashRetry,typed_customer_retained:captured.customer_name==='QA Typed Customer'&&!('customer' in captured),invoice_adjustments_retained:pricingRetry,cash_mobile_no_page_overflow:cashMobile});
-  deviceChecks.passed=deviceChecks.passed&&cashPreview.correct&&cashPreview.decimalExact&&cashPreview.cleared&&cashPreview.bankDisabled&&cashPreview.bankHidden&&bankStillDisabled&&cashRetry&&cashMobile&&pricingRetry&&deviceChecks.typed_customer_retained;
+  Object.assign(deviceChecks,{cash_change_preview:cashPreview.correct,exact_paisa_arithmetic:cashPreview.decimalExact,split_row_cleared:cashPreview.cleared,bank_cash_hidden_disabled:cashPreview.bankDisabled&&cashPreview.bankHidden,bank_cash_disabled_after_validation:bankStillDisabled,cash_payload_retained:cashRetry,typed_customer_retained:captured.customer_name==='QA Typed Customer'&&!('customer' in captured),pta_only_retained:captured.items?.[0]?.pta_status==='Non-PTA',invoice_adjustments_retained:pricingRetry,cash_mobile_no_page_overflow:cashMobile});
+  deviceChecks.passed=deviceChecks.passed&&cashPreview.correct&&cashPreview.decimalExact&&cashPreview.cleared&&cashPreview.bankDisabled&&cashPreview.bankHidden&&bankStillDisabled&&cashRetry&&cashMobile&&pricingRetry&&deviceChecks.typed_customer_retained&&deviceChecks.pta_only_retained;
   fs.writeFileSync(path.join(output,'device-checks.json'),JSON.stringify(deviceChecks,null,2));if(!deviceChecks.passed)process.exitCode=1;
  }
  await navigate(base+'/desk/mobile-shop');
  await evaluate(`(()=>{document.querySelector('form[action="/logout/"]').requestSubmit();return true;})()`);
  for(let i=0;i<100;i++){if(await evaluate('location.pathname')==='/login/'){signedIn=false;break;}await pause(100);}
- result={phase,headless_browser:true,existing_browser_profile_used:false,business_transactions_changed:false,customer_entry_checks:customerEntryChecks,report_checks:reportChecks,device_checks:deviceChecks,return_form_checks:returnFormChecks,fund_form_checks:fundFormChecks,journal_form_checks:journalFormChecks,screens,exceptions,report_filter_refresh_retained:filterRetained,pos_cart_interaction:posCartInteraction,pos_cart_details:posCartDetails,mobile_menu_interaction:mobileMenuInteraction,owner_session_signed_out:!signedIn};
+ result={phase,headless_browser:true,existing_browser_profile_used:false,business_transactions_changed:false,isolated_easy_transactions:easyChecks?.isolated_database_submissions||0,easy_retail_checks:easyChecks,customer_entry_checks:customerEntryChecks,report_checks:reportChecks,device_checks:deviceChecks,return_form_checks:returnFormChecks,fund_form_checks:fundFormChecks,journal_form_checks:journalFormChecks,screens,exceptions,report_filter_refresh_retained:filterRetained,pos_cart_interaction:posCartInteraction,pos_cart_details:posCartDetails,mobile_menu_interaction:mobileMenuInteraction,owner_session_signed_out:!signedIn};
  fs.writeFileSync(path.join(output,process.argv.includes('--interactions-only')?'interactions.json':'review.json'),JSON.stringify(result,null,2));
  if(phase==='after'&&(!filterRetained||!posCartInteraction||!mobileMenuInteraction||exceptions.length||screens.some(s=>s.pageOverflow||s.mobile?.pageOverflow||s.errorPage)))process.exitCode=1;
  console.log(JSON.stringify({phase,screens:screens.length,desktop_overflow:screens.filter(s=>s.pageOverflow).map(s=>s.path),mobile_overflow:screens.filter(s=>s.mobile?.pageOverflow).map(s=>s.path),page_errors:screens.filter(s=>s.errorPage).map(s=>s.path),javascript_exceptions:exceptions,report_filter_refresh_retained:filterRetained,pos_cart_interaction:posCartInteraction,pos_cart_details:posCartDetails,mobile_menu_interaction:mobileMenuInteraction,owner_session_signed_out:!signedIn},null,2));

@@ -11,7 +11,7 @@ DESCRIPTIONS={
     'Profit and Loss Statement':'Ledger income and expenses for the selected period, including returns, repair expenses and posted adjustments. Accrual basis; not cash collected.',
     'Balance Sheet':'Ledger assets, liabilities and equity through the selected date, including unclosed profit/loss. Uses posted ledger valuation, not current asking prices.',
     'Trial Balance':'Account opening balances, period debits/credits and closing balances. Includes reversal entries and unclassified accounts; does not hide an imbalance.',
-    'Mobile Inventory':'Individual phones, IMEIs, condition, warehouse and asking price. Purchase costs follow your role.',
+    'Mobile Inventory':'Individual phones, PTA / Non-PTA status, condition, warehouse and asking price. Purchase costs follow your role.',
     'Mobile Stock Ageing':'Available/reserved phones, time in stock and prices needing review.',
     'Mobile Device Economics':'Lifetime posted sales less stock cost and device repair expenses. Includes unsold devices with repair costs; excludes unallocated overheads.',
     'Device Profit':'Posted device sales and returns, net revenue, stock cost and margin before overheads.',

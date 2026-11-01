@@ -32,15 +32,13 @@ def run(name,user,params):
     if params.get('model'):devices=devices.filter(product__model_id=params['model'])
     if params.get('product'):devices=devices.filter(product_id=params['product'])
     if params.get('status'):devices=devices.filter(status=params['status'])
-    if params.get('pta_status'):devices=devices.filter(imeis__pta_status=params['pta_status']).distinct()
+    if params.get('pta_status'):devices=devices.filter(pta_status=params['pta_status'])
     rows=[]
     if name in ('Mobile Inventory','Mobile Stock Ageing','Mobile Device Economics'):
         if name=='Mobile Stock Ageing':devices=devices.filter(status__in=['Available','Reserved'])
         for d in devices:
-            imeis={i.slot:i for i in d.imeis.all()}
             row={'Device':d.code,'Shop':f'{d.branch.name} ({d.branch.code})','Model':d.product.model.name if d.product.model_id else d.product.name,'Storage':d.product.storage,
-                'Colour':d.product.colour,'IMEI':imeis[1].number if 1 in imeis else '', 'IMEI 2':imeis[2].number if 2 in imeis else '',
-                'PTA IMEI 1':imeis[1].pta_status if 1 in imeis else 'Not recorded','PTA IMEI 2':imeis[2].pta_status if 2 in imeis else 'Not recorded','Status':d.status,
+                'Colour':d.product.colour,'PTA status':d.pta_status,'Status':d.status,
                 'Warehouse':str(d.warehouse or ''),'Condition':d.condition,'Asking price':d.asking_price,'Days in stock':max(0,(end-d.received_on).days)}
             if costs(user):row['Purchase cost']=d.purchase_cost
             if name=='Mobile Stock Ageing':
@@ -149,7 +147,7 @@ def run(name,user,params):
 def empty_columns(name,with_costs):
     from . import financial_reports
     if name in financial_reports.NAMES:return financial_reports.columns(name)
-    inventory=['Device','Shop','Model','Storage','Colour','IMEI','IMEI 2','PTA IMEI 1','PTA IMEI 2','Status','Warehouse','Condition','Asking price','Days in stock']+(['Purchase cost'] if with_costs else [])
+    inventory=['Device','Shop','Model','Storage','Colour','PTA status','Status','Warehouse','Condition','Asking price','Days in stock']+(['Purchase cost'] if with_costs else [])
     return {
         'Mobile Inventory':inventory,'Mobile Stock Ageing':inventory+['Received','Action'],
         'Mobile Device Economics':['Device','Shop','Phone','Status','Current / Last Valuation','Expensed Repairs (Net)','Valuation + Repairs','Lifetime Net Sales','Net Posted Stock Cost','Posted Margin After Repairs'],

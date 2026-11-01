@@ -29,7 +29,7 @@ def sections(form):
     groups=[('Shop, transaction and staff',['branch','posting_date','customer','customer_name','supplier','warehouse','reference','buyer','seller','handler','till','purchase_source','trade_in_customer','trade_in_customer_name','seller_phone']),
         ('Cash count and settlement',['opening_float','counted_cash','difference_notes','mode','transaction_reference','direction','amount','sales_invoice','purchase_invoice','target_warehouse']),
         ('Invoice discount and sales tax',['invoice_discount_type','invoice_discount_value','sales_tax_rule']),
-        ('Device identity and PTA',['device_type','manufacturer_serial','regional_version','market_description','imei_1','pta_status_1','verified_on_1','evidence_1','imei_2','pta_status_2','verified_on_2','evidence_2','pta_notes']),
+        ('Phone details',['device_type','pta_status','manufacturer_serial','regional_version','market_description','imei_1','pta_status_1','verified_on_1','evidence_1','imei_2','pta_status_2','verified_on_2','evidence_2','pta_notes']),
         ('Condition and inspection',['condition','inspection_status','inspection_date','battery_checked','battery',*DETAIL_CHOICES,'repair_history','included_accessories','inspection_notes','faults']),
         ('Prices and checking warranty',['asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms']),
         ('Claim and notes',['device','claim_status','resolution','notes'])]
@@ -45,19 +45,14 @@ def sections(form):
 class DeviceForm(forms.ModelForm):
     class Meta:
         model=Device
-        fields=['device_type','condition','inspection_status','inspection_date','battery_checked','battery','asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
+        fields=['device_type','pta_status','condition','inspection_status','inspection_date','battery_checked','battery','asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
         widgets={'inspection_date':DATE}
     def __init__(self,*args,user,**kwargs):
         super().__init__(*args,**kwargs)
         if not costs(user):
             for key in ('minimum_price','wholesale_price'):self.fields.pop(key)
         for key in DETAIL_FIELDS:self.fields[key]=detail_field(key,self.instance.details.get(key,''))
-        for slot in (1,2):
-            old=self.instance.imeis.filter(slot=slot).first()
-            self.fields[f'imei_{slot}']=forms.CharField(required=False,initial=old.number if old else '',max_length=15)
-            self.fields[f'pta_status_{slot}']=forms.ChoiceField(choices=[(x,x) for x in ('Not Checked','Compliant','Non-compliant','Blocked','Unknown')],initial=old.pta_status if old else 'Not Checked')
-            self.fields[f'verified_on_{slot}']=forms.DateField(required=False,widget=DATE,initial=old.verified_on if old else None)
-            self.fields[f'evidence_{slot}']=forms.FileField(required=False)
+        self.fields['pta_status'].choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA')]
         self.sections=sections(self)
 
 class DocumentForm(forms.ModelForm):
@@ -139,7 +134,7 @@ class DocumentForm(forms.ModelForm):
             add('warranty_days',forms.IntegerField(min_value=0,required=False))
             for name in ('warranty_terms','faults'):add(name,forms.CharField(required=False,widget=forms.Textarea(attrs={'rows':2})))
             for name in DETAIL_FIELDS:add(name,detail_field(name))
-            for slot in (1,2):add(f'imei_{slot}',forms.CharField(required=slot==1,max_length=15))
+            add('pta_status',forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA')]))
         if kind in ('Payment Entry','Mobile Exchange'):
             methods=ShopSettings.objects.filter(branch=branch).first() if branch else None
             add('mode',forms.ChoiceField(choices=[(x,x) for x in (methods.payment_methods if methods else ['Cash'])]))

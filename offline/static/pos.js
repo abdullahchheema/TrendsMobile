@@ -28,7 +28,7 @@
   products.filter(p=>`${p.code} ${p.name} ${p.barcode}`.toLowerCase().includes(query)).slice(0,80).forEach(product=>{
    const button=make('button');button.type='button';button.disabled=Boolean(pending);
    button.append(make('span',product.name),make('strong',format(product.rate)),make('small',product.code),make('small',product.warehouse_name||''));
-   if(product.serialized)button.append(make('small','IMEI '+product.barcode));else if(product.stock_item)button.append(make('small','In stock: '+product.stock));
+   if(product.serialized)button.append(make('small','PTA: '+product.pta_status));else if(product.stock_item)button.append(make('small','In stock: '+product.stock));
    button.addEventListener('click',()=>add(product));list.append(button);
   });
  }
@@ -43,6 +43,7 @@
    rate.addEventListener('change',()=>{if(pending)return;product.rate=rate.value;render();});
    const remove=make('button','Remove');remove.type='button';remove.disabled=Boolean(pending);remove.addEventListener('click',()=>{if(pending)return;cart.splice(index,1);error.textContent='';render();});
    row.append(qty,rate,remove);cartEl.append(row);
+   if(product.serialized){const label=make('label','PTA status'),pta=make('select');pta.required=true;pta.disabled=Boolean(pending);for(const [value,text] of [['','Choose PTA status'],['PTA','PTA'],['Non-PTA','Non-PTA']]){const option=make('option',text);option.value=value;pta.append(option);}pta.value=['PTA','Non-PTA'].includes(product.pta_status)?product.pta_status:'';pta.addEventListener('change',()=>{if(!pending)product.pta_status=pta.value;});label.append(pta);row.append(label);}
   });
   try{const values=totals();document.getElementById('cart-total').textContent=format(values.total);document.getElementById('cart-breakdown').textContent=`Subtotal ${format(values.subtotal)} − discount ${format(values.discount)} + tax ${format(values.tax)}`;}
   catch(problem){document.getElementById('cart-total').textContent='Check invoice pricing';document.getElementById('cart-breakdown').textContent=problem.message;}
@@ -53,7 +54,7 @@
   if(event.key!=='Enter'||pending)return;event.preventDefault();const value=search.value.trim();if(!value)return;
   const matches=products.filter(p=>p.code===value||(p.barcodes||p.barcode.split(/\s+/)).includes(value));
   if(matches.length===1){add(matches[0]);search.value='';show();}
-  else error.textContent=matches.length?'This barcode has multiple warehouse matches. Choose the correct item and warehouse.':'No exact IMEI or barcode match. Check the label or choose an item from the search results.';
+  else error.textContent=matches.length?'This barcode has multiple warehouse matches. Choose the correct item and warehouse.':'No exact stock reference or barcode match. Choose an item from the search results.';
  });
  document.addEventListener('covison-server-status',updateButton);
  window.addEventListener('beforeunload',event=>{if(pending){event.preventDefault();event.returnValue='';}});
@@ -67,7 +68,7 @@
    try{totals();}catch(problem){error.textContent=problem.message;return;}
    const values=new FormData(form);
    let payments;try{payments=window.covisonPayments.read(form);}catch(problem){error.textContent=problem.message;return;}
-   pending={request_key:root.dataset.requestKey,branch:root.dataset.branch,customer_name:values.get('customer_name'),seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate})=>({product,device,warehouse,quantity,rate})),adjustments:adjustments(),payments};
+   pending={request_key:root.dataset.requestKey,branch:root.dataset.branch,customer_name:values.get('customer_name'),seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate,pta_status})=>({product,device,warehouse,quantity,rate,pta_status})),adjustments:adjustments(),payments};
   }
   sending=true;error.textContent='';lockEditor();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);

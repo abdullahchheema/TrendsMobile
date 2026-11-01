@@ -110,7 +110,7 @@ class TypedCustomers(TestCase):
         self.assertFalse(Party.objects.filter(name='Invalid Mixed Customer').exists())
     def test_tradein_name_is_resolved_to_customer_reference(self):
         data=dict(branch=str(self.branch.pk),posting_date=str(timezone.localdate()),supplier=str(self.supplier.pk),buyer=str(self.buyer.pk),warehouse=str(self.warehouse.pk),
-            purchase_source='Customer Trade-In',trade_in_customer_name='Trade-in Customer',device_type='Used',condition='Good',inspection_status='Pending',imei_1='990000190000010')
+            purchase_source='Customer Trade-In',trade_in_customer_name='Trade-in Customer',device_type='Used',condition='Good',inspection_status='Pending',pta_status='Non-PTA')
         form=DocumentForm(data,instance=Document(kind='Mobile Intake'),user=self.user,kind='Mobile Intake');self.assertTrue(form.is_valid(),form.errors)
         draft=form.save(commit=False);form.apply_customers(draft,self.user);form.apply_data(draft)
         customer=Party.objects.get(name='Trade-in Customer',kind='Customer');self.assertEqual(draft.data['trade_in_customer'],str(customer.pk))

@@ -1,0 +1,70 @@
+import uuid
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.shortcuts import render,redirect,get_object_or_404
+from django.utils import timezone
+from .models import Device,Document,Branch,LedgerEntry
+from . import access,services,easy_retail
+from .easy_forms import EasyEntryForm
+
+
+class InvalidEntry(Exception):pass
+
+
+@login_required
+def entry(request,kind):
+    if kind not in ('sale','purchase'):raise ValidationError('Choose a sale or purchase.')
+    from .views import selected_branch,scoped_devices,error_text
+    branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
+    if not branch:return redirect('setup')
+    access.require(request.user,branch,'can_sell' if kind=='sale' else 'can_buy')
+    phone=None
+    if kind=='sale' and request.GET.get('phone') and not request.GET.get('branch') and request.method!='POST':
+        phone=get_object_or_404(scoped_devices(request.user),pk=request.GET['phone'],status='Available');branch=phone.branch
+    if kind=='sale' and request.GET.get('phone'):phone=get_object_or_404(scoped_devices(request.user),pk=request.GET['phone'],status='Available',branch=branch)
+    form=EasyEntryForm(request.POST or None,user=request.user,branch=branch,kind=kind,phone=phone)
+    if request.method=='POST':
+        payload={key:request.POST.getlist(key) for key in request.POST if key not in ('csrfmiddlewaretoken','request_key')}
+        try:
+            key=uuid.UUID(request.POST.get('request_key',''))
+            def perform():
+                if not form.is_valid():raise InvalidEntry()
+                return (easy_retail.sale if kind=='sale' else easy_retail.purchase)(form.cleaned_data,request.user)
+            result=services.once(key,request.user,{'easy_entry':kind,'fields':payload},perform)
+            messages.success(request,'Sale saved. Stock, payment and customer balance are updated.' if kind=='sale' else 'Purchase saved. Stock, payment and supplier balance are updated.')
+            return redirect('easy_done',pk=result.pk)
+        except InvalidEntry:pass
+        except (ValidationError,IntegrityError,ValueError) as error:form.add_error(None,error_text(error))
+    phones=[dict(id=str(p.pk),price=str(p.asking_price),pta=p.pta_status) for p in form.fields['phone'].queryset] if kind=='sale' else []
+    return render(request,'easy_entry.html',dict(title='New Sale' if kind=='sale' else 'Buy Stock',kind=kind,form=form,branch=branch,phones=phones))
+
+
+@login_required
+def done(request,pk):
+    from .views import document
+    doc=document(request.user,pk)
+    access.require(request.user,doc.branch,'can_buy' if doc.kind=='Purchase Invoice' else 'can_sell')
+    if doc.kind not in ('Sales Invoice','Purchase Invoice') or not doc.data.get('easy_entry'):return redirect('detail',pk=doc.pk)
+    return render(request,'easy_done.html',dict(title='Sale saved' if doc.kind=='Sales Invoice' else 'Purchase saved',branch=doc.branch,doc=doc,paid=doc.total-doc.outstanding,
+        purchase=doc.kind=='Purchase Invoice',lines=(doc.reference.lines if doc.kind=='Purchase Invoice' else doc.lines).select_related('product','device')))
+
+
+@login_required
+def training(request):
+    from . import financial_reports
+    from .management.commands.seed_easy_demo import BATCH
+    from django.db.models import Sum
+    from django.urls import reverse
+    from urllib.parse import urlencode
+    branch=get_object_or_404(access.branches(request.user),code='COV-DEMO')
+    if not access.costs(request.user):return redirect('dashboard')
+    docs=Document.objects.filter(branch=branch,status='Submitted');today=timezone.localdate()
+    _,rows=financial_reports.run('Profit and Loss Statement',Branch.objects.filter(pk=branch.pk),today.replace(year=2000,month=1,day=1),today)
+    summary=dict(financial_reports.summary('Profit and Loss Statement',rows))
+    totals=dict(sales=summary['Income'],expenses=summary['Expenses'],profit=summary['Net profit / loss'],
+        customers=docs.filter(kind__in=['Sales Invoice','POS Invoice']).aggregate(total=Sum('outstanding'))['total'] or 0,
+        suppliers=docs.filter(kind='Purchase Invoice').aggregate(total=Sum('outstanding'))['total'] or 0)
+    reports=[dict(name=name,url=reverse('report',args=[name])+'?'+urlencode({'branch':str(branch.pk),'from_date':'2000-01-01','to_date':str(today)})) for name in ('Sales Register','Purchase Register','Accounts Receivable','Accounts Payable','Profit and Loss Statement','Balance Sheet','Trial Balance')]
+    return render(request,'training.html',dict(title='Demo shop practice',branch=branch,totals=totals,reports=reports))

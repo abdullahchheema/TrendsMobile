@@ -2,7 +2,9 @@
 
 This deployment uses one shared LAN server. Shop computers open the CRM in a browser; they do not each need a database or Docker installation. The server and LAN must remain available. Normal sign-in, trading and file access work without internet after the images and configuration have been installed.
 
-Supabase provides PostgreSQL, Auth, private Storage, the Data API, Studio and Realtime. Django remains the transaction API for phone inventory, staff responsibility, POS, purchases, supplier bills, payments, advances, exchanges, returns, expenses, closing and reports.
+Supabase provides PostgreSQL, Auth, private Storage, the Data API, Studio and Realtime. Daily staff use **New Sale** and **Buy Stock** for one-save entry with typed names, automatic stock/account updates and PTA / Non-PTA status. See [Simple counter guide](../offline/EASY_RETAIL_GUIDE.md). Existing IMEI records stay as private history; normal entry, inventory, reports and receipts use stock references and PTA status.
+
+Django remains the transaction API for phone inventory, staff responsibility, POS, purchases, supplier bills, payments, advances, exchanges, returns, expenses, closing and reports.
 
 ## Current addresses
 
@@ -63,7 +65,7 @@ python3 supabase/control.py exec crm-web python manage.py verify_migration
 
 The importer accepts an empty business database, checks the snapshot checksum, preserves the raw source records and reconciles stock at warehouse level and financial totals. Reimporting the same snapshot creates no duplicates. It will not merge a newer export over a database that has already begun trading.
 
-The verified copy contains 39 phones, 52 synthetic IMEIs, stock worth PKR 2,593,163, customer invoice outstanding of PKR 205,000 and supplier invoice outstanding of PKR 1,101,454. All 13 reports contain data. Historical cancelled USD documents retain their original currency; active trading documents use PKR.
+Before subsequent trading or training entries, the verified original copy contained 39 phones and 52 archived synthetic identifiers, stock worth PKR 2,593,163, customer invoice outstanding of PKR 205,000 and supplier invoice outstanding of PKR 1,101,454. The current catalogue provides 17 reports. A separate labelled demo shop adds purchases, cash/credit sales, supplier payments and an expense; its starting net profit is PKR 40,000. Open **Demo shop practice** for scoped reports. Historical cancelled USD documents retain their original currency; active trading documents use PKR.
 
 Application tables are in the private `covison_app` schema. Anonymous and authenticated Supabase browser roles have no access to it. The Data API exposes only the dedicated `api` and `graphql_public` schemas. Money and stock changes pass through Django's atomic services rather than direct browser table writes.
 

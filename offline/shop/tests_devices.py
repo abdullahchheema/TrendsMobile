@@ -19,7 +19,7 @@ class DeviceChecks(TestCase):
         for paper in ('58','80','a4'):
             response=self.client.get(reverse('device_print_test'),{'paper':paper})
             self.assertContains(response,'NOT A SALE');self.assertContains(response,'PKR 12,345.50')
-            self.assertTrue(valid_imei(response.context['sample_imei']))
+            self.assertEqual(response.context['sample_stock'],'PHONE-DEMO-001');self.assertNotContains(response,'IMEI')
         self.assertFalse(Document.objects.exists());self.assertFalse(LedgerEntry.objects.exists());self.assertFalse(StockMovement.objects.exists())
         self.assertEqual(self.client.get(reverse('device_print_test'),{'paper':'unrecognized'}).status_code,404)
     def test_device_screen_explains_server_dependency_and_scanner_suffix(self):

@@ -15,7 +15,7 @@ html=response.read().decode();assert 'Mobile Shop Dashboard' in html and 'COV-PH
 for name in ('SUPABASE_SECRET_KEY','COVISON_APP_DB_PASSWORD','COVISON_CRM_OWNER_PASSWORD'):
     assert env[name] not in html,'A private value appeared in HTML.'
 health=json.loads(client.open(base+'/health/').read());assert health['database']=='Supabase PostgreSQL' and health['authentication']=='Supabase Auth'
-paths=['/desk/query-report/Profit%20and%20Loss%20Statement','/desk/query-report/Balance%20Sheet','/desk/query-report/Trial%20Balance','/reports/','/desk/query-report/Stock%20Ledger','/desk/mobile-shop','/desk/point-of-sale','/settings/','/accounts/','/account/password/']
+paths=['/entry/sale/','/entry/purchase/','/training/','/desk/query-report/Profit%20and%20Loss%20Statement','/desk/query-report/Balance%20Sheet','/desk/query-report/Trial%20Balance','/reports/','/desk/query-report/Stock%20Ledger','/desk/mobile-shop','/desk/point-of-sale','/settings/','/accounts/','/account/password/']
 paths += ['/device-check/','/device-check/print/?paper=58','/device-check/print/?paper=80','/device-check/print/?paper=a4']
 paths += ['/documents/Stock%20Entry/new/']
 paths += ['/fund-transfers/','/fund-transfers/new/']
@@ -33,6 +33,8 @@ results={}
 for path in paths:
     page=client.open(base+path)
     assert page.status==200,path
+    if path in ('/entry/sale/','/entry/purchase/'):
+        content=page.read().decode();assert 'data-easy-entry' in content and 'name="pta_status"' in content and 'IMEI' not in content,'Easy retail / PTA input is missing.'
     if path=='/desk/point-of-sale':
         content=page.read().decode();assert 'name="customer_name"' in content and '<select name="customer"' not in content,'POS customer typing control is missing.'
     results[path]=page.status

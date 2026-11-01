@@ -38,7 +38,7 @@ class ReportFilters(forms.Form):
             'warehouse':forms.ModelChoiceField(label='Shop / warehouse',queryset=Warehouse.objects.filter(branch__in=places).order_by('name'),required=False,empty_label='All warehouses'),
             'staff':forms.ModelChoiceField(label='Staff member',queryset=Staff.objects.filter(branch__in=places).order_by('name'),required=False,empty_label='All staff'),
             'product':forms.ModelChoiceField(label='Variant / accessory',queryset=Product.objects.order_by('name'),required=False,empty_label='All items'),
-            'pta_status':forms.ChoiceField(label='PTA status (either IMEI)',required=False,choices=[('','All PTA statuses')]+[(s,s) for s in ('Not Checked','Compliant','Non-compliant','Blocked','Unknown')]),
+            'pta_status':forms.ChoiceField(label='PTA status',required=False,choices=[('','All PTA statuses')]+[(s,s) for s in ('PTA','Non-PTA','Not recorded')]),
             'review_only':forms.BooleanField(label='Only phones needing review',required=False),
             'party':forms.ModelChoiceField(label='Customer / supplier',queryset=Party.objects.order_by('name'),required=False,empty_label='All parties'),
             'account':forms.ModelChoiceField(queryset=Account.objects.filter(is_group=False).order_by('name'),required=False,empty_label='All accounts'),

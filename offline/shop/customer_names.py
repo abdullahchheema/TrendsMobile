@@ -15,11 +15,11 @@ def clean_name(value):
     return name
 
 
-def find(name,selected=None):
+def find(name,selected=None,kind="Customer"):
     key=clean_name(name).casefold()
     # Names are shared across shops, just like the existing Customer master.
     # Normalize imported names too, including repeated spaces and Urdu names.
-    matches=[party for party in Party.objects.filter(kind='Customer').only('id','name','enabled').iterator() if ' '.join(party.name.split()).casefold()==key]
+    matches=[party for party in Party.objects.filter(kind=kind).only('id','name','enabled').iterator() if ' '.join(party.name.split()).casefold()==key]
     if selected:
         selected=next((party for party in matches if party.pk==selected.pk),None)
         if selected:matches=[selected]
@@ -29,16 +29,17 @@ def find(name,selected=None):
 
 
 @transaction.atomic
-def resolve(name,user,selected=None):
+def resolve(name,user,selected=None,kind="Customer",demo_batch=""):
     access.staff(user)
     name=clean_name(name)
+    if kind not in ('Customer','Supplier'):raise ValidationError('Choose a customer or supplier.')
     # Serialize matching name creation across shop counters. The lock lasts for
     # the surrounding sale/draft transaction, so failed sales leave no customer.
-    key=int.from_bytes(hashlib.sha256(('covison-customer:'+name.casefold()).encode()).digest()[:8],'big',signed=True)
+    key=int.from_bytes(hashlib.sha256((('covison-customer:' if kind=='Customer' else 'covison-supplier:')+name.casefold()).encode()).digest()[:8],'big',signed=True)
     with connection.cursor() as cursor:cursor.execute('SELECT pg_advisory_xact_lock(%s)',[key])
-    existing=find(name,selected)
+    existing=find(name,selected,kind)
     if existing:return existing
     from . import services
-    customer=Party.objects.create(code=services.code('CUST'),name=name,kind='Customer')
-    services.audit(user,'Create customer',None,customer=str(customer.pk),source='typed name')
+    customer=Party.objects.create(code=services.code('CUST'),name=name,kind=kind,demo_batch=demo_batch)
+    services.audit(user,'Create '+kind.lower(),None,party=str(customer.pk),source='typed name')
     return customer

@@ -42,11 +42,11 @@ class ScreenParity(TestCase):
         self.assertTrue(all(field.disabled for field in response.context['form'].fields.values()))
         self.assertNotIn('minimum_price',response.context['form'].fields)
         self.assertContains(response,'Device details are read-only')
-    def test_inventory_filters_status_model_and_either_imei_without_duplicates(self):
+    def test_inventory_filters_status_model_and_pta_without_duplicates(self):
         sold=self.phone();available=self.phone(22);self.sale(sold)
-        available.imeis.filter(slot=2).update(pta_status='Blocked')
-        _,rows=reports.run('Mobile Inventory',self.user,{'status':'Available','model':str(self.product.model_id),'pta_status':'Blocked'})
-        self.assertEqual([row['Device'] for row in rows],[available.code]);self.assertEqual(rows[0]['IMEI 2'],imei(1022))
+        available.pta_status='Non-PTA';available.save()
+        _,rows=reports.run('Mobile Inventory',self.user,{'status':'Available','model':str(self.product.model_id),'pta_status':'Non-PTA'})
+        self.assertEqual([row['Device'] for row in rows],[available.code]);self.assertEqual(rows[0]['PTA status'],'Non-PTA');self.assertNotIn('IMEI',rows[0])
         response=self.client.get(reverse('report',args=['Mobile Inventory']),{'status':'Sold','model':str(self.product.model_id)})
         self.assertEqual(len(response.context['rows']),1);self.assertEqual(response.context['filter_form']['status'].value(),'Sold')
     def test_report_screen_and_csv_reject_foreign_or_malformed_filters(self):
@@ -60,7 +60,7 @@ class ScreenParity(TestCase):
     def test_empty_csv_retains_role_safe_headers(self):
         user=get_user_model().objects.create_user('empty-sales');self.seller.user=user;self.seller.save();self.client.force_login(user)
         response=self.client.get(reverse('report',args=['Mobile Inventory']),{'status':'Sold','format':'csv'})
-        self.assertEqual(response.status_code,200);self.assertIn('IMEI 2',response.content.decode());self.assertNotIn('Purchase cost',response.content.decode())
+        self.assertEqual(response.status_code,200);self.assertIn('PTA status',response.content.decode());self.assertNotIn('IMEI',response.content.decode());self.assertNotIn('Purchase cost',response.content.decode())
     def test_receivables_as_of_date_does_not_use_current_paid_balance(self):
         sale=self.sale(self.phone());self.payment('25000',sale)
         _,past=reports.run('Accounts Receivable',self.user,{'to_date':str(timezone.localdate()-timedelta(days=1))})

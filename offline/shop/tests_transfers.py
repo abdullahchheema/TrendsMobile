@@ -57,7 +57,7 @@ class Transfers(TestCase):
             totals=doc.ledger.filter(branch=branch).aggregate(d=Sum('debit'),c=Sum('credit'))
             self.assertEqual(totals,dict(d=Decimal(50000),c=Decimal(50000)))
         self.assertEqual(doc.total,50000);self.assertEqual(doc.staff_names['transferred_by'],self.user.username)
-        self.assertEqual(doc.lines.get().snapshot['imei_1'],imei(1));self.assertEqual(doc.state,'Completed')
+        self.assertEqual(doc.lines.get().snapshot['pta_status'],'Not recorded');self.assertNotIn('imei_1',doc.lines.get().snapshot);self.assertEqual(doc.state,'Completed')
         from .reports import run
         columns,rows=run('General Ledger',self.user,{'branch':str(self.other.pk)})
         self.assertIn('Shop',columns)

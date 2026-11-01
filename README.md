@@ -24,7 +24,7 @@ The protected environment selects the main routing overlay and a versioned appli
 
 ## Features
 
-Per-device IMEI/condition/variant inventory, PKR purchasing and supplier bills, POS and split payments/change, staff responsibility, customer credit/advances, returns, exchanges, warranty/repairs, stock transfers, tills/closing, reports, configurable sales discounts/tax and owner journal corrections.
+Simple one-save sales and purchases, PTA / Non-PTA phone inventory, PKR purchasing and supplier bills, POS and split payments/change, staff responsibility, customer credit/advances, returns, exchanges, warranty/repairs, stock transfers, tills/closing, reports, configurable sales discounts/tax and owner journal corrections.
 
 Existing business records were preserved during the main-address switch. Original tax templates are retained as source evidence; client-approved rates have not been activated automatically.
 
@@ -44,3 +44,5 @@ The current dataset still contains demonstration records and one imported shop. 
 The repository also retains [the original upstream Frappe Docker README](docs/FRAPPE_DOCKER_UPSTREAM_README.md) and Frappe source/deployment files for the archived original. Those generic startup examples are not the selected main-CRM startup procedure.
 
 Report navigation, dates, financial statements and exports: [Reports guide](supabase/REPORTS.md).
+
+Daily staff guide: [Simple counter entry](offline/EASY_RETAIL_GUIDE.md). Use **Demo shop practice** for labelled sample sales, purchases and profit reports.

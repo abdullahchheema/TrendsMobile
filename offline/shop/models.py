@@ -110,6 +110,7 @@ class Device(Record):
     warehouse=models.ForeignKey(Warehouse,on_delete=models.PROTECT,null=True,blank=True)
     status=models.CharField(max_length=30,default='Available')
     device_type=models.CharField(max_length=30,default='Used')
+    pta_status=models.CharField(max_length=20,default='Not recorded',db_default='Not recorded',choices=[('PTA','PTA'),('Non-PTA','Non-PTA'),('Not recorded','Not recorded')])
     condition=models.CharField(max_length=40,default='Not Inspected')
     inspection_status=models.CharField(max_length=30,default='Pending')
     inspection_date=models.DateField(null=True,blank=True)
@@ -199,6 +200,12 @@ class Line(models.Model):
     rate=models.DecimalField(max_digits=18,decimal_places=2)
     cost=models.DecimalField(max_digits=18,decimal_places=2,default=0)
     snapshot=models.JSONField(default=dict,blank=True)
+
+    @property
+    def pta_label(self):
+        if self.snapshot.get('pta_status'):return self.snapshot['pta_status']
+        values=[entry.get('status') for entry in self.snapshot.get('pta',[])]
+        return 'Non-PTA' if any(value in ('Non-compliant','Blocked') for value in values) else 'PTA' if values and all(value=='Compliant' for value in values) else 'Not recorded'
 
 class Account(Record):
     name=models.CharField(max_length=180)

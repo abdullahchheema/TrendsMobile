@@ -104,24 +104,27 @@ check('Sales staff cannot open purchase forms',sales.get('/documents/Purchase%20
 intake_values=dict(supplier=str(supplier.pk),warehouse=str(store.pk),buyer=str(buyer.pk),purchase_source='Distributor',
     device_type='Used',condition='Good',inspection_status='Passed',inspection_date=today,battery_checked='on',battery='91',
     asking_price='68000',minimum_price='60000',wholesale_price='65000',warranty_days='7',warranty_terms='DEMO seven-day checking warranty',
-    inspection_notes='Synthetic assessment for isolated QA; not a real inspection.',imei_1=context['imei'])
+    inspection_notes='Synthetic assessment for isolated QA; not a real inspection.',pta_status='Non-PTA')
 intake=submit(owner,new(owner,'Mobile Intake',intake_values,line(phone_product,51000)))
 phone=Device.objects.get(pk=intake.data['device']);receipt=Document.objects.get(pk=intake.data['purchase_receipt'])
-check('Phone received once with unique IMEI',phone.purchase_cost==51000 and phone.imeis.get(slot=1).number==context['imei'] and phone.status=='Available')
+check('Phone received without IMEI using PTA status',phone.purchase_cost==51000 and not phone.imeis.exists() and phone.pta_status=='Non-PTA' and phone.status=='Available')
 check('Posted staff attribution',receipt.staff_names['buyer']=='Usman Khan')
 action(owner,receipt,'bill');bill=receipt.linked.get(kind='Purchase Invoice')
 check('Purchase draft edit denies cost access',sales.get('/documents/Purchase%20Invoice/'+str(bill.pk)+'/edit/')[0]==403)
 submit(owner,bill)
 payment(cash,supplier,20000,'Pay',bill);bill.refresh_from_db();check('Supplier partial payment leaves correct balance',bill.outstanding==31000)
 
-# Real private file upload via the device form; PTA remains unchecked.
+# Preserve access to a legacy private attachment without restoring IMEI entry UI.
 file_bytes=b'%PDF-1.4\n% DEMO synthetic attachment for controlled testing only\n%%EOF\n'
 device_fields=dict(device_type='Used',condition='Good',inspection_status='Passed',inspection_date=today,battery_checked='on',battery='91',
     asking_price='68000',minimum_price='60000',wholesale_price='65000',warranty_days='7',warranty_terms='DEMO seven-day checking warranty',
-    imei_1=context['imei'],imei_2='',pta_status_1='Not Checked',pta_status_2='Not Checked')
+    pta_status='Non-PTA')
 owner.get('/device/'+str(phone.pk)+'/')
-status,_,_=owner.multipart('/device/'+str(phone.pk)+'/',device_fields,'qa-'+run_id+'.pdf',file_bytes)
-attachment=phone.imeis.get(slot=1);check('Private file saved through CRM',status==200 and bool(attachment.evidence.name))
+status,_,_=owner.post('/device/'+str(phone.pk)+'/',device_fields)
+from django.core.files.base import ContentFile
+attachment=IMEI.objects.create(number=context['imei'],device=phone,slot=1)
+attachment.evidence.save('qa-'+run_id+'.pdf',ContentFile(file_bytes))
+check('PTA-only edit and archived private attachment',status==200 and bool(attachment.evidence.name))
 file_path='/attachments/'+quote(attachment.evidence.name,safe='/')
 check('Authorized private download',owner.get(file_path)[1]==file_bytes)
 check('Cross-shop file denied',outsider.get(file_path)[0]==404)
@@ -141,7 +144,7 @@ action(cash,advance,'allocate',{'invoice':str(sale.pk),'amount':'5000'});advance
 check('Advance allocation does not receive money twice',sale.outstanding==25000 and services.money(advance.data['unallocated'])==0)
 payment(cash,customer,25000,'Receive',sale);sale.refresh_from_db();check('Customer settlement',sale.outstanding==0)
 status,printed,_=cash.get('/receipt/'+str(sale.pk)+'/')
-check('Receipt contains IMEI staff and demo label',status==200 and context['imei'].encode() in printed and b'Ali Hassan' in printed and b'DEMONSTRATION DATA' in printed)
+check('Receipt contains PTA staff and demo label without IMEI',status==200 and b'Non-PTA' in printed and context['imei'].encode() not in printed and b'Ali Hassan' in printed and b'DEMONSTRATION DATA' in printed)
 claim=submit(owner,new(owner,'Warranty Claim',dict(customer=str(customer.pk),reference=str(sale.pk),device=str(phone.pk),claim_status='Closed',resolution='DEMO cable replaced under checking warranty')))
 check('Warranty keeps original sale and customer',claim.reference_id==sale.pk and claim.customer_id==customer.pk and claim.state=='Closed')
 
@@ -175,7 +178,7 @@ inter=submit(owner,new(owner,'Stock Entry',dict(warehouse=str(counter.pk),target
 phone.refresh_from_db()
 check('Inter-shop transfer keeps IMEI and purchase cost',phone.branch_id==target_shop.pk and phone.warehouse_id==target_store.pk and phone.purchase_cost==51000 and phone.imeis.get(slot=1).number==context['imei'])
 status,body,_=owner.get('/document/'+str(inter.pk)+'/')
-check('Transfer detail shows both locations and IMEI',status==200 and b'QA transfer destination' in body and context['imei'].encode() in body and b'Stock transfer' in body)
+check('Transfer detail shows both locations and PTA',status==200 and b'QA transfer destination' in body and b'Non-PTA' in body and context['imei'].encode() not in body and b'Stock transfer' in body)
 shop_balances=[inter.ledger.filter(branch=shop).aggregate(d=Sum('debit'),c=Sum('credit')) for shop in (branch,target_shop)]
 check('Each shop balances inventory and clearing',inter.ledger.count()==4 and all(row['d']==row['c']==51000 for row in shop_balances))
 status,body,_=owner.get('/desk/query-report/General%20Ledger?branch='+str(target_shop.pk))
