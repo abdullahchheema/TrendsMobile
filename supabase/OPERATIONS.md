@@ -1,6 +1,6 @@
 # Backup and recovery guide
 
-These tools operate on the separate **Covison Supabase preview**. They do not back up or stop the original Frappe/MariaDB application. Use Python **3.11 or later**, Docker and the checked-in Covison Compose wrapper. Daily shop users only need a browser.
+These tools operate on the separate **Covison Supabase preview**. Use Python **3.11 or later**, Docker and the checked-in Covison Compose wrapper. Daily shop users only need a browser.
 
 ## Current automatic schedule
 

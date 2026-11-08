@@ -11,7 +11,7 @@ Django remains the transaction API for phone inventory, staff responsibility, PO
 - Main CRM: **http://localhost:8080/desk/mobile-shop** or **http://10.202.44.209:8080/desk/mobile-shop**
 - Previous LAN address: **http://10.202.44.209:8081/desk/mobile-shop** — an alias of the same main application/database
 - Supabase Studio and API: **http://10.202.44.209:8765**
-- Original Frappe CRM: backed up and stopped; preserved for guarded rollback
+
 
 Studio and the CRM have separate initial logins. See **`private/SERVER-LOGIN.txt`** on the server. Studio is for the owner/administrator; counter staff use their own CRM accounts. Server keys and database passwords are in `server/.env` and are never sent to CRM browser pages.
 
@@ -53,25 +53,6 @@ python3 supabase/control.py exec crm-web python manage.py bootstrap_supabase_own
 Download/build images once while connected, or transport matching Docker images on a drive and load them with `docker load`. Image bundles must match the shared server's CPU architecture. Current setup scripts preserve an existing `.env`; they do not rotate keys or passwords on repeated runs.
 
 An existing server is restored from its protected backup, including its original secrets and database encryption keys. A fresh `.env` is not a replacement for lost encryption keys.
-
-## Data migration and access
-
-The original Frappe/MariaDB CRM remains intact, backed up and stopped after the authorized local main-address promotion. `scripts/export_offline_snapshot.py` creates a read-only export; its checksum manifest is saved in `artifacts/source-manifest.json`. The snapshot is mounted read-only from `offline/imports/current-crm.json`.
-
-```sh
-python3 supabase/import_crm.py
-python3 supabase/control.py exec crm-web python manage.py verify_migration
-```
-
-The importer accepts an empty business database, checks the snapshot checksum, preserves the raw source records and reconciles stock at warehouse level and financial totals. Reimporting the same snapshot creates no duplicates. It will not merge a newer export over a database that has already begun trading.
-
-Before subsequent trading or training entries, the verified original copy contained 39 phones and 52 archived synthetic identifiers, stock worth PKR 2,593,163, customer invoice outstanding of PKR 205,000 and supplier invoice outstanding of PKR 1,101,454. The current catalogue provides 17 reports. **Sales & Accounts** is a normal operating-shop workspace for posted sales, purchases, balances and profit. Previously generated records retain their sample-origin information; they are not verification of actual business activity. Historical cancelled USD documents retain their original currency; active trading documents use PKR.
-
-Application tables are in the private `covison_app` schema. Anonymous and authenticated Supabase browser roles have no access to it. The Data API exposes only the dedicated `api` and `graphql_public` schemas. Money and stock changes pass through Django's atomic services rather than direct browser table writes.
-
-Staff logins are created through **Staff login accounts**. Supabase identities are explicitly linked to local staff users; a valid Supabase account alone grants no CRM access. Staff/shop permissions remain in the transaction API. Supabase access and refresh tokens stay in server-side sessions. Public signup, phone/SMS login and external OAuth providers are disabled. Offline password login does not need email delivery; email-based invitations/recovery require a separately configured mail service.
-
-PTA evidence is in a private Supabase Storage bucket. Downloads pass through authenticated, shop-scoped Django routes. Storage uses a Docker named volume because Docker Desktop bind mounts did not support the file backend's required extended attributes.
 
 ## Backups and verification
 
@@ -120,7 +101,7 @@ POS opening cash and per-till physical closing are implemented in the preview. S
 
 The [six-step rollout status](artifacts/ROLLOUT_STATUS.md) and [client handover worksheet](CLIENT_HANDOVER.md) track the remaining work. The read-only `manage.py deployment_readiness` command found one shop, no linked operator logins, 90 submitted demo documents and one legacy open shift; actual configuration and onsite acceptance are required. A fresh backup restored 33 captured tables without changing primary records. An independent backup destination and final-machine recovery remain pending.
 
-Supabase + Django is now the selected main CRM on this computer. The original address serves the replacement; the Frappe application and workers are preserved, backed up and stopped. See [the main CRM guide](MAIN_CRM.md) and [switch record](artifacts/main-crm-promotion.json). This local application switch does not certify the four-shop client deployment. The [Step 1 screen and feature review](artifacts/SCREEN_PARITY_REVIEW.md) covers 57 headless Chrome screens, fixes and remaining gaps. Original form layouts are not pixel-identical. Full native invoice/accounting and setup parity remains pending. Imported posted history is read-only in this version. Review these findings, actual shop names and staff permissions before switching the shops to this deployment. Physical printers and actual shop computers still need acceptance testing. Final cutover needs a fresh export with trading paused so the two systems do not receive separate live transactions.
+Supabase + Django is the application served on this computer. The [Step 1 screen and feature review](artifacts/SCREEN_PARITY_REVIEW.md) covers 57 headless Chrome screens. This local setup does not certify the four-shop client deployment: review actual shop names and staff permissions, test physical printers and shop computers, and complete HTTPS and independent backups before handover.
 
 The pinned official server release is `self-hosted/v0.8.3`; see `UPSTREAM.txt` and `UPSTREAM-LICENSE`. Key generation uses the reviewed upstream scripts and enables their asymmetric Auth settings. Covison service configuration is in `compose.covison.yaml`.
 

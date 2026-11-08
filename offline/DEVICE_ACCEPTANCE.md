@@ -63,4 +63,4 @@ Complete one copy of this table per premises. Run trading checks in a designated
 | Supervised uncertain-result retry: one invoice/stock change | Pending |
 | Checked by / accepted by | Pending |
 
-This step prepares hardware acceptance. It does not switch the shops from Frappe or complete the outstanding feature-parity work. Backup scheduling, recovery/startup on the final server and final cutover remain separate work.
+This step prepares hardware acceptance. Backup scheduling, recovery/startup on the final server and final cutover remain separate work.

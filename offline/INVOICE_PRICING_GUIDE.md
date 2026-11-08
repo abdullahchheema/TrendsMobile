@@ -1,6 +1,6 @@
 # Sales discounts and tax
 
-Available in the separate Supabase + Django preview. The original Frappe CRM has not been switched over.
+Available in the separate Supabase + Django preview.
 
 ## Enter a sale
 

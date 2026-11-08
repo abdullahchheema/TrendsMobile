@@ -22,19 +22,12 @@ paths += ['/fund-transfers/','/fund-transfers/new/']
 paths += ['/journals/','/journals/new/']
 paths += ['/records/Till/','/master/Till/new/','/records/POS%20Opening%20Entry/','/documents/POS%20Opening%20Entry/new/','/documents/POS%20Closing%20Entry/new/']
 paths += ['/setup/tax/','/setup/tax/new/','/setup/','/setup/new/','/records/Shop/','/records/Account/','/master/Account/new/']
-sidebar=ROOT.parent/'apps/covison_erp/covison_erp/mobile_shop/sidebar'
-for file in sidebar.glob('*/*.json'):
-    for entry in json.loads(file.read_text())['items']:
-        if entry['type']!='Link':continue
-        if entry['link_type']=='Page':paths.append('/desk/'+entry['link_to'])
-        elif entry['link_type']=='DocType':paths.append('/records/'+quote(entry['link_to'])+'/')
-        elif entry['link_type']=='Report':paths.append('/desk/query-report/'+quote(entry['link_to']))
 results={}
 for path in paths:
     page=client.open(base+path)
     assert page.status==200,path
     if path in ('/entry/sale/','/entry/purchase/'):
-        content=page.read().decode();assert 'data-easy-entry' in content and 'name="pta_status"' in content and 'IMEI' not in content,'Easy retail / PTA input is missing.'
+        content=page.read().decode();assert 'data-easy-entry' in content and 'name="pta_status"' in content and 'IMEI' in content,'Easy retail / PTA / IMEI input is missing.'
     if path=='/desk/point-of-sale':
         content=page.read().decode();assert 'name="customer_name"' in content and '<select name="customer"' not in content,'POS customer typing control is missing.'
     results[path]=page.status

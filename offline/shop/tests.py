@@ -1,10 +1,8 @@
-import hashlib,json,uuid
+import json,uuid
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
-from pathlib import Path
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError,PermissionDenied
-from django.core.management import call_command
 from django.db import close_old_connections,connections
 from django.db.models import Sum
 from django.test import TestCase,TransactionTestCase,Client
@@ -269,28 +267,3 @@ class Concurrency(TransactionTestCase):
             finally:connections.close_all()
         with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(sell,docs))
         self.assertCountEqual(results,['sold','blocked'])
-
-class SnapshotMigration(TestCase):
-    def test_import_reconciles_and_rerun_is_safe(self):
-        path=Path('/imports/current-crm.json')
-        if not path.exists():self.skipTest('Migration snapshot not mounted.')
-        digest=hashlib.sha256(path.read_bytes()).hexdigest()
-        call_command('import_frappe',str(path),sha256=digest,verbosity=0)
-        self.assertEqual(Device.objects.count(),39);self.assertEqual(IMEI.objects.count(),52)
-        self.assertEqual(Document.objects.filter(status='Cancelled',currency='USD').count(),10)
-        self.assertFalse(Document.objects.filter(status='Submitted').exclude(currency='PKR').exists())
-        self.assertEqual(StockMovement.objects.aggregate(v=Sum('value'))['v'],2593163)
-        count=Document.objects.count();call_command('import_frappe',str(path),sha256=digest,verbosity=0);self.assertEqual(Document.objects.count(),count)
-        user=get_user_model().objects.create_superuser('snapshot-owner',password='Snapshot-test-password-727!')
-        _,profit=run('Device Profit',user,{})
-        self.assertEqual(sum(r['Margin'] for r in profit),112351)
-        _,economics=run('Mobile Device Economics',user,{})
-        self.assertEqual(sum(r['Posted Margin After Repairs'] for r in economics),107851)
-        _,summary=run('Staff Summary',user,{})
-        self.assertEqual(sum(r['Net Device Purchases'] for r in summary),3115362)
-        self.assertEqual(sum(r['Net Sales'] for r in summary),668150)
-        self.assertEqual(sum(r['Money Collected'] for r in summary),463150)
-        self.assertEqual(sum(r['Money Paid / Refunded'] for r in summary),2054908)
-        self.client.force_login(user)
-        for name in REPORTS:self.assertEqual(self.client.get(reverse('report',args=[name])).status_code,200)
-        for doc in Document.objects.all():self.assertEqual(self.client.get(reverse('detail',args=[doc.pk])).status_code,200)

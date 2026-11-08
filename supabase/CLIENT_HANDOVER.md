@@ -64,15 +64,15 @@ Automated HTTP/browser results are supporting evidence; they do not fill the cli
 
 ## 6. Final shop-server deployment
 
-The authorized **local main-address switch is complete**: Supabase + Django serves port 8080 and the original Frappe application is backed up and stopped. See [the main CRM guide](MAIN_CRM.md) and [switch record](artifacts/main-crm-promotion.json). The current Supabase database is now the authoritative source for subsequent work. The following steps concern the final client/shop server and remain pending.
+Supabase + Django serves port 8080 and its database is the authoritative source for all work. The following steps concern the final client/shop server and remain pending.
 
-1. Agree the deployment window, data boundary, last document numbers and actual target server. Close/count tills and pause writes in the **current main Supabase CRM**. Keep the original Frappe archive stopped.
-2. Take a fresh complete Supabase backup with database, roles, files, encryption keys, protected environment and checksums. Include a matching application/runtime release for the actual target architecture. The historical Frappe JSON snapshot cannot represent transactions entered after the local main switch.
+1. Agree the deployment window, data boundary, last document numbers and actual target server. Close/count tills and pause writes in the **current main Supabase CRM**.
+2. Take a fresh complete Supabase backup with database, roles, files, encryption keys, protected environment and checksums. Include a matching application/runtime release for the actual target architecture.
 3. Restore first into separate staging on the selected final server. Preserve authentication identities, storage and encryption keys. Review the actual LAN address, host/callback settings, HTTPS and selected release. Do not merge independently traded databases or overwrite a target already in use.
 4. Reconcile per shop: exact devices/IMEIs, accessory quantities/values, AR/AP and advances/credits, cash/bank, tax, journals and till/daily closings. Record source backup hash, control totals, differences and dated acceptance.
 5. Prove access from each actual shop PC, operator permissions, physical scanning/printing, independent backup copying and final-machine reboot/recovery before moving staff to the new address.
 6. Make only the accepted target writable and keep the prior main installation as an archive. Check the first transactions and next closing. If the target has received no new transactions, a controlled rollback can resume the prior Supabase main installation. If new transactions exist, stop both and reconcile them before rollback; do not discard or duplicate them.
 
-Do not use the archived Frappe database as the source for a later migration of new Supabase transactions. The local `promote_main.py rollback` command is specifically for the recorded local Frappe-to-Supabase address switch and refuses after business records change; it is not a general final-server migration tool.
+The previous Frappe application has been removed from this repository; the Supabase database is the only system of record.
 
 Actual client details, physical acceptance, the independent backup destination and the final server remain prerequisites for shop production handover.

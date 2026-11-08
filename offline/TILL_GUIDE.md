@@ -1,6 +1,6 @@
 # Cash tills and POS shift closing
 
-This workflow is available in the separate Supabase + Django preview. The original Frappe CRM has not been switched over.
+This workflow is available in the separate Supabase + Django preview.
 
 ## Manager setup
 

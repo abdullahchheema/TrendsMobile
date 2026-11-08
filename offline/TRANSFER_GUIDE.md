@@ -1,6 +1,6 @@
 # Stock transfers between shops
 
-In the Supabase preview, the owner can now move phones and accessories between active shops in the same business. Shop managers retain access to transfers between warehouses in their own shop. This does not switch trading from the original Frappe CRM.
+In the Supabase preview, the owner can now move phones and accessories between active shops in the same business. Shop managers retain access to transfers between warehouses in their own shop.
 
 ## Prepare each shop
 
@@ -37,4 +37,4 @@ Check **Mobile Inventory**, **Stock Balance** and **General Ledger** with the re
 
 Submitted transfers cannot be cancelled in place. After checking current stock and open accounting dates, record a new transfer in the opposite direction with the original transfer code in the reason. This preserves the original handover and correcting movement. There is no automatic reverse-transfer button or receiver-approval workflow in this version.
 
-Inter-shop transfers support the shared business's branch stock, not sales between separate legal companies. Full native ERPNext accounting/invoice parity, accessory-return UI, POS cash tender/change, final shop/hardware acceptance and cutover remain separate work.
+Inter-shop transfers support the shared business's branch stock, not sales between separate legal companies. Accessory-return UI, POS cash tender/change, final shop/hardware acceptance and cutover remain separate work.

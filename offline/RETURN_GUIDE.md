@@ -35,4 +35,4 @@ Creating the draft and applying credit use the existing request-key protection a
 
 If an original invoice's total does not match its captured line amounts because of taxes, discounts or other adjustments, the standard return flow requests a reviewed credit calculation. Native invoice tax/discount and correction parity is still pending. This flow handles physical stock items, not service-fee credits or supplier returns.
 
-The original Frappe CRM has not been switched. Actual shop setup, physical handover/printer/LAN checks, independent backup copying and final-server recovery/cutover acceptance remain separate tasks.
+Actual shop setup, physical handover/printer/LAN checks, independent backup copying and final-server recovery/cutover acceptance remain separate tasks.

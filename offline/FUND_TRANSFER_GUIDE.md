@@ -49,4 +49,4 @@ Preparing a reverse draft does not move funds. Repeated preparation reopens the 
 
 The posting service revalidates roles, accounts, date, cashier, references and till funds. If account mappings or the current till shift changed since a draft was saved, edit and save it again to review the accounts and cash custody. Failed validation rolls back both sides. Request keys protect repeated saves/submissions, and concurrent deposits cannot both withdraw the same till cash.
 
-The feature is deployed in the separate Supabase preview. Existing business records and the original Frappe deployment remain unchanged. Native invoice tax/discount options, journals/amendments and final shop/server acceptance still require work before cutover.
+The feature is deployed in the separate Supabase preview. Native invoice tax/discount options, journals/amendments and final shop/server acceptance still require work before cutover.
