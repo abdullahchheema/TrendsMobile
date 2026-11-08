@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="{% static 'covison.css' %}">
 <link rel="stylesheet" href="{% static 'offline.css' %}">
 <link rel="stylesheet" href="{% static 'glass.css' %}">
+<script>try{if(sessionStorage.getItem('cov-shell'))document.documentElement.classList.add('shell-seen');else sessionStorage.setItem('cov-shell','1')}catch(e){}</script>
+<script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/logout/*"}},{"not":{"selector_matches":"[data-no-prefetch]"}}]},"eagerness":"moderate"}]}</script>
 </head>
 <body class="app">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
@@ -35,7 +37,6 @@
   <div class="welcome"><span>Welcome</span><strong>{{ user.get_full_name|default:user.get_username }}</strong></div>
   <div class="header-end">
     <span class="tag">Pakistan · PKR</span>
-    <span class="tag">Local server</span>
     <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button aria-label="Sign out"><svg class="ico" width="17" height="17" style="stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><use href="#i-out"/></svg>Sign out</button></form>
   </div>
 </header>
@@ -63,8 +64,12 @@
     {% if is_manager %}<a href="{% url 'settings' %}">Shop Settings</a><a href="{% url 'collection' 'Warehouse' %}">Warehouses</a><a href="{% url 'collection' 'Till' %}">Cash tills</a><a href="{% url 'users' %}">Staff login accounts</a>{% endif %}
     <a href="{% url 'device_check' %}">PC, scanner &amp; printer check</a><a href="{% url 'password' %}">Change password</a>
   </details>
-  <div class="side-foot"><small>Covison ERP · <a href="https://covison.com" rel="noopener">covison.com</a></small></div>
 </aside>
-<main class="app-main">{% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
+<main class="app-main" id="content">{% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
+<footer class="app-footer" role="contentinfo">
+  <div class="foot-credit"><img src="{% static 'covison-logo-mark.png' %}" alt="" width="22" height="22"><span>Designed &amp; developed by <a href="https://covison.com" rel="noopener">covison.com</a></span></div>
+  <span class="foot-rule" aria-hidden="true"></span>
+  <div class="foot-owner">This ERP is the property of <strong>{{ owner_company|default:"the business that operates it" }}</strong> &middot; &copy; {% now "Y" %} All rights reserved</div>
+</footer>
 <script src="{% static 'offline.js' %}" defer></script><script src="{% static 'payments.js' %}" defer></script><script src="{% static 'shell.js' %}" defer></script>{% block scripts %}{% endblock %}
 </body></html>

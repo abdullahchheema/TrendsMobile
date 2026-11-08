@@ -1,5 +1,6 @@
 """Hosted-deployment settings: DATABASE_URL parsing, Vercel hostnames, cache and static selection."""
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase,TestCase
 from config import deploy
 
 
@@ -27,3 +28,35 @@ class HostsAndModes(SimpleTestCase):
     def test_cache_and_static_modes(self):
         self.assertTrue(deploy.uses_database_cache({'DATABASE_URL':'x'}));self.assertFalse(deploy.uses_database_cache({}))
         self.assertTrue(deploy.static_from_finders({'VERCEL':'1'}));self.assertFalse(deploy.static_from_finders({}))
+
+
+class VercelPathDecoding(SimpleTestCase):
+    def test_percent_encoded_path_is_decoded_only_on_vercel(self):
+        import os
+        from unittest.mock import patch
+        from config.wsgi import decode_path_info
+        with patch.dict(os.environ,{'VERCEL':'1'}):
+            self.assertEqual(decode_path_info({'PATH_INFO':'/records/Purchase%20Receipt/'})['PATH_INFO'],'/records/Purchase Receipt/')
+        with patch.dict(os.environ,{},clear=False):
+            os.environ.pop('VERCEL',None)
+            self.assertEqual(decode_path_info({'PATH_INFO':'/records/Purchase%20Receipt/'})['PATH_INFO'],'/records/Purchase%20Receipt/')
+
+
+
+class VercelSpacedUrlEndToEnd(TestCase):
+    def call(self,vercel):
+        import os
+        from unittest.mock import patch
+        from wsgiref.util import setup_testing_defaults
+        from config.wsgi import application
+        user=get_user_model().objects.create_superuser('wsgi-owner',password='Unrelated-test-password-729!');self.client.force_login(user)
+        environ={'REQUEST_METHOD':'GET'};setup_testing_defaults(environ);environ['PATH_INFO']='/records/Purchase%20Receipt/';environ['HTTP_COOKIE']='sessionid='+self.client.cookies['sessionid'].value
+        seen=[]
+        with patch.dict(os.environ,{'VERCEL':'1'} if vercel else {}):
+            if not vercel:os.environ.pop('VERCEL',None)
+            list(application(environ,lambda status,headers,exc=None:seen.append(status)))
+        return seen[0]
+    def test_runtime_passing_an_encoded_path_now_reaches_the_page(self):
+        self.assertTrue(self.call(True).startswith('200'))
+    def test_without_decoding_the_same_request_is_a_404(self):
+        self.assertTrue(self.call(False).startswith('404'))

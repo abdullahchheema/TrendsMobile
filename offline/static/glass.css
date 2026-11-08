@@ -9,7 +9,7 @@
   --ok:#5eead4;--warn:#fbbf24;--bad:#fda4af;--link:#c4b5fd;
   --glass:rgba(255,255,255,.155);--glass-line:rgba(255,255,255,.20);
   --glass-chrome:linear-gradient(180deg,rgba(255,255,255,.125) 0%,rgba(255,255,255,.135) 13%,rgba(255,255,255,.098) 34%,rgba(255,255,255,.092) 100%);
-  --glass-card:linear-gradient(180deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,.17) 24%,rgba(255,255,255,.155) 78%,rgba(255,255,255,.14) 100%);
+  --glass-card:linear-gradient(180deg,rgba(255,255,255,.20) 0%,rgba(255,255,255,.258) 24%,rgba(255,255,255,.25) 78%,rgba(255,255,255,.23) 100%);
   --glass-data:rgba(10,14,28,.46);       /* denser panel behind tables & forms for legibility */
   --blur-1:blur(16px) saturate(115%);--blur-2:blur(18px) saturate(115%);--blur-3:blur(26px) saturate(118%);
   --r-sm:10px;--r-md:16px;--r-lg:24px;--r-xl:26px;
@@ -24,10 +24,10 @@ html:has(body.app),html:has(body.login){background:var(--bg)}
 body.app,body.login{margin:0;min-height:100vh;color:var(--ink);background:transparent;font-family:var(--font);font-feature-settings:"kern" 1;-webkit-font-smoothing:antialiased;font-size:14px;color-scheme:dark}
 body.app::before,body.login::before{content:"";position:fixed;inset:-10%;z-index:-2;pointer-events:none;
   background:
-   radial-gradient(52% 46% at 14% 8%,rgba(99,102,241,.92),transparent 68%),
-   radial-gradient(46% 44% at 90% 14%,rgba(192,80,255,.70),transparent 70%),
-   radial-gradient(50% 46% at 70% 96%,rgba(20,184,166,.52),transparent 68%),
-   radial-gradient(44% 42% at 4% 92%,rgba(59,130,246,.62),transparent 68%),
+   radial-gradient(52% 46% at 14% 8%,rgba(110,113,255,1),transparent 68%),
+   radial-gradient(46% 44% at 90% 14%,rgba(206,96,255,.88),transparent 70%),
+   radial-gradient(50% 46% at 70% 96%,rgba(32,214,190,.66),transparent 68%),
+   radial-gradient(44% 42% at 4% 92%,rgba(70,150,255,.78),transparent 68%),
    radial-gradient(38% 32% at 38% 46%,rgba(99,102,241,.46),transparent 70%),
    radial-gradient(32% 28% at 80% 56%,rgba(168,85,247,.36),transparent 70%),
    radial-gradient(34% 30% at 52% 80%,rgba(45,212,191,.26),transparent 70%),
@@ -259,3 +259,53 @@ body.app .cov-recent td{padding:10px 12px}
 @media(max-width:1100px){body.app .cov-insight{grid-template-columns:1fr}body.app .cov-rail{flex-direction:row;flex-wrap:wrap}body.app .cov-rail>*{flex:1 1 240px}}
 @media(max-width:650px){body.app .cov-pnl{text-align:left}body.app .cov-days{grid-template-columns:repeat(7,1fr)}body.app .cov-days li:nth-child(-n+7){display:none}body.app .cov-trend h2{font-size:28px}}
 @media(prefers-reduced-motion:reduce){body.app .cov-wave .wline{stroke-dashoffset:0!important}}
+
+/* ---------- v2: header bar, shine, footer, smooth navigation ---------- */
+:root{--foot-h:48px}
+@view-transition{navigation:auto}
+.sidebar{view-transition-name:sidebar}
+body.app .app-header{view-transition-name:header}
+body.app .app-footer{view-transition-name:footer}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.22s;animation-timing-function:var(--e-soft)}
+html.shell-seen body.app .sidebar,html.shell-seen body.app .sidebar .brand img,html.shell-seen body.app .sidebar a[aria-current=page]::before{animation:none!important}
+html.shell-seen body.app .app-main>*{animation-duration:.3s;animation-delay:0s}
+
+/* header: a real glass bar, so scrolled content passes cleanly underneath it */
+body.app .app-header{top:0;left:calc(var(--side-w) + 32px);right:0;height:68px;padding:0 16px 0 4px;z-index:15;
+  background:linear-gradient(180deg,rgba(8,11,24,.82),rgba(8,11,24,.62));backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);
+  border-bottom:1px solid rgba(255,255,255,.14);box-shadow:0 10px 30px rgba(0,0,0,.25),inset 0 -1px 0 rgba(255,255,255,.05)}
+body.app .app-main{margin-top:88px;padding-bottom:calc(var(--foot-h) + 34px)}
+body.app .sidebar{bottom:calc(var(--foot-h) + 28px)}
+
+/* shine: bright top edge, soft light bloom and a sweep on hover */
+body.app .panel,body.app .cov-hero,body.app .cov-stat,body.app .cov-inventory,body.app .cov-model-card,body.app .easy-extra,body.app .cov-kpi{
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 0 0 1px rgba(255,255,255,.05),0 18px 50px rgba(0,0,0,.30)}
+body.app .panel::before,body.app .cov-hero::before,body.app .cov-stat::before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:radial-gradient(120% 70% at 0% 0%,rgba(255,255,255,.24),transparent 58%),radial-gradient(90% 60% at 100% 100%,rgba(167,139,250,.16),transparent 60%)}
+body.app .panel::after,body.app .cov-stat::after,body.app .cov-hero::after{animation:sheen 1.15s var(--e-soft) 1.2s 1 backwards;transform:translate3d(-150%,0,0) skewX(-18deg);transition:transform 0s .9s}
+body.app .panel:hover::after,body.app .cov-stat:hover::after,body.app .cov-hero:hover::after{transform:translate3d(260%,0,0) skewX(-18deg);transition:transform .9s var(--e-soft)}
+body.app .cov-stat>strong,body.app .cov-kpi>strong,body.app .cov-trend h2{text-shadow:0 0 28px rgba(167,139,250,.45)}
+body.app .sidebar{box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 0 0 1px rgba(255,255,255,.05),0 20px 60px rgba(0,0,0,.35)}
+body.app .primary,body.app .cov-btn-light,body.app .cov-btn-primary,body.app .sidebar .primary-nav{background-size:200% 100%;box-shadow:0 8px 24px rgba(106,92,240,.45),inset 0 1px 0 rgba(255,255,255,.35)}
+
+/* footer: full-width credit bar at the bottom of the window */
+body.app .app-footer{position:fixed;left:16px;right:16px;bottom:12px;height:var(--foot-h);z-index:14;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 22px;border-radius:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.09));backdrop-filter:var(--blur-2);-webkit-backdrop-filter:var(--blur-2);border:1px solid var(--glass-line);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 10px 30px rgba(0,0,0,.3);font-size:12.5px;color:var(--ink-2)}
+body.app .app-footer::before{content:"";position:absolute;left:18px;right:18px;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(196,181,253,.9),rgba(255,255,255,.9),rgba(196,181,253,.9),transparent);opacity:.7}
+body.app .foot-credit{display:flex;align-items:center;gap:10px;white-space:nowrap;font-weight:500;color:#fff}
+body.app .foot-credit img{width:22px;height:22px;object-fit:contain}
+body.app .foot-credit a{color:#c4b5fd;font-weight:700;letter-spacing:.2px}
+body.app .foot-rule{flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.28),rgba(255,255,255,.04))}
+body.app .foot-owner{text-align:right;color:var(--ink-2)}
+body.app .foot-owner strong{color:#fff;font-weight:650}
+@media(max-width:860px){
+  :root{--foot-h:62px}
+  body.app .app-header{left:0;height:62px;padding:0 12px}
+  body.app .app-main{margin-top:78px}
+  body.app .app-footer{left:10px;right:10px;bottom:8px;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:6px 14px;font-size:11.5px}
+  body.app .foot-rule{display:none}body.app .foot-owner{text-align:left}
+  body.app .sidebar{bottom:calc(var(--foot-h) + 18px)}
+}
+@media print{body.app .app-footer{display:none}}
+@media(prefers-reduced-motion:reduce){::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}

@@ -52,5 +52,6 @@ def navigation(request):
         sections=[(section,links) for section,links in NAV if (section!='Buy' or can_costs) and (section not in ('Exchanges','Stock') or is_manager) and (section!='Sell / POS' or can_sell)]
         visible=[name for name in REPORTS if (name not in ('Device Profit','Mobile Device Economics','Purchase Register','Accounts Payable') or can_costs) and (name not in STATEMENTS or is_manager) and (name not in ('Staff Activity','Staff Summary','Mobile Device Economics') or is_manager)]
         from .report_catalog import label
-        return dict(navigation=sections,reports=visible,report_navigation=[dict(name=name,label=label(name)) for name in visible],staff_report_navigation=[dict(name=name,label=label(name)) for name in visible if name.startswith('Staff ')],can_costs=can_costs,can_sell=can_sell,is_manager=is_manager,can_fund_transfers=is_manager or person.can_handle_payments,shops=branches(request.user))
+        company=branches(request.user).exclude(company='').values_list('company',flat=True).first() or ''
+        return dict(owner_company=company,navigation=sections,reports=visible,report_navigation=[dict(name=name,label=label(name)) for name in visible],staff_report_navigation=[dict(name=name,label=label(name)) for name in visible if name.startswith('Staff ')],can_costs=can_costs,can_sell=can_sell,is_manager=is_manager,can_fund_transfers=is_manager or person.can_handle_payments,shops=branches(request.user))
     except PermissionDenied:return {}
