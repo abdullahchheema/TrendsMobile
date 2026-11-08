@@ -8,9 +8,9 @@ Django remains the transaction API for phone inventory, staff responsibility, PO
 
 ## Current addresses
 
-- Main CRM: **http://localhost:8080/desk/mobile-shop** or **http://10.202.44.209:8080/desk/mobile-shop**
-- Previous LAN address: **http://10.202.44.209:8081/desk/mobile-shop** — an alias of the same main application/database
-- Supabase Studio and API: **http://10.202.44.209:8765**
+- Main CRM: **http://localhost:8080/desk/mobile-shop** or **http://SERVER-LAN-ADDRESS:8080/desk/mobile-shop**
+- Previous LAN address: **http://SERVER-LAN-ADDRESS:8081/desk/mobile-shop** — an alias of the same main application/database
+- Supabase Studio and API: **http://SERVER-LAN-ADDRESS:8765**
 
 
 Studio and the CRM have separate initial logins. See **`private/SERVER-LOGIN.txt`** on the server. Studio is for the owner/administrator; counter staff use their own CRM accounts. Server keys and database passwords are in `server/.env` and are never sent to CRM browser pages.

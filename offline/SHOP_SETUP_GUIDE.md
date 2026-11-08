@@ -1,6 +1,6 @@
 # Four-shop setup
 
-The setup tools are available in the separate Supabase + Django preview at **http://10.202.44.209:8081/setup/**. Actual shop and staff records are pending the client's details. Existing imported records have been preserved.
+The setup tools are available in the separate Supabase + Django preview at **http://SERVER-LAN-ADDRESS:8081/setup/**. Actual shop and staff records are pending the client's details. Existing imported records have been preserved.
 
 ## Owner workflow
 

@@ -4,7 +4,7 @@ The Supabase preview has a **PC, scanner & printer check** link in its sidebar. 
 
 ## Shared-server connection
 
-Each shop computer uses a browser to reach the shared server's private LAN address, currently `http://10.202.44.209:8081`. Use the installed server's actual address after deployment. Test each physical premises: the four shops must have a working network route to this server. Merely sharing the same business does not put separate premises on one LAN.
+Each shop computer uses a browser to reach the shared server's private LAN address, currently `http://SERVER-LAN-ADDRESS:8081`. Use the installed server's actual address after deployment. Test each physical premises: the four shops must have a working network route to this server. Merely sharing the same business does not put separate premises on one LAN.
 
 The connection check contacts the local app and database. It does not use the browser's internet indicator to decide whether trading is possible. Supabase sign-in and an approved test transaction must also succeed on each PC. Daily users do not need Python or Docker installed on their PCs.
 
