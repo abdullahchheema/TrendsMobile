@@ -106,34 +106,3 @@ class EasyRetail(TestCase):
         payload=dict(request_key=str(uuid.uuid4()),branch=str(self.branch.pk),customer_name='Invalid PTA Customer',seller=str(self.seller.pk),items=[dict(product=str(self.product.pk),device=str(phone.pk),warehouse=str(self.warehouse.pk),quantity=1,rate='65000',pta_status='Approved maybe')])
         response=self.client.post(reverse('pos_checkout'),json.dumps(payload),content_type='application/json');self.assertEqual(response.status_code,400)
         self.assertFalse(Party.objects.filter(name='Invalid PTA Customer').exists());phone.refresh_from_db();self.assertEqual(phone.status,'Available')
-
-
-class EasyDemo(TestCase):
-    def setUp(self):self.__dict__.update(fixtures());self.client.force_login(self.user)
-    def seed(self,**kwargs):
-        output=io.StringIO();call_command('seed_easy_demo',actor=self.user.username,stdout=output,**kwargs);return output.getvalue()
-    def test_demo_seed_reconciles_sales_credit_stock_and_profit_without_imei(self):
-        self.seed();branch=Branch.objects.get(code='COV-DEMO');docs=Document.objects.filter(branch=branch)
-        self.assertEqual(docs.count(),23);self.assertEqual(Device.objects.filter(branch=branch).count(),6);self.assertFalse(IMEI.objects.filter(device__branch=branch).exists())
-        self.assertEqual(docs.filter(kind='Sales Invoice').aggregate(total=Sum('total'))['total'],295000)
-        self.assertEqual(docs.filter(kind='Sales Invoice').aggregate(total=Sum('outstanding'))['total'],110000)
-        self.assertEqual(docs.filter(kind='Purchase Invoice').aggregate(total=Sum('outstanding'))['total'],380000)
-        response=self.client.get(reverse('sales_accounts'),{'branch':str(branch.pk)});self.assertContains(response,'40,000.00');self.assertContains(response,'110,000.00');self.assertContains(response,'380,000.00')
-        self.assertFalse(Document.objects.filter(branch=self.branch).exists())
-    def test_demo_seed_is_idempotent_and_dry_run_leaves_no_records(self):
-        self.seed(dry_run=True);self.assertFalse(Branch.objects.filter(code='COV-DEMO').exists())
-        self.seed();count=Document.objects.count();self.assertIn('already_seeded',self.seed());self.assertEqual(Document.objects.count(),count)
-    def test_further_training_entries_keep_demo_labels(self):
-        self.seed();branch=Branch.objects.get(code='COV-DEMO');phone=Device.objects.filter(branch=branch,status='Available').first();staff=Staff.objects.get(branch=branch,can_sell=True)
-        sale=easy_retail.sale(dict(branch=branch,party_name='Practice Customer',phone=phone,price=phone.asking_price,pta_status=phone.pta_status,staff=staff,handler=staff,posting_date=timezone.localdate(),payment_status='unpaid',method='Cash'),self.user)
-        self.assertEqual(sale.demo_batch,branch.demo_batch);self.assertEqual(sale.customer.demo_batch,branch.demo_batch)
-    def test_counter_navigation_keeps_the_selected_training_shop(self):
-        self.seed();branch=Branch.objects.get(code='COV-DEMO')
-        for kind in ('sale','purchase'):
-            response=self.client.get(reverse('easy_entry',args=[kind]),{'branch':str(branch.pk)})
-            self.assertContains(response,'Record origin');self.assertNotContains(response,'Practice entries')
-            for target in ('sale','purchase'):self.assertContains(response,reverse('easy_entry',args=[target])+'?branch='+str(branch.pk))
-    def test_reports_label_training_data_and_real_shop_filter_excludes_it(self):
-        self.seed();url=reverse('report',args=['Profit and Loss Statement'])
-        self.assertContains(self.client.get(url),'generated as sample entries')
-        self.assertNotContains(self.client.get(url,{'branch':str(self.branch.pk)}),'generated as sample entries')

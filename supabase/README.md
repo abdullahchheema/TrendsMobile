@@ -67,7 +67,7 @@ Backups include the full PostgreSQL database, cluster roles, file storage with e
 
 The [operations guide](OPERATIONS.md) covers the installed Mac daily schedule after 02:00 Pakistan time, weekly restore verification, interrupted-backup recovery, a second-copy destination and final-server scheduling. The second copy is awaiting a destination; Mac scheduling requires this user session and Docker. Run `python3 supabase/operations.py status` to inspect backup freshness and checksums.
 
-`verify_backup.py --backup BACKUP_FOLDER` checks restoration into a disposable database and storage volume and removes those temporary resources. It compares against that backup's captured fingerprints rather than fixed demo totals, and checks file bytes and extended attributes. It never restores over the live database. Full replacement-server boot/recovery with saved encryption keys still needs a rehearsal on the actual server.
+`verify_backup.py --backup BACKUP_FOLDER` checks restoration into a disposable database and storage volume and removes those temporary resources. It compares against that backup's captured fingerprints rather than fixed totals, and checks file bytes and extended attributes. It never restores over the live database. Full replacement-server boot/recovery with saved encryption keys still needs a rehearsal on the actual server.
 
 Verified artifacts:
 
@@ -99,7 +99,7 @@ POS opening cash and per-till physical closing are implemented in the preview. S
 
 [Owner accounting adjustments](artifacts/JOURNAL_STATUS.md) are deployed at `/journals/`, with balanced PKR rows, linked reversal/replacement corrections, owner permissions and closed-date protection. Control accounts retain their dedicated stock/payment/party/tax workflows. See the [journal guide](../offline/JOURNAL_GUIDE.md).
 
-The [six-step rollout status](artifacts/ROLLOUT_STATUS.md) and [client handover worksheet](CLIENT_HANDOVER.md) track the remaining work. The read-only `manage.py deployment_readiness` command found one shop, no linked operator logins, 90 submitted demo documents and one legacy open shift; actual configuration and onsite acceptance are required. A fresh backup restored 33 captured tables without changing primary records. An independent backup destination and final-machine recovery remain pending.
+Track the remaining work in the [client handover worksheet](CLIENT_HANDOVER.md). The read-only `manage.py deployment_readiness` command reports configuration and data-integrity gaps; actual shop configuration, operator logins and onsite acceptance are required before go-live. An independent backup destination and final-machine recovery remain pending.
 
 Supabase + Django is the application served on this computer. The [Step 1 screen and feature review](artifacts/SCREEN_PARITY_REVIEW.md) covers 57 headless Chrome screens. This local setup does not certify the four-shop client deployment: review actual shop names and staff permissions, test physical printers and shop computers, and complete HTTPS and independent backups before handover.
 

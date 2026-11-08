@@ -43,9 +43,6 @@ class LiveSalesAccounts(TestCase):
         user=get_user_model().objects.create_user('live-sales-only');self.seller.user=user;self.seller.save();self.client.force_login(user)
         response=self.client.get(reverse('sales_accounts'));self.assertRedirects(response,reverse('dashboard'))
         self.assertNotContains(self.client.get(reverse('dashboard')),'Sales &amp; Accounts')
-    def test_old_training_url_redirects_to_normal_workspace(self):
-        response=self.client.get(reverse('training'),{'branch':str(self.branch.pk)})
-        self.assertRedirects(response,reverse('sales_accounts')+'?branch='+str(self.branch.pk))
     def test_new_operating_transactions_do_not_inherit_demo_mode_from_stock_or_parties(self):
         self.product.demo_batch='INITIAL-STOCK';self.product.save()
         self.supplier.demo_batch='INITIAL-PARTIES';self.supplier.save()

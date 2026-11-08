@@ -153,7 +153,6 @@ body.app .cov-model-card h3 a{color:#fff}body.app .cov-model-card p{color:var(--
 body.app .cov-model-icon{background:rgba(255,255,255,.12);color:#fff}
 body.app .cov-device-count{border-color:rgba(255,255,255,.25);color:var(--ink-2)}
 body.app .cov-empty{color:var(--ink-3)}body.app .cov-footer,body.app .cov-footer a{color:var(--ink-3)}
-body.app .cov-demo-notice{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.4);color:#fef3c7}
 
 /* ---------- misc app components ---------- */
 body.app .record-summary strong,body.app .statement-cards h2{color:var(--ink-3)}

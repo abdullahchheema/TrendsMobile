@@ -22,7 +22,6 @@ class Command(BaseCommand):
         bad_imeis=sum(not valid_imei(number) for number in IMEI.objects.values_list('number',flat=True))
         missing=Device.objects.filter(status='Available').exclude(imeis__slot=1).count()
         imported_legacy=Document.objects.filter(kind='POS Opening Entry',status='Submitted',state='Open',till__isnull=True).count()
-        sample_docs=Document.objects.filter(status='Submitted').exclude(demo_batch='').count()
         issues=[]
         if not settings.SUPABASE_AUTH_ENABLED:issues.append('The selected deployment requires Supabase Auth; this instance is using the standalone development login.')
         if len(shops)!=4:issues.append('Configure the actual four active shops; confirm the disposition of the imported shop.')
@@ -30,12 +29,11 @@ class Command(BaseCommand):
         if unbalanced:issues.append('Review the unbalanced shop ledgers.')
         if negative or bad_imeis or missing:issues.append('Review stock quantities and device IMEI exceptions.')
         if imported_legacy:issues.append('Review and close imported legacy POS shifts with actual evidence.')
-        if sample_docs:issues.append('Confirm how demonstration data will be separated from live trading; do not delete posted history.')
         result=dict(generated_at_utc=timezone.now().isoformat(),read_only=True,planned_shops=4,active_shops=len(shops),shops=shops,
             supabase_auth_enabled=settings.SUPABASE_AUTH_ENABLED,
-            data_checks=dict(unbalanced_shop_ledgers=unbalanced,negative_stock_groups=negative,invalid_format_imeis=bad_imeis,available_phones_missing_primary_imei=missing,open_legacy_shifts=imported_legacy,submitted_demo_documents=sample_docs),
+            data_checks=dict(unbalanced_shop_ledgers=unbalanced,negative_stock_groups=negative,invalid_format_imeis=bad_imeis,available_phones_missing_primary_imei=missing,open_legacy_shifts=imported_legacy),
             configured_sales_tax_rules=SalesTaxRule.objects.count(),manual_journals=Document.objects.filter(data__manual_journal__version=1).count(),
             configuration_issues=issues,automated_configuration_ready=not issues,
             client_and_onsite_acceptance='Not assessed by this command',
-            required_external_evidence=['Client-approved tax treatment (including explicit no-tax decision if appropriate)','Actual shop/staff configuration and demo-data disposition','Connection from every shop PC with internet disconnected and LAN connected','Physical scanner and printed receipt checks per shop','Independent backup copy and replacement-server recovery/reboot','Client acceptance of the purchase/sale/return/exchange/payment/closing workflows','Fresh trading-paused export and reconciliation before the switch'])
+            required_external_evidence=['Client-approved tax treatment (including explicit no-tax decision if appropriate)','Actual shop/staff configuration','Connection from every shop PC with internet disconnected and LAN connected','Physical scanner and printed receipt checks per shop','Independent backup copy and replacement-server recovery/reboot','Client acceptance of the purchase/sale/return/exchange/payment/closing workflows','Fresh trading-paused export and reconciliation before the switch'])
         self.stdout.write(json.dumps(result,indent=2,ensure_ascii=False))

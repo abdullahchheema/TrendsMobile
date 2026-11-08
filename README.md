@@ -32,4 +32,4 @@ Simple one-save sales and purchases with optional IMEI capture, PTA / Non-PTA ph
 - [Backup and recovery](supabase/OPERATIONS.md)
 - [Client handover and onsite acceptance](supabase/CLIENT_HANDOVER.md)
 
-The current dataset still contains demonstration records. Actual four-shop/staff setup, approved tax treatment, shop equipment/LAN, HTTPS, independent backups and client acceptance remain required before production handover. The current application image is Linux ARM64.
+The repository contains no sample data: create the shops, staff, products and opening balances through the setup screens. Actual four-shop/staff setup, approved tax treatment, shop equipment/LAN, HTTPS, independent backups and client acceptance remain required before production handover. The current application image is Linux ARM64.

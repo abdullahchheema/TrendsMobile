@@ -2,7 +2,7 @@ from django.urls import path
 from django.contrib.auth import views as auth
 from shop import views,tax_views,easy_views,stock_adjust
 from shop.login_throttle import ThrottledLoginView
-urlpatterns=[path('stock/adjust/',stock_adjust.adjust,name='stock_adjust'),path('sales-accounts/',easy_views.sales_accounts,name='sales_accounts'),path('training/',easy_views.training,name='training'),path('entry/<str:kind>/',easy_views.entry,name='easy_entry'),path('entry/done/<uuid:pk>/',easy_views.done,name='easy_done'),path('',views.dashboard),path('health/',views.health),
+urlpatterns=[path('stock/adjust/',stock_adjust.adjust,name='stock_adjust'),path('sales-accounts/',easy_views.sales_accounts,name='sales_accounts'),path('entry/<str:kind>/',easy_views.entry,name='easy_entry'),path('entry/done/<uuid:pk>/',easy_views.done,name='easy_done'),path('',views.dashboard),path('health/',views.health),
     path('login/',ThrottledLoginView.as_view(),name='login'),path('logout/',views.sign_out,name='logout'),
     path('account/password/',views.change_password,name='password'),
     path('accounts/',views.users,name='users'),

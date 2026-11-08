@@ -82,9 +82,3 @@ def sales_accounts(request):
     reports=[dict(name=name,url=reverse('report',args=[name])+'?'+urlencode({**params,'from_date':str(start)})) for name in ('Sales Register','Purchase Register','Accounts Receivable','Accounts Payable','Profit and Loss Statement','Balance Sheet','Trial Balance')]
     return render(request,'sales_accounts.html',dict(title='Sales & Accounts',branch=branch,form=form,totals=totals,reports=reports,from_date=start,to_date=end))
 
-
-@login_required
-def training(request):
-    from django.urls import reverse
-    from urllib.parse import urlencode
-    return redirect(reverse('sales_accounts')+('?' +urlencode(request.GET) if request.GET else ''))

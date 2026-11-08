@@ -46,7 +46,7 @@ def document(user,pk):
     return doc
 def selected_branch(user,value=None):
     places=access.branches(user)
-    try:branch=places.filter(pk=value).first() if value else places.exclude(code='COV-DEMO').first() or places.first()
+    try:branch=places.filter(pk=value).first() if value else places.first()
     except (ValueError,ValidationError):raise Http404('Invalid shop.')
     if value and not branch:raise Http404('Shop not available.')
     return branch
@@ -101,7 +101,7 @@ def dashboard(request):
         insight.update(money=dm.finance(request.user,insight['shop']) if manager_view else None,balances=dm.balances(insight['shop']) if manager_view else [],trend=trend,
                        chart=dm.chart_geometry(trend),recent=dm.recent(insight['shop']),week=sum((p['net'] for p in trend[-7:]),Decimal(0)))
     return render(request,'dashboard.html',dict(insight=insight,title='Mobile Shop',devices=rows,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
-        demo_shop=access.branches(request.user).filter(code='COV-DEMO').first(),models=PhoneModel.objects.order_by('name'),demo=any(d.demo_batch for d in all_devices)))
+        models=PhoneModel.objects.order_by('name')))
 
 @login_required
 def collection(request,kind):
@@ -477,7 +477,6 @@ def report(request,name):
     presentation=report_presentation.context(name,columns,rows,form.params(),scoped(request.user),scoped_devices(request.user),request.user)
     included=access.branches(request.user)
     if form.cleaned_data.get('branch'):included=included.filter(pk=form.cleaned_data['branch'].pk)
-    presentation['includes_training']=included.filter(code='COV-DEMO').exists()
     applied=[dict(label=form.fields[key].label or key.replace('_',' ').title(),value=str(value)) for key,value in form.cleaned_data.items() if value not in (None,'',False) and key not in ('sort_by','sort_dir')]
     return render(request,'report.html',dict(title=report_catalog.label(name),filter_form=form,columns=columns,rows=[[r.get(c,'') for c in columns] for r in rows],query=request.GET.urlencode(),statement_summary=statement_summary,inventory_report=name in ('Mobile Inventory','Mobile Stock Ageing','Mobile Device Economics'),applied_filters=applied,**presentation))
 

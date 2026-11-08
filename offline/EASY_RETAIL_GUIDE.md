@@ -33,4 +33,3 @@ New Sale and Buy Stock are normal operating features: a successful save immediat
 
 Previously generated sample entries keep their source information in record history. Those entries are not verification that a physical purchase, sale or payment actually happened. Actual business activity should be entered using the shop’s real names, prices and payments.
 
-Choosing an existing phone, variant, customer or supplier from initial data does not automatically mark a new operating-shop transaction as demo. Its initial-record provenance is retained under Record history. Explicit sample-shop transactions keep their original labels.
