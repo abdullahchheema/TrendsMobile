@@ -43,6 +43,10 @@ postgresql://covison_app.PROJECTREF:DB_PASSWORD@aws-0-REGION.pooler.supabase.com
 
 ## Part 2 — Create the tables and the owner (once, from your computer)
 
+**Easiest way:** run `powershell -ExecutionPolicy Bypass -File supabase\hostedirst-time-setup.ps1` from the project folder and answer
+the questions. It does everything below, keeps your answers out of the project, and writes the values for Vercel to
+`supabase\privateercel-env.txt` (ignored by git). The manual steps follow if you prefer them.
+
 You need Python 3.11 or newer. In PowerShell, from the project folder:
 
 ```powershell
