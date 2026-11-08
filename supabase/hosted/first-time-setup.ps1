@@ -18,6 +18,14 @@ function AskSecret([string]$text) {
     try { return ([Runtime.InteropServices.Marshal]::PtrToStringAuto($b)).Trim() } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
 }
 
+function JwtClaims([string]$jwt) {
+    try {
+        $p = $jwt.Split('.')[1].Replace('-', '+').Replace('_', '/')
+        switch ($p.Length % 4) { 2 { $p += '==' } 3 { $p += '=' } }
+        return ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p)) | ConvertFrom-Json)
+    } catch { return $null }
+}
+
 Write-Host ""
 Write-Host "Step 1 of 3 - answers from your Supabase dashboard" -ForegroundColor Cyan
 Write-Host "Project URL: Project Settings > API. It looks like https://abcdefghijklmnop.supabase.co"
@@ -41,6 +49,14 @@ Write-Host "Keys: Project Settings > API Keys. Use the 'Legacy' tab: anon key an
 $anon = AskSecret "anon key (typing is hidden)"
 $service = AskSecret "service_role key (typing is hidden)"
 if ($anon.Length -lt 30 -or $service.Length -lt 30) { throw "A key looks too short. Copy the whole key." }
+if ($anon -eq $service) { throw "The anon key and the service_role key are identical. Copy each from its own row on the API Keys page." }
+foreach ($pair in @(@('anon', $anon), @('service_role', $service))) {
+    $claims = JwtClaims $pair[1]
+    if ($claims) {
+        if ($claims.role -ne $pair[0]) { throw "The key you pasted as '$($pair[0])' is actually a '$($claims.role)' key. Swap them." }
+        if ($claims.ref -and $claims.ref -ne $ref) { throw "The $($pair[0]) key belongs to a different Supabase project ($($claims.ref)), not $ref. Copy the keys from the project you are setting up." }
+    } else { Write-Host "Note: the $($pair[0]) key is not in the older eyJ... format, so it could not be pre-checked." -ForegroundColor Yellow }
+}
 
 Write-Host ""
 Write-Host "Step 2 of 3 - the owner login you will use to sign in to the ERP" -ForegroundColor Cyan

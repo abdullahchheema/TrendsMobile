@@ -12,6 +12,7 @@ def call(path,method='GET',payload=None,token=None,admin=False,content_type='app
     key=settings.SUPABASE_SECRET_KEY if admin else settings.SUPABASE_PUBLISHABLE_KEY
     headers={'apikey':key,'Content-Type':content_type}
     if token:headers['Authorization']='Bearer '+token
+    elif key.count('.')==2:headers['Authorization']='Bearer '+key  # legacy JWT keys: hosted Supabase Auth admin and Storage read the bearer header
     raw=payload if isinstance(payload,bytes) else json.dumps(payload).encode() if payload is not None else None
     try:
         with urlopen(Request(settings.SUPABASE_INTERNAL_URL+path,data=raw,headers=headers,method=method),timeout=10) as response:
@@ -19,7 +20,7 @@ def call(path,method='GET',payload=None,token=None,admin=False,content_type='app
             return json.loads(body) if not raw_response and 'json' in response.headers.get('Content-Type','') and body else body
     except HTTPError as error:
         # Provider responses can include user data or tokens. Do not echo response bodies.
-        if error.code in (400,401,403,404,409,422):raise ValidationError('The authentication or file request was rejected. Check the account, permissions and supplied details.') from None
+        if error.code in (400,401,403,404,409,422):raise ValidationError(f'The authentication or file request was rejected (HTTP {error.code}). Check the account, permissions and supplied details.') from None
         raise ProviderUnavailable('The Supabase service could not complete the request.') from None
     except (URLError,TimeoutError,OSError):raise ProviderUnavailable('The Supabase service is unavailable.') from None
 
