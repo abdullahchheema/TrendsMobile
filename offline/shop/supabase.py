@@ -20,8 +20,8 @@ def call(path,method='GET',payload=None,token=None,admin=False,content_type='app
     except HTTPError as error:
         # Provider responses can include user data or tokens. Do not echo response bodies.
         if error.code in (400,401,403,404,409,422):raise ValidationError('The authentication or file request was rejected. Check the account, permissions and supplied details.') from None
-        raise ProviderUnavailable('The local Supabase service could not complete the request.') from None
-    except (URLError,TimeoutError,OSError):raise ProviderUnavailable('The local Supabase service is unavailable.') from None
+        raise ProviderUnavailable('The Supabase service could not complete the request.') from None
+    except (URLError,TimeoutError,OSError):raise ProviderUnavailable('The Supabase service is unavailable.') from None
 
 def sign_in(email,password):return call('/auth/v1/token?grant_type=password',method='POST',payload={'email':email,'password':password})
 def refresh(token):return call('/auth/v1/token?grant_type=refresh_token',method='POST',payload={'refresh_token':token})

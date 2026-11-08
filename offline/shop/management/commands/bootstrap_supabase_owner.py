@@ -24,4 +24,4 @@ class Command(BaseCommand):
         if not created and not user.is_superuser:raise CommandError('Existing local account is not an owner; no privileges were changed.')
         user.set_unusable_password();user.save()
         SupabaseIdentity.objects.create(auth_id=found['id'],user=user)
-        self.stdout.write('Supabase owner linked. Initial credentials are in supabase/private/SERVER-LOGIN.txt.')
+        self.stdout.write('Supabase owner linked. Sign in with the email and password you supplied in COVISON_CRM_OWNER_EMAIL / COVISON_CRM_OWNER_PASSWORD, then change the password.')

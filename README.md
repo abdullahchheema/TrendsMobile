@@ -23,6 +23,7 @@ Simple one-save sales and purchases with optional IMEI capture, PTA / Non-PTA ph
 
 ## Guides
 
+- **[Fresh deployment on Supabase + Vercel](DEPLOYMENT.md)**
 - [Server setup and deployment](supabase/README.md)
 - [Shop/staff setup](offline/SHOP_SETUP_GUIDE.md)
 - [Daily counter entry](offline/EASY_RETAIL_GUIDE.md)

@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
+from . import deploy
 BASE_DIR=Path(__file__).resolve().parent.parent
 SECRET_KEY=os.environ['DJANGO_SECRET_KEY']
 DEBUG=False
-ALLOWED_HOSTS=os.environ.get('DJANGO_ALLOWED_HOSTS','localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS,_VERCEL_ORIGINS=deploy.hosts_and_origins(os.environ)
 INSTALLED_APPS=['django.contrib.auth','django.contrib.contenttypes','django.contrib.sessions','django.contrib.messages','django.contrib.staticfiles','shop']
 MIDDLEWARE=['django.middleware.security.SecurityMiddleware','whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware',
@@ -15,12 +16,9 @@ TEMPLATES=[dict(BACKEND='django.template.backends.django.DjangoTemplates',DIRS=[
     OPTIONS=dict(context_processors=['django.template.context_processors.request','django.contrib.auth.context_processors.auth',
         'django.contrib.messages.context_processors.messages','shop.access.navigation']))]
 WSGI_APPLICATION='config.wsgi.application'
-DATABASES={'default':dict(ENGINE='django.db.backends.postgresql',NAME=os.environ.get('DATABASE_NAME','covison'),
-    USER=os.environ.get('DATABASE_USER','covison'),PASSWORD=os.environ['DATABASE_PASSWORD'],
-    HOST=os.environ.get('DATABASE_HOST','db'),PORT=os.environ.get('DATABASE_PORT','5432'),CONN_MAX_AGE=60,
-    OPTIONS={'options':'-c search_path='+os.environ.get('DATABASE_SCHEMA','public')+',public'},
-    TEST={'NAME':os.environ.get('TEST_DATABASE_NAME','test_covison')})}
-SUPABASE_INTERNAL_URL=os.environ.get('SUPABASE_INTERNAL_URL','').rstrip('/')
+DATABASES={'default':deploy.database(os.environ)}
+# SUPABASE_URL is the hosted project URL (https://<ref>.supabase.co); SUPABASE_INTERNAL_URL is the self-hosted container address.
+SUPABASE_INTERNAL_URL=(os.environ.get('SUPABASE_URL') or os.environ.get('SUPABASE_INTERNAL_URL','')).rstrip('/')
 SUPABASE_AUTH_ENABLED=bool(SUPABASE_INTERNAL_URL)
 SUPABASE_PUBLISHABLE_KEY=os.environ.get('SUPABASE_PUBLISHABLE_KEY','')
 SUPABASE_SECRET_KEY=os.environ.get('SUPABASE_SECRET_KEY','')
@@ -57,7 +55,7 @@ DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
 # so cookies become Secure and browsers are told to stay on HTTPS.
 SESSION_COOKIE_AGE=int(os.environ.get('COVISON_SESSION_HOURS','12'))*3600
 SESSION_SAVE_EVERY_REQUEST=False
-CSRF_TRUSTED_ORIGINS=[o for o in os.environ.get('COVISON_TRUSTED_ORIGINS','').split(',') if o]
+CSRF_TRUSTED_ORIGINS=_VERCEL_ORIGINS
 if os.environ.get('COVISON_HTTPS')=='1':
     SESSION_COOKIE_SECURE=CSRF_COOKIE_SECURE=SECURE_SSL_REDIRECT=True
     SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
@@ -65,3 +63,9 @@ if os.environ.get('COVISON_HTTPS')=='1':
     SECURE_REFERRER_POLICY='same-origin'
 LOGIN_MAX_FAILURES=int(os.environ.get('COVISON_LOGIN_MAX_FAILURES','8'))
 LOGIN_LOCKOUT_SECONDS=15*60
+
+if deploy.static_from_finders(os.environ):
+    STORAGES['staticfiles']={'BACKEND':'django.contrib.staticfiles.storage.StaticFilesStorage'}
+    WHITENOISE_USE_FINDERS=True
+if deploy.uses_database_cache(os.environ):
+    CACHES={'default':{'BACKEND':'django.core.cache.backends.db.DatabaseCache','LOCATION':'covison_cache'}}

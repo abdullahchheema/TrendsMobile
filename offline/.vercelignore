@@ -1,0 +1,17 @@
+# Keep the serverless bundle small: nothing below is needed at runtime.
+shop/tests*.py
+*.md
+*.ps1
+Dockerfile
+compose.yaml
+nginx.conf
+start.sh
+backup.py
+setup_local.py
+check_http.py
+staticfiles/
+imports/
+__pycache__/
+.env
+.env.*
+!.env.example
