@@ -6,7 +6,7 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from django.core.exceptions import ValidationError,PermissionDenied
+from django.core.exceptions import ValidationError,PermissionDenied,ObjectDoesNotExist
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction,IntegrityError
 from django.db.models import Q,Sum
@@ -82,7 +82,7 @@ def dashboard(request):
     search=request.GET.get('search','').strip().lower();status=request.GET.get('status','Available')
     rows=[d for d in all_devices if (status=='All' or d.status==status) and (not request.GET.get('model') or str(d.product.model_id)==request.GET['model'])
         and (not request.GET.get('condition') or d.condition==request.GET['condition']) and (not request.GET.get('pta_status') or d.pta_status==request.GET['pta_status'])
-        and (not search or any(search in str(v).lower() for v in [d.code,d.product.name,d.product.storage,d.product.colour]))]
+        and (not search or any(search in str(v).lower() for v in [d.code,d.product.name,d.product.storage,d.product.colour,*[i.number for i in d.imeis.all()]]))]
     summary=dict(available=len(available),stock_value=sum((d.purchase_cost for d in available),Decimal(0)),
         pending=sum(d.inspection_status!='Passed' for d in available),missing=sum(d.pta_status=='Not recorded' for d in available),
         sold_today=sum(d.status=='Sold' and d.sold_on==timezone.localdate() for d in all_devices))
@@ -93,7 +93,14 @@ def dashboard(request):
         groups[key]['phones'].append(d)
     for g in groups.values():g['min']=min(d.asking_price for d in g['phones']);g['max']=max(d.asking_price for d in g['phones'])
     query=request.GET.copy();query.pop('view',None)
-    return render(request,'dashboard.html',dict(title='Mobile Shop',devices=rows,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
+    insight=dict(shop=branch or selected_branch(request.user))
+    if insight['shop'] and access.costs(request.user):
+        from . import dashboard_metrics as dm
+        trend=dm.sales_trend(insight['shop'])
+        manager_view=access.statements(request.user)
+        insight.update(money=dm.finance(request.user,insight['shop']) if manager_view else None,balances=dm.balances(insight['shop']) if manager_view else [],trend=trend,
+                       chart=dm.chart_geometry(trend),recent=dm.recent(insight['shop']),week=sum((p['net'] for p in trend[-7:]),Decimal(0)))
+    return render(request,'dashboard.html',dict(insight=insight,title='Mobile Shop',devices=rows,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
         demo_shop=access.branches(request.user).filter(code='COV-DEMO').first(),models=PhoneModel.objects.order_by('name'),demo=any(d.demo_batch for d in all_devices)))
 
 @login_required
@@ -347,7 +354,7 @@ def action(request,pk,name):
             messages.success(request,'Journal correction draft prepared. Review its date, supporting reference and reason before posting.')
             return redirect('journal_edit',pk=result.pk)
         messages.success(request,'Action completed.');return redirect('detail',pk=result.pk)
-    except (ValidationError,IntegrityError,KeyError,ValueError,Staff.DoesNotExist) as error:
+    except (ValidationError,IntegrityError,KeyError,ValueError,ObjectDoesNotExist) as error:
         messages.error(request,error_text(error));return redirect('detail',pk=doc.pk)
 
 @login_required
@@ -589,8 +596,8 @@ def pos_checkout(request):
             return services.checkout(doc,request.user,data.get('payments',[]),handler)
         result=services.once(uuid.UUID(data['request_key']),request.user,data,perform)
         return JsonResponse(dict(id=str(result.pk),url=reverse('detail',args=[result.pk]),receipt=reverse('receipt',args=[result.pk])))
-    except (ValidationError,IntegrityError,ValueError,KeyError,Party.DoesNotExist,Staff.DoesNotExist,Product.DoesNotExist,Warehouse.DoesNotExist) as error:
-        return JsonResponse({'error':error_text(error)},status=400)
+    except (ValidationError,IntegrityError,ValueError,KeyError,TypeError,AttributeError,ObjectDoesNotExist) as error:  # ValueError covers malformed JSON
+        return JsonResponse({'error':'Invalid checkout request.' if isinstance(error,(TypeError,AttributeError)) else error_text(error)},status=400)
 
 @login_required
 def evidence(request,pk):

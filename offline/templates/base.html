@@ -1,8 +1,70 @@
-{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ title }} · Covison ERP</title><link rel="stylesheet" href="{% static 'covison.css' %}"><link rel="stylesheet" href="{% static 'offline.css' %}"></head>
-<body><header class="app-header"><button class="sidebar-toggle" type="button" data-menu-toggle aria-controls="main-navigation" aria-expanded="false">Menu</button><a href="{% url 'dashboard' %}" class="brand"><img src="{% static 'covison-mark.svg' %}" alt="">Covison ERP</a><span>Pakistan · PKR</span><span class="local-badge">Local server</span><div class="header-end"><span>{{ user.get_username }}</span> <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button>Sign out</button></form></div></header>
-<aside id="main-navigation" class="sidebar">{% if can_sell %}<a href="{% url 'easy_entry' 'sale' %}{% if branch %}?branch={{ branch.pk }}{% elif request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}" class="primary-nav">New Sale</a>{% endif %}{% if can_costs %}<a href="{% url 'easy_entry' 'purchase' %}{% if branch %}?branch={{ branch.pk }}{% elif request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}" class="primary-nav">Buy Stock</a>{% endif %}{% if can_sell %}<a href="{% url 'pos' %}">POS / Multiple items</a>{% endif %}<a href="{% url 'dashboard' %}">Dashboard</a>{% if can_costs %}<a href="{% url 'sales_accounts' %}{% if branch %}?branch={{ branch.pk }}{% elif request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}">Sales &amp; Accounts</a>{% endif %}<a href="{% url 'report_center' %}" class="report-center-link">All reports</a>
-{% for section,links in navigation %}<details open><summary>{{ section }}</summary>{% for label,target in links %}<a href="{% if target == 'Mobile Intake' %}{% url 'easy_entry' 'purchase' %}{% if branch %}?branch={{ branch.pk }}{% elif request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}{% else %}{% url 'collection' target %}{% endif %}">{{ label }}</a>{% endfor %}{% if section == 'Staff' %}{% for item in staff_report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}{% endif %}</details>{% endfor %}
-{% if user.is_superuser %}<a href="{% url 'journals' %}">Accounting adjustments</a>{% endif %}{% if can_fund_transfers %}<a href="{% url 'fund_transfers' %}">Cash & bank transfers</a>{% endif %}<details open><summary>Reports</summary>{% for item in report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}</details>
-{% if user.is_superuser %}<a href="{% url 'setup' %}">Four-shop setup</a><a href="{% url 'collection' 'Shop' %}">Shops</a><a href="{% url 'collection' 'Account' %}">Posting accounts</a>{% endif %}{% if is_manager %}<a href="{% url 'settings' %}">Shop Settings</a><a href="{% url 'collection' 'Warehouse' %}">Warehouses</a><a href="{% url 'collection' 'Till' %}">Cash tills</a><a href="{% url 'users' %}">Staff login accounts</a>{% endif %}<a href="{% url 'device_check' %}">PC, scanner & printer check</a><a href="{% url 'password' %}">Change password</a></aside>
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070a14">
+<title>{{ title }} · Covison ERP</title>
+<link rel="icon" href="{% static 'covison-logo-mark.png' %}" type="image/png">
+<link rel="preload" href="{% static 'fonts/inter-var.woff2' %}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{% static 'covison.css' %}">
+<link rel="stylesheet" href="{% static 'offline.css' %}">
+<link rel="stylesheet" href="{% static 'glass.css' %}">
+</head>
+<body class="app">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
+<symbol id="i-phones" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+<symbol id="i-buy" viewBox="0 0 24 24"><path d="M6 6h14l-1.6 8.5H8L6 3H3M9 20h.01M17 20h.01"/></symbol>
+<symbol id="i-sell-pos" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h3"/></symbol>
+<symbol id="i-exchanges" viewBox="0 0 24 24"><path d="M7 7h12l-3-3M17 17H5l3 3"/></symbol>
+<symbol id="i-stock" viewBox="0 0 24 24"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5zM3 7.5l9 4.5 9-4.5M12 12v9"/></symbol>
+<symbol id="i-customers-suppliers" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-3.6 3.2-5.5 6.5-5.5s6 1.9 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .6 3.2 2.3 3.5 5.2"/></symbol>
+<symbol id="i-payments-expenses" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="3"/><circle cx="12" cy="12" r="2.6"/></symbol>
+<symbol id="i-staff" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 21c.6-4 3.6-6 7.5-6s6.9 2 7.5 6"/></symbol>
+<symbol id="i-warranty" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+<symbol id="i-reports" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></symbol>
+<symbol id="i-money" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+<symbol id="i-out" viewBox="0 0 24 24"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3M10 8l-4 4 4 4M6 12h10"/></symbol>
+</defs></svg>
+{% firstof branch.pk request.GET.branch as qs %}
+<header class="app-header">
+  <button class="sidebar-toggle" type="button" data-menu-toggle aria-controls="main-navigation" aria-expanded="false" aria-label="Open menu"><svg class="ico" width="20" height="20" style="stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round"><use href="#i-menu"/></svg></button>
+  <div class="welcome"><span>Welcome</span><strong>{{ user.get_full_name|default:user.get_username }}</strong></div>
+  <div class="header-end">
+    <span class="tag">Pakistan · PKR</span>
+    <span class="tag">Local server</span>
+    <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button aria-label="Sign out"><svg class="ico" width="17" height="17" style="stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><use href="#i-out"/></svg>Sign out</button></form>
+  </div>
+</header>
+<aside id="main-navigation" class="sidebar" aria-label="Main navigation">
+  <a href="{% url 'dashboard' %}" class="brand"><img src="{% static 'covison-logo-mark.png' %}" alt=""><span>Covison ERP<small>Mobile shop suite</small></span></a>
+  <div class="quick">
+    {% if can_sell %}<a href="{% url 'easy_entry' 'sale' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">New Sale</a>{% endif %}
+    {% if can_costs %}<a href="{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">Buy Stock</a>{% endif %}
+  </div>
+  <a href="{% url 'dashboard' %}"><svg class="ico"><use href="#i-home"/></svg>Dashboard</a>
+  {% if can_sell %}<a href="{% url 'pos' %}"><svg class="ico"><use href="#i-sell-pos"/></svg>POS / Multiple items</a>{% endif %}
+  {% if is_manager %}<a href="{% url 'sales_accounts' %}{% if qs %}?branch={{ qs }}{% endif %}"><svg class="ico"><use href="#i-money"/></svg>Sales &amp; Accounts</a>{% endif %}
+  <a href="{% url 'report_center' %}" class="report-center-link"><svg class="ico"><use href="#i-reports"/></svg>All reports</a>
+  {% for section,links in navigation %}
+  <details open><summary><svg class="ico"><use href="#i-{{ section|slugify }}"/></svg>{{ section }}</summary>{% for label,target in links %}<a href="{% if target == 'Stock Adjustment' %}{% url 'stock_adjust' %}{% if qs %}?branch={{ qs }}{% endif %}{% elif target == 'Mobile Intake' %}{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}{% else %}{% url 'collection' target %}{% endif %}">{{ label }}</a>{% endfor %}{% if section == 'Staff' %}{% for item in staff_report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}{% endif %}</details>
+  {% endfor %}
+  {% if user.is_superuser or can_fund_transfers %}
+  <details open><summary><svg class="ico"><use href="#i-money"/></svg>Money</summary>
+    {% if user.is_superuser %}<a href="{% url 'journals' %}">Accounting adjustments</a>{% endif %}{% if can_fund_transfers %}<a href="{% url 'fund_transfers' %}">Cash &amp; bank transfers</a>{% endif %}
+  </details>
+  {% endif %}
+  <details open><summary><svg class="ico"><use href="#i-reports"/></svg>Reports</summary>{% for item in report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}</details>
+  <details open><summary><svg class="ico"><use href="#i-settings"/></svg>Settings</summary>
+    {% if user.is_superuser %}<a href="{% url 'setup' %}">Four-shop setup</a><a href="{% url 'collection' 'Shop' %}">Shops</a><a href="{% url 'collection' 'Account' %}">Posting accounts</a>{% endif %}
+    {% if is_manager %}<a href="{% url 'settings' %}">Shop Settings</a><a href="{% url 'collection' 'Warehouse' %}">Warehouses</a><a href="{% url 'collection' 'Till' %}">Cash tills</a><a href="{% url 'users' %}">Staff login accounts</a>{% endif %}
+    <a href="{% url 'device_check' %}">PC, scanner &amp; printer check</a><a href="{% url 'password' %}">Change password</a>
+  </details>
+  <div class="side-foot"><small>Covison ERP · <a href="https://covison.com" rel="noopener">covison.com</a></small></div>
+</aside>
 <main class="app-main">{% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
-<script src="{% static 'offline.js' %}" defer></script><script src="{% static 'payments.js' %}" defer></script>{% block scripts %}{% endblock %}</body></html>
+<script src="{% static 'offline.js' %}" defer></script><script src="{% static 'payments.js' %}" defer></script><script src="{% static 'shell.js' %}" defer></script>{% block scripts %}{% endblock %}
+</body></html>

@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.http import Http404
 from django.shortcuts import render,redirect,get_object_or_404
 from django.utils import timezone
 from .models import Device,Document,Branch,LedgerEntry
@@ -15,7 +16,7 @@ class InvalidEntry(Exception):pass
 
 @login_required
 def entry(request,kind):
-    if kind not in ('sale','purchase'):raise ValidationError('Choose a sale or purchase.')
+    if kind not in ('sale','purchase'):raise Http404('Choose a sale or purchase.')
     from .views import selected_branch,scoped_devices,error_text
     branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not branch:return redirect('setup')
@@ -60,7 +61,7 @@ def sales_accounts(request):
     from urllib.parse import urlencode
     branch=selected_branch(request.user,request.GET.get('branch'))
     if not branch:return redirect('setup')
-    if not access.costs(request.user):return redirect('dashboard')
+    if not access.statements(request.user):return redirect('dashboard')
     filters=request.GET.copy();filters.setdefault('branch',str(branch.pk));filters.setdefault('from_date','2000-01-01');filters.setdefault('to_date',str(timezone.localdate()))
     form=SalesAccountsForm(filters,user=request.user,branch=branch)
     if not form.is_valid():return render(request,'sales_accounts.html',dict(title='Sales & Accounts',branch=branch,form=form),status=400)

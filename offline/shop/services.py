@@ -13,7 +13,8 @@ from .access import require,manager,staff
 ZERO=Decimal('0.00')
 BUY={'Mobile Intake','Purchase Receipt','Purchase Invoice','Purchase Order'}
 SELL={'Sales Invoice','POS Invoice'}
-MANAGER={'Journal Entry','Mobile Exchange','Mobile Daily Closing','Stock Entry'}
+MANAGER={'Journal Entry','Mobile Exchange','Mobile Daily Closing','Stock Entry','Stock Adjustment'}
+ADJUST_REASONS=('Damaged','Lost / stolen','Count correction','Other')
 
 def money(value):
     try:result=Decimal(str(value or 0))
@@ -151,7 +152,7 @@ def open_date(doc):
 
 def new_doc(kind,branch,**values):
     values.setdefault('demo_batch',branch.demo_batch)
-    return Document.objects.create(kind=kind,branch=branch,code=code({'Sales Invoice':'SALE','POS Invoice':'POS','Purchase Receipt':'RECEIPT','Purchase Invoice':'BILL','Payment Entry':'PAY','Journal Entry':'JOURNAL'}.get(kind,'COV')),**values)
+    return Document.objects.create(kind=kind,branch=branch,code=code({'Sales Invoice':'SALE','POS Invoice':'POS','Purchase Receipt':'RECEIPT','Purchase Invoice':'BILL','Payment Entry':'PAY','Journal Entry':'JOURNAL','Stock Adjustment':'ADJ'}.get(kind,'COV')),**values)
 
 def copy_lines(source,target):
     for line in source.lines.all():
@@ -206,8 +207,8 @@ def _receive(doc):
             received=Line.objects.filter(document__reference=order,document__kind='Purchase Receipt',document__status='Submitted',product_id=product_id).aggregate(q=Sum('quantity'))['q'] or ZERO
             incoming=doc.lines.filter(product_id=product_id).aggregate(q=Sum('quantity'))['q'] or ZERO
             if received+incoming>ordered:raise ValidationError('Receipt quantity exceeds the remaining purchase order quantity.')
-    total=ZERO
-    for line in doc.lines.select_related('product').order_by('product_id'):
+    total=ZERO;phone_index=0
+    for line in doc.lines.select_related('product').order_by('product_id','pk'):
         Product.objects.select_for_update().get(pk=line.product_id)
         if line.quantity<=0 or line.rate<0:raise ValidationError('Purchase quantities must be positive and rates cannot be negative.')
         if line.product.serialized:
@@ -223,12 +224,58 @@ def _receive(doc):
                 asking_price=money(attrs.get('asking_price')),minimum_price=money(attrs.get('minimum_price')),
                 wholesale_price=money(attrs.get('wholesale_price')),warranty_days=int(attrs.get('warranty_days') or 0),
                 warranty_terms=attrs.get('warranty_terms',''),faults=attrs.get('faults',''),details=attrs.get('details',{}))
-            device.full_clean();device.save();update_imeis(device,attrs.get('imeis',[{},{}]),doc.posted_by)
+            per_phone=attrs.get('line_imeis') or []
+            numbers=[{'number':n} for n in per_phone[phone_index]] if phone_index<len(per_phone) else attrs.get('imeis',[{},{}]);phone_index+=1
+            device.full_clean();device.save();update_imeis(device,numbers,doc.posted_by)
             line.device=device;line.cost=line.rate;line.save()
         if line.product.stock_item:stock(doc,line,line.quantity,line.rate)
         total+=money(line.quantity*line.rate)
     doc.total=total
     entry(doc,'inventory',debit=total);entry(doc,'stock_received',credit=total)
+
+def _adjust(doc):
+    """Stock write-off / count correction. Line quantity is the signed change (negative = stock leaves).
+    Phones can only be written off one exact device at a time; accessories take the change at the location's average
+    cost (a write-off of the last units takes the exact remaining value so no rounding residue is left behind).
+    Ledger: write-offs Dr expense / Cr inventory, gains Dr inventory / Cr expense — always balanced."""
+    if doc.data.get('reason') not in ADJUST_REASONS:raise ValidationError('Choose a reason for the stock adjustment.')
+    if not doc.lines.exists():raise ValidationError('Add at least one stock line.')
+    loss=gain=ZERO;seen=set()
+    for line in doc.lines.select_related('product','device','warehouse').order_by('product_id','pk'):
+        product=Product.objects.select_for_update().get(pk=line.product_id)
+        place=line.warehouse or doc.warehouse
+        if not product.stock_item:raise ValidationError('Only stock-tracked products can be adjusted.')
+        qty=quantity_signed(line.quantity)
+        if product.serialized:
+            if not line.device_id or qty!=-1 or line.device_id in seen:raise ValidationError('Write off one exact phone per line.')
+            device=Device.objects.select_for_update().get(pk=line.device_id);seen.add(device.pk)
+            if device.product_id!=product.pk or device.status!='Available' or device.warehouse_id!=place.pk:raise ValidationError('This exact phone is not available in that stock location.')
+            value=-money(device.purchase_cost);line.cost=device.purchase_cost
+            device.status='Written off';device.warehouse=None;device.details=dict(device.details,written_off=dict(document=doc.code,reason=doc.data['reason']));device.save()
+        else:
+            on_hand_qty,on_hand_value=on_hand(product,place)
+            if qty<0:
+                if -qty>on_hand_qty:raise ValidationError(f'Only {on_hand_qty:g} of {product.name} in stock there; cannot remove {-qty:g}.')
+                value=-on_hand_value if -qty==on_hand_qty else -money(-qty*(on_hand_value/on_hand_qty))
+            else:
+                unit=(on_hand_value/on_hand_qty) if on_hand_qty>0 else money(line.rate)
+                if unit<=0:raise ValidationError('Enter the unit cost for stock that is being added.')
+                value=money(qty*unit)
+            line.cost=money(abs(value)/abs(qty))
+        line.warehouse=place;line.save()
+        stock(doc,line,qty,(value/qty) if qty else ZERO,warehouse=place)
+        # stock() rounds qty*cost; pin the exact value so the movement equals the ledger posting
+        movement=doc.stock.order_by('-pk').first();movement.value=value;movement.save(update_fields=['value'])
+        if value<0:loss+=-value
+        else:gain+=value
+    if loss:entry(doc,'expense',debit=loss);entry(doc,'inventory',credit=loss)
+    if gain:entry(doc,'inventory',debit=gain);entry(doc,'expense',credit=gain)
+    doc.total=loss+gain;doc.data['loss']=str(loss);doc.data['gain']=str(gain)
+
+def quantity_signed(value):
+    value=Decimal(str(value))
+    if value==0:raise ValidationError('A stock change of zero is not an adjustment.')
+    return value
 
 def _sale(doc):
     if doc.is_return:
@@ -408,6 +455,7 @@ def submit(doc,user):
         doc.data['purchase_receipt']=str(receipt.pk);doc.data['device']=str(receipt.lines.get().device_id)
         doc.total=receipt.total
     elif doc.kind=='Purchase Receipt':_receive(doc)
+    elif doc.kind=='Stock Adjustment':_adjust(doc)
     elif doc.kind in SELL:_sale(doc)
     elif doc.kind=='Purchase Invoice':_bill(doc)
     elif doc.kind=='Purchase Order':
@@ -618,11 +666,24 @@ def cancel(doc,user):
             if line.device:
                 device=Device.objects.select_for_update().get(pk=line.device_id)
                 if device.status!='Available' or device.warehouse_id!=(line.warehouse_id or doc.warehouse_id):raise ValidationError('Phone has subsequent stock activity.')
+                released=[i.number for i in device.imeis.all()]
+                if released:device.details=dict(device.details,released_imeis=released);device.imeis.all().delete()  # free the numbers for a corrected re-entry; kept on the device for audit
                 device.status='Unavailable';device.warehouse=None;device.save()
+    elif doc.kind=='Stock Adjustment':
+        for line in doc.lines.select_related('device'):
+            if line.device_id:
+                device=Device.objects.select_for_update().get(pk=line.device_id)
+                if device.status!='Written off':raise ValidationError('The written-off phone has subsequent stock activity.')
+                device.status='Available';device.warehouse=line.warehouse or doc.warehouse;device.details={k:v for k,v in device.details.items() if k!='written_off'};device.save()
+            else:
+                product=Product.objects.select_for_update().get(pk=line.product_id)
+                if line.quantity>0:
+                    available,_=on_hand(product,line.warehouse or doc.warehouse)
+                    if available<line.quantity:raise ValidationError('Added stock has already been used.')
     elif doc.kind=='Mobile Intake':
         receipt=Document.objects.get(pk=doc.data['purchase_receipt']);cancel(receipt,user)
     elif doc.kind=='Stock Entry':raise ValidationError('Create a reverse stock transfer to preserve its movement history.')
     reversal=new_doc('Journal Entry',doc.branch,reference=doc,posted_by=user,notes='Cancellation reversal of '+doc.code,demo_batch=doc.demo_batch,status='Submitted')
     for original in doc.ledger.all():entry(reversal,original.account,debit=original.credit,credit=original.debit,party=original.party,reference=original.reference)
-    for movement in doc.stock.all():StockMovement.objects.create(document=reversal,posting_date=doc.posting_date,product=movement.product,device=movement.device,warehouse=movement.warehouse,quantity=-movement.quantity,value=-movement.value)
+    for movement in doc.stock.all():StockMovement.objects.create(document=reversal,posting_date=reversal.posting_date,product=movement.product,device=movement.device,warehouse=movement.warehouse,quantity=-movement.quantity,value=-movement.value)
     doc.status='Cancelled';doc.outstanding=ZERO;doc.save();balanced(reversal);audit(user,'Cancel',doc,reversal=str(reversal.pk));return doc

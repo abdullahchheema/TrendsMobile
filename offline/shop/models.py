@@ -102,6 +102,9 @@ class Product(Record):
     def clean(self):
         if self.serialized and (not self.stock_item or not self.model_id or not self.storage):raise ValidationError('Phone variants require a model, storage and stock tracking.')
         if self.selling_price<0:raise ValidationError('Selling price cannot be negative.')
+        before=Product.objects.filter(pk=self.pk).values('serialized','stock_item').first()
+        if before and (before['serialized']!=self.serialized or before['stock_item']!=self.stock_item) and (StockMovement.objects.filter(product_id=self.pk).exists() or Line.objects.filter(product_id=self.pk).exists()):
+            raise ValidationError('Stock tracking cannot be changed once this product has been bought or sold. Create a new product instead.')
     def __str__(self):return self.name if self.name==self.code else f'{self.name} ({self.code})'
 
 class Device(Record):
@@ -159,7 +162,7 @@ class IMEI(models.Model):
         if self.pta_status!='Not Checked' and not self.verified_on:raise ValidationError('Record the PTA verification date.')
 
 KINDS=['Mobile Intake','Purchase Order','Purchase Receipt','Purchase Invoice','Sales Invoice','POS Invoice',
-       'Payment Entry','Journal Entry','Stock Entry','Mobile Exchange','Warranty Claim','Mobile Daily Closing','POS Opening Entry','POS Closing Entry']
+       'Payment Entry','Journal Entry','Stock Entry','Mobile Exchange','Warranty Claim','Mobile Daily Closing','POS Opening Entry','POS Closing Entry','Stock Adjustment']
 class Document(Record):
     kind=models.CharField(max_length=40,choices=[(k,k) for k in KINDS],db_index=True)
     branch=models.ForeignKey(Branch,on_delete=models.PROTECT)

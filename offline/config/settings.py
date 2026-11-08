@@ -52,3 +52,16 @@ X_FRAME_OPTIONS='DENY'
 DATA_UPLOAD_MAX_MEMORY_SIZE=10485760
 FILE_UPLOAD_MAX_MEMORY_SIZE=5242880
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
+
+# Hardening. The shop LAN runs plain HTTP by default; set COVISON_HTTPS=1 once TLS terminates in front of the app
+# so cookies become Secure and browsers are told to stay on HTTPS.
+SESSION_COOKIE_AGE=int(os.environ.get('COVISON_SESSION_HOURS','12'))*3600
+SESSION_SAVE_EVERY_REQUEST=False
+CSRF_TRUSTED_ORIGINS=[o for o in os.environ.get('COVISON_TRUSTED_ORIGINS','').split(',') if o]
+if os.environ.get('COVISON_HTTPS')=='1':
+    SESSION_COOKIE_SECURE=CSRF_COOKIE_SECURE=SECURE_SSL_REDIRECT=True
+    SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
+    SECURE_HSTS_SECONDS=31536000
+    SECURE_REFERRER_POLICY='same-origin'
+LOGIN_MAX_FAILURES=int(os.environ.get('COVISON_LOGIN_MAX_FAILURES','8'))
+LOGIN_LOCKOUT_SECONDS=15*60

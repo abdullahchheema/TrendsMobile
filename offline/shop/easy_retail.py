@@ -21,6 +21,25 @@ def payment(data,total):
     return ([dict(mode=data['method'],amount=str(paid),reference=data.get('payment_reference',''))] if paid else []),paid
 
 
+def parse_imeis(text,quantity):
+    """Turn the IMEI box into one list of 1–2 numbers per phone. Blank is allowed; otherwise every phone needs IMEI 1,
+    every number must pass the check-digit test, and none may repeat or already exist in the system."""
+    from .models import IMEI
+    rows=[line.replace(',',' ').split() for line in (text or '').replace(';','\n').splitlines() if line.strip()]
+    if not rows:return []
+    if len(rows)!=quantity:raise ValidationError(f'You entered {len(rows)} IMEI line(s) for {quantity} phone(s). Enter one line per phone, or leave the box empty.')
+    seen={}
+    for position,row in enumerate(rows,1):
+        if len(row)>2:raise ValidationError(f'Phone {position}: enter at most two IMEIs (one per SIM).')
+        for number in row:
+            if not s.valid_imei(number):raise ValidationError(f'Phone {position}: “{number}” is not a valid 15-digit IMEI. Check for a typing mistake.')
+            if number in seen:raise ValidationError(f'IMEI {number} appears twice (phones {seen[number]} and {position}).')
+            seen[number]=position
+    for found in IMEI.objects.filter(number__in=list(seen)).select_related('device'):
+        raise ValidationError(f'IMEI {found.number} is already registered to {found.device.code} ({found.device.status}). The same phone cannot be bought twice.')
+    return rows
+
+
 @transaction.atomic
 def purchase(data,user,demo_batch=''):
     branch=Branch.objects.select_for_update(no_key=True).get(pk=data['branch'].pk);access.require(user,branch,'can_buy')
@@ -32,7 +51,7 @@ def purchase(data,user,demo_batch=''):
     if not 1<=qty<=20 or cost<=0 or asking<=0:raise ValidationError('Enter 1–20 phones, a buying price and an expected selling price.')
     if data['pta_status'] not in ('PTA','Non-PTA'):raise ValidationError('Choose PTA or Non-PTA.')
     receipt=s.new_doc('Purchase Receipt',branch,supplier=supplier,warehouse=data['warehouse'],buyer=data['staff'],posting_date=data['posting_date'],demo_batch=demo_batch,
-        notes=data.get('notes',''),data={'device':dict(pta_status=data['pta_status'],device_type=data['device_type'],condition=data['condition'],inspection_status='Passed',inspection_date=str(data['posting_date']),asking_price=str(asking))})
+        notes=data.get('notes',''),data={'device':dict(pta_status=data['pta_status'],device_type=data['device_type'],condition=data['condition'],inspection_status='Passed',inspection_date=str(data['posting_date']),asking_price=str(asking),line_imeis=data.get('imeis') or [])})
     for _ in range(qty):Line.objects.create(document=receipt,product=product,warehouse=data['warehouse'],quantity=1,rate=cost)
     receipt=s.submit(receipt,user);bill=s.supplier_bill(receipt,user);bill.posting_date=data['posting_date'];bill.data['easy_entry']={'kind':'purchase','quantity':qty};bill.save();bill=s.submit(bill,user)
     paid=paid_amount(data,bill.total)

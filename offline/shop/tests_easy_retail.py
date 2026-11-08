@@ -59,10 +59,10 @@ class EasyRetail(TestCase):
         from django.core.exceptions import ValidationError
         with self.assertRaises(ValidationError):easy_retail.sale(self.sale_data(phone),self.user)
         self.assertEqual(Document.objects.filter(kind='Sales Invoice').count(),1)
-    def test_page_uses_plain_labels_and_has_no_imei_input(self):
+    def test_page_uses_plain_labels_and_offers_one_optional_imei_box(self):  # IMEI capture restored (Phase 1): one box, not the old imei_1/imei_2 slot inputs
         for kind,label in [('sale','New Sale'),('purchase','Buy Stock')]:
             response=self.client.get(reverse('easy_entry',args=[kind]));self.assertEqual(response.status_code,200);self.assertContains(response,label)
-            self.assertContains(response,'Pay later / on credit');self.assertContains(response,'PTA');self.assertNotContains(response,'IMEI');self.assertNotContains(response,'imei_')
+            self.assertContains(response,'Pay later / on credit');self.assertContains(response,'PTA');self.assertContains(response,'IMEI');self.assertNotContains(response,'imei_')
     def test_sale_prefill_selects_exact_phone_price_and_pta(self):
         bill,phone=self.buy();response=self.client.get(reverse('easy_entry',args=['sale']),{'phone':str(phone.pk)})
         form=response.context['form'];self.assertEqual(form['phone'].value(),phone.pk);self.assertEqual(form['price'].value(),65000);self.assertEqual(form['pta_status'].value(),'Non-PTA')

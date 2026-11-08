@@ -27,12 +27,15 @@ class EasyEntryForm(forms.Form):
         self.fields['branch']=forms.ModelChoiceField(queryset=access.branches(user),initial=branch,widget=forms.HiddenInput())
         self.fields['party_name']=forms.CharField(label='Customer name' if kind=='sale' else 'Who are you buying from?',max_length=180,widget=CustomerNameInput(attrs={'placeholder':'Type full name','autocomplete':'off'}) if kind=='sale' else forms.TextInput(attrs={'placeholder':'Type supplier / seller name'}))
         if kind=='sale':
-            phones=Device.objects.filter(branch=branch,status='Available',warehouse__isnull=False,warehouse__enabled=True,product__enabled=True).select_related('product','warehouse')
+            phones=Device.objects.filter(branch=branch,status='Available',warehouse__isnull=False,warehouse__enabled=True,product__enabled=True).select_related('product','warehouse').prefetch_related('imeis')
+            self.fields['find_imei']=forms.CharField(label='Find by IMEI (optional)',required=False,widget=forms.TextInput(attrs={'placeholder':'Type or scan an IMEI to narrow the list','autocomplete':'off','inputmode':'numeric','data-imei-filter':'phone'}))
             self.fields['phone']=forms.ModelChoiceField(label='Phone to sell',queryset=phones,empty_label='Choose a phone from stock',initial=phone,error_messages={'invalid_choice':'This phone is no longer available. Choose another phone.'})
-            self.fields['phone'].label_from_instance=lambda value:f'{value.product.name} · {value.pta_status} · PKR {value.asking_price:,.0f} · {value.code}'
+            self.fields['phone'].label_from_instance=lambda value:f'{value.product.name} · {value.pta_status} · PKR {value.asking_price:,.0f} · '+(('IMEI '+' / '.join(i.number for i in value.imeis.all())) if value.imeis.all() else value.code)
         else:
             self.fields['product']=forms.ModelChoiceField(label='Phone model / storage / colour',queryset=Product.objects.filter(enabled=True,serialized=True).select_related('model').order_by('name'),empty_label='Choose phone variant')
             self.fields['quantity']=forms.IntegerField(label='How many phones?',min_value=1,max_value=20,initial=1)
+            self.fields['imeis']=forms.CharField(label='IMEI numbers (recommended)',required=False,widget=forms.Textarea(attrs={'rows':3,'placeholder':'One phone per line. Dual-SIM: put both IMEIs on the line, separated by a space.','autocomplete':'off'}),
+                help_text='Entering IMEIs lets you find each phone later and stops the same phone being bought twice. Leave blank only if you will add them later.')
         self.fields['pta_status']=forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA')],initial=phone.pta_status if phone and phone.pta_status in ('PTA','Non-PTA') else '')
         self.fields['price']=forms.DecimalField(label='Selling price (PKR)' if kind=='sale' else 'Buying price per phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2,initial=phone.asking_price if phone else None)
         if kind=='purchase':
@@ -54,7 +57,7 @@ class EasyEntryForm(forms.Form):
             places=Warehouse.objects.filter(branch=branch,enabled=True);default=person.default_warehouse if person and person.default_warehouse_id else places.first()
             self.fields['warehouse']=forms.ModelChoiceField(label='Keep stock at',queryset=places,initial=default)
         self.fields['notes']=forms.CharField(label='Note (optional)',required=False,widget=forms.Textarea(attrs={'rows':2}))
-        self.main_fields=[self[name] for name in ('party_name','phone','product','quantity','pta_status','price','asking_price','device_type','condition') if name in self.fields]
+        self.main_fields=[self[name] for name in ('party_name','find_imei','phone','product','quantity','imeis','pta_status','price','asking_price','device_type','condition') if name in self.fields]
         self.payment_fields=[self[name] for name in ('payment_status','amount_paid','method','payment_reference')]
         self.extra_fields=[self[name] for name in ('staff','handler','posting_date','warehouse','notes') if name in self.fields]
 
@@ -72,4 +75,7 @@ class EasyEntryForm(forms.Form):
             if paid and not data.get('method'):self.add_error('method','Choose a payment method.')
             config=ShopSettings.objects.filter(branch=data.get('branch')).first()
             if paid and config and data.get('method') not in services.cash_modes(data['branch']) and not data.get('payment_reference'):self.add_error('payment_reference','Enter the bank or wallet transaction reference.')
+        if self.kind=='purchase' and 'imeis' not in self.errors and 'quantity' not in self.errors:
+            try:data['imeis']=easy_retail.parse_imeis(data.get('imeis',''),data.get('quantity') or 1)
+            except forms.ValidationError as error:self.add_error('imeis',error)
         return data

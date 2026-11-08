@@ -87,9 +87,9 @@ class FinancialReports(TestCase):
         for name in financial.NAMES:
             self.assertEqual(self.page(name).status_code,403);self.assertEqual(self.page(name,format='csv').status_code,403)
         center=self.client.get(reverse('report_center'));self.assertNotContains(center,'Balance Sheet');self.assertNotContains(center,'Trial Balance')
-    def test_purchasing_role_statements_are_scoped_to_assigned_shop(self):
+    def test_shop_manager_statements_are_scoped_to_assigned_shop(self):  # purchasing-only staff no longer see statements (tests_phase1)
         other=Branch.objects.create(code='OTHER',name='Other',company='Other');self.post('2026-10-09',self.accounts['cash'],self.accounts['sales'],500,other)
-        user=get_user_model().objects.create_user('buyer-report');self.buyer.user=user;self.buyer.save();self.client.force_login(user)
+        user=get_user_model().objects.create_user('buyer-report');self.buyer.user=user;self.buyer.manager=True;self.buyer.save();self.client.force_login(user)
         self.assertEqual(self.totals(self.page('Profit and Loss Statement'))['Net profit / loss'],'160.00')
         self.assertEqual(self.page('Profit and Loss Statement',branch=str(other.pk)).status_code,400)
     def test_row_search_keeps_statement_summary_and_export_matches_filtered_rows(self):

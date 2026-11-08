@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Stock adjustments</h1><p>{{ branch.name }} · write off damaged or lost stock, or correct a count. Every adjustment posts to stock value and the accounts, and can be reversed.</p></div><a href="{% url 'dashboard' %}">Back to dashboard</a></div>
+<form method="post" class="panel easy-entry">{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.non_field_errors }}
+<div class="form-grid">{% for field in form.visible_fields %}<div class="field">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}</div>
+<p class="notice warning">Writing off a phone removes it from stock at its purchase cost. Choose “Count correction” when stock was simply miscounted.</p>
+<button class="primary easy-save" type="submit">Post adjustment</button></form>
+<section class="panel"><div class="cov-eyebrow">RECENT ADJUSTMENTS</div>
+{% if recent %}<div class="table-scroll"><table><thead><tr><th>Reference</th><th>Date</th><th>Reason</th><th>Value (PKR)</th><th>Status</th></tr></thead><tbody>{% for d in recent %}<tr><td><a href="{% url 'detail' d.pk %}">{{ d.code }}</a></td><td>{{ d.posting_date|date:"j M Y" }}</td><td>{{ d.data.reason }}</td><td class="report-number">{{ d.total|floatformat:"2g" }}</td><td>{{ d.status }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="muted">No adjustments yet.</p>{% endif %}</section>
+{% endblock %}
