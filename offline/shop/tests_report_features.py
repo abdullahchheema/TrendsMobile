@@ -23,7 +23,7 @@ class ReportFeatures(TestCase):
     def sales_user(self,buy=False):
         user=get_user_model().objects.create_user('report-user');self.seller.user=user;self.seller.can_buy=buy;self.seller.save();self.client.force_login(user);return user
     def test_catalog_exposes_original_labels_all_reports_and_stock_ledger(self):
-        response=self.client.get(reverse('report_center'));self.assertEqual(response.status_code,200);self.assertEqual(response.context['report_count'],20)
+        response=self.client.get(reverse('report_center'));self.assertEqual(response.status_code,200);self.assertEqual(response.context['report_count'],29)
         for label in ('Phone Stock','Stock Age &amp; Prices','Device Costs &amp; Margin','Customer Balances','Supplier Balances','Staff Activity','Staff Summary','Stock Ledger'):
             self.assertContains(response,label)
     def test_catalog_search_accepts_original_report_name(self):

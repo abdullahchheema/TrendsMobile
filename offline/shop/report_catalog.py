@@ -3,8 +3,8 @@ from . import access
 
 LABELS={'Mobile Inventory':'Phone Stock','Mobile Stock Ageing':'Stock Age & Prices','Mobile Device Economics':'Device Costs & Margin',
     'Accounts Receivable':'Customer Balances','Accounts Payable':'Supplier Balances'}
-GROUPS=[('Stock & devices',['Mobile Inventory','Mobile Stock Ageing','Device Profit','Mobile Device Economics','Stock Balance','Stock Ledger']),
-    ('Sales & purchases',['Sales Register','Purchase Register']),('Staff',['Staff Activity','Staff Summary']),
+GROUPS=[('Stock & devices',['Mobile Inventory','Mobile Stock Ageing','Device Profit','Mobile Device Economics','Stock Balance','Stock Ledger','IMEI Report','Low Stock']),
+    ('Sales & purchases',['Daily Sales','Monthly Sales','Annual Sales','Sales Register','Purchase Register','Expense Report','Exchange Report']),('Branches',['Branch Comparison','Stock Transfer Report']),('Staff',['Staff Activity','Staff Summary']),
     ('Financial statements',['Profit and Loss Statement','Balance Sheet','Cash Flow Statement','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance']),
     ('Accounts & payments',['Accounts Receivable','Accounts Payable','Payment Ledger','General Ledger'])]
 DESCRIPTIONS={
@@ -28,6 +28,9 @@ DESCRIPTIONS={
     'Payment Ledger':'Party-linked ledger entries for customer/supplier collections, payments and allocations.',
     'Stock Balance':'Item quantities and valuation by warehouse through the selected date.',
     'Stock Ledger':'Dated stock movements by item, warehouse and source document; valuation follows your role.'}
+
+from .report_extra import DESCRIPTIONS as _EXTRA
+DESCRIPTIONS.update(_EXTRA)
 
 
 def label(name):return LABELS.get(name,name)

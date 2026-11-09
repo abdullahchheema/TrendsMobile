@@ -6,7 +6,7 @@ reports can never disagree. Sales trend uses SQL aggregates (one query), not Pyt
 from datetime import timedelta
 from decimal import Decimal
 from django.core.exceptions import ValidationError
-from django.db.models import Case,DecimalField,F,Sum,When
+from django.db.models import Case,Count,DecimalField,F,Sum,When
 from django.db.models.functions import Abs
 from django.utils import timezone
 from . import financial_reports,reports as reporting
@@ -90,3 +90,44 @@ def finance(user,branch):
     positive=lambda rows:sum((max(row['Outstanding'],0) for row in rows),ZERO)
     return dict(month=month,income=pnl.get('Income',ZERO),expenses=pnl.get('Expenses',ZERO),profit=pnl.get('Net profit / loss',ZERO),
                 receivable=positive(receivables),payable=positive(payables))
+
+
+RANGES=[('today','Today'),('7d','Last 7 days'),('30d','Last 30 days'),('month','This month'),('year','This year'),('custom','Custom dates')]
+
+
+def period(params,today=None):
+    """Resolve the dashboard date range from ?range= (and ?from_date / ?to_date for custom). Falls back to this month."""
+    from datetime import date
+    today=today or timezone.localdate();key=params.get('range') or 'month'
+    if key=='custom':
+        try:
+            start=date.fromisoformat(params.get('from_date') or '');end=date.fromisoformat(params.get('to_date') or str(today))
+            if start<=end:return 'custom',start,end
+        except ValueError:pass
+        key='month'
+    start={'today':today,'7d':today-timedelta(days=6),'30d':today-timedelta(days=29),'year':today.replace(month=1,day=1)}.get(key,today.replace(day=1))
+    return key if key in dict(RANGES) else 'month',start,today
+
+
+def overview(shops,start,end):
+    """Company or single-shop figures for [start, end]: one pass of SQL aggregates, shared with the Branch Comparison report."""
+    from . import report_extra
+    from .models import Device
+    shops=list(shops)
+    rows=report_extra.branch_comparison(shops,start,end)
+    total=lambda key:sum((r[key] for r in rows),ZERO)
+    income=total('Net sales');gross=total('Gross profit')
+    sales=Document.objects.filter(branch__in=shops,status='Submitted',kind__in=SALE_KINDS,is_return=False,posting_date__range=[start,end]).exclude(pk__in=_consolidated())
+    mix=dict(cash=ZERO,credit=ZERO,part=ZERO,cash_n=0,credit_n=0,part_n=0)
+    for row in sales.values('total','outstanding'):
+        kind='cash' if row['outstanding']<=0 else 'credit' if row['outstanding']>=row['total'] else 'part'
+        mix[kind]+=row['total'];mix[kind+'_n']+=1
+    sold=Device.objects.filter(branch__in=shops,status='Sold',sold_on__range=[start,end])
+    def top(field,limit=5):
+        return list(sold.values(field).annotate(n=Count('pk'),revenue=Sum('sold_price'),cost=Sum('purchase_cost')).order_by('-revenue')[:limit])
+    models=[dict(name=r['product__model__name'] or r['product__name'],n=r['n'],revenue=r['revenue'] or ZERO,profit=(r['revenue'] or ZERO)-(r['cost'] or ZERO)) for r in top('product__model__name')]
+    brands=[dict(name=r['product__model__brand'] or 'Other',n=r['n'],revenue=r['revenue'] or ZERO) for r in top('product__model__brand')]
+    profitable=[dict(device=d,profit=d.sold_price-d.purchase_cost) for d in sorted(sold.select_related('product'),key=lambda d:d.purchase_cost-d.sold_price)[:5]]
+    compare=[dict(shop=r['Shop'],sales=r['Net sales'],gross=r['Gross profit'],margin=r['Gross margin %'],expenses=r['Expenses'],net=r['Net profit'],cash=r['Cash and bank'],owed=r['Customers owe']) for r in rows]
+    return dict(rows=rows,compare=compare,shops=shops,start=start,end=end,income=income,purchases=total('Purchases'),gross=gross,margin=(gross*100/income).quantize(Decimal('0.1')) if income else ZERO,expenses=total('Expenses'),net=total('Net profit'),
+                stock=total('Stock value'),cash=total('Cash and bank'),receivable=total('Customers owe'),payable=total('You owe suppliers'),phones=sum(r['Phones sold'] for r in rows),mix=mix,models=models,brands=brands,profitable=profitable)

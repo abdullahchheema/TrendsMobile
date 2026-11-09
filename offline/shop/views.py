@@ -1,3 +1,4 @@
+from urllib.parse import urlencode
 import csv
 import json
 import uuid
@@ -108,8 +109,13 @@ def dashboard(request):
         manager_view=access.statements(request.user)
         insight.update(money=dm.finance(request.user,insight['shop']) if manager_view else None,balances=dm.balances(insight['shop']) if manager_view else [],trend=trend,
                        low_stock=dm.low_stock(insight['shop']),chart=dm.chart_geometry(trend),recent=dm.recent(insight['shop']),week=sum((p['net'] for p in trend[-7:]),Decimal(0)))
+    overview=None
+    if access.statements(request.user):
+        from . import dashboard_metrics as dm
+        key,start,end=dm.period(request.GET);places=list(access.branches(request.user).filter(pk=branch.pk) if branch else access.branches(request.user))
+        overview=dm.overview(places,start,end);overview.update(range=key,ranges=dm.RANGES,scope=branch.name if branch else 'All shops',qs=urlencode({**({'branch':branch.pk} if branch else {}),'from_date':start.isoformat(),'to_date':end.isoformat()}))
     device_page,pager_query=paginate(request,rows,25)
-    return render(request,'dashboard.html',dict(insight=insight,title='Mobile Shop',devices=device_page.object_list,page_obj=device_page,pager_query=pager_query,device_total=device_page.paginator.count,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
+    return render(request,'dashboard.html',dict(insight=insight,overview=overview,title='Mobile Shop',devices=device_page.object_list,page_obj=device_page,pager_query=pager_query,device_total=device_page.paginator.count,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
         models=PhoneModel.objects.order_by('name')))
 
 @login_required
@@ -573,9 +579,11 @@ def pos(request):
     if not configuration or not configuration.accounts or not configuration.payment_methods:
         return render(request,'empty.html',{'title':'Point of Sale setup','text':'This shop needs its payment and posting accounts configured by an administrator before POS can start.'})
     items=[]
-    for d in scoped_devices(request.user).filter(warehouse__branch=branch,status='Available').select_related('product','warehouse').prefetch_related('imeis'):
+    for d in scoped_devices(request.user).filter(warehouse__branch=branch,status='Available').select_related('product__model','warehouse').prefetch_related('imeis'):
+        imeis=[i.number for i in d.imeis.all()]
         items.append(dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),code=d.code,
-            name=d.product.name,rate=str(d.asking_price),stock=1,pta_status=d.pta_status,barcode=d.code,barcodes=[d.code],warehouse_name=d.warehouse.name,serialized=True))
+            name=d.product.name,rate=str(d.asking_price),stock=1,pta_status=d.pta_status,barcode=' '.join([d.code]+imeis),barcodes=[d.code]+imeis,imeis=imeis,warehouse_name=d.warehouse.name,serialized=True,
+            brand=(d.product.model.brand if d.product.model_id else d.product.brand) or '',storage=d.product.storage,colour=d.product.colour,condition=d.condition,grade=d.grade))
     for p in Product.objects.filter(enabled=True,serialized=False):
         for warehouse in Warehouse.objects.filter(branch=branch,enabled=True):
             qty,_=services.on_hand(p,warehouse)
@@ -615,7 +623,13 @@ def pos_checkout(request):
                     device=Device.objects.select_for_update().get(pk=device.pk);device.pta_status=row['pta_status'];device.save(update_fields=['pta_status','modified'])
                 Line.objects.create(document=doc,product=product,device=device,warehouse=place,
                     quantity=services.quantity(row['quantity']),rate=services.money(row['rate']))
-            return services.checkout(doc,request.user,data.get('payments',[]),handler)
+            sale=services.checkout(doc,request.user,data.get('payments',[]),handler)
+            terms=data.get('credit') or {}
+            if sale.outstanding>0 and terms.get('due_date'):
+                from . import credit
+                from datetime import date as _date
+                credit.plan(sale,request.user,terms.get('instalments') or 0,_date.fromisoformat(terms['due_date']))
+            return sale
         result=services.once(uuid.UUID(data['request_key']),request.user,data,perform)
         return JsonResponse(dict(id=str(result.pk),url=reverse('detail',args=[result.pk]),receipt=reverse('receipt',args=[result.pk])))
     except (ValidationError,IntegrityError,ValueError,KeyError,TypeError,AttributeError,ObjectDoesNotExist) as error:  # ValueError covers malformed JSON

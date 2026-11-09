@@ -81,4 +81,9 @@ def sale(data,user,demo_batch=''):
         from . import overrides
         overrides.apply(doc,user,data.get('override_approver'),data.get('override_pin'),'Counter sale')
     payments,paid=payment(data,price)
-    return s.checkout(doc,user,payments,data['handler'])
+    if data.get('instalments') and not data.get('due_date'):raise ValidationError('Choose the first instalment date.')
+    sale=s.checkout(doc,user,payments,data['handler'])
+    if sale.outstanding>0 and data.get('due_date'):
+        from . import credit
+        credit.plan(sale,user,data.get('instalments') or 0,data['due_date']);sale.refresh_from_db()
+    return sale

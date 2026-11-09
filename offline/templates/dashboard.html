@@ -1,6 +1,35 @@
 {% extends 'base.html' %}{% load static %}{% block content %}<div class="covison-shop">
 
 <section class="cov-hero"><div class="cov-hero-copy"><div class="cov-eyebrow">RETAIL OPERATIONS</div><h1>Mobile Shop Dashboard</h1><div class="cov-hero-actions">{% if can_sell %}<a class="cov-btn cov-btn-light" href="{% url 'easy_entry' 'sale' %}">New Sale →</a>{% endif %}{% if can_buy %}<a class="cov-btn cov-btn-outline" href="{% url 'easy_entry' 'purchase' %}">＋ Buy Stock</a>{% endif %}{% if is_manager %}<a class="cov-btn cov-btn-outline" href="{% url 'exchange' %}">⇄ Phone exchange</a>{% endif %}<a class="cov-btn cov-btn-outline" href="{% url 'collection' 'Sales Invoice' %}">Sales & payments ↗</a></div></div><div class="cov-hero-mark"><img src="{% static 'covison-logo-mark.png' %}" alt=""><div><strong>Covison ERP</strong><span>Pakistan · PKR</span></div></div></section>
+{% if overview %}
+<section class="panel ov" aria-label="Business overview">
+  <form class="ov-filter" method="get"><div><div class="cov-eyebrow">BUSINESS OVERVIEW</div><h2>{{ overview.scope }} · {{ overview.start|date:"j M Y" }} – {{ overview.end|date:"j M Y" }}</h2></div>
+    <div class="ov-controls"><select name="branch" aria-label="Shop"><option value="">All permitted shops</option>{% for shop in shops %}<option value="{{ shop.pk }}" {% if selected_shop.pk == shop.pk %}selected{% endif %}>{{ shop.name }}</option>{% endfor %}</select>
+    <select name="range" aria-label="Period">{% for key,label in overview.ranges %}<option value="{{ key }}" {% if overview.range == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <input type="date" name="from_date" value="{{ overview.start|date:'Y-m-d' }}" aria-label="From date"><input type="date" name="to_date" value="{{ overview.end|date:'Y-m-d' }}" aria-label="To date"><button>Show</button></div></form>
+  <div class="ov-kpis">
+    <a class="ov-kpi" href="{% url 'report' 'Daily Sales' %}?{{ overview.qs }}"><span>Net sales</span><strong>PKR {{ overview.income|floatformat:"0g" }}</strong><small>{{ overview.phones }} phones sold</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Purchase Register' %}?{{ overview.qs }}"><span>Purchases</span><strong>PKR {{ overview.purchases|floatformat:"0g" }}</strong><small>Supplier bills</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Profit and Loss Statement' %}?{{ overview.qs }}"><span>Gross profit</span><strong>PKR {{ overview.gross|floatformat:"0g" }}</strong><small>{{ overview.margin }}% margin</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Expense Report' %}?{{ overview.qs }}"><span>Expenses</span><strong>PKR {{ overview.expenses|floatformat:"0g" }}</strong><small>Operating costs</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Profit and Loss Statement' %}?{{ overview.qs }}"><span>Net profit</span><strong>PKR {{ overview.net|floatformat:"0g" }}</strong><small>After expenses</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Stock Balance' %}?{% if selected_shop %}branch={{ selected_shop.pk }}{% endif %}"><span>Stock value</span><strong>PKR {{ overview.stock|floatformat:"0g" }}</strong><small>At cost</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Cash Flow Statement' %}?{{ overview.qs }}"><span>Cash &amp; bank</span><strong>PKR {{ overview.cash|floatformat:"0g" }}</strong><small>All payment methods</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Accounts Receivable' %}?{% if selected_shop %}branch={{ selected_shop.pk }}{% endif %}"><span>Customers owe you</span><strong>PKR {{ overview.receivable|floatformat:"0g" }}</strong><small>Receivables</small></a>
+    <a class="ov-kpi" href="{% url 'report' 'Accounts Payable' %}?{% if selected_shop %}branch={{ selected_shop.pk }}{% endif %}"><span>You owe suppliers</span><strong>PKR {{ overview.payable|floatformat:"0g" }}</strong><small>Payables</small></a>
+  </div>
+  <div class="ov-grid">
+    <div><h3>How customers paid</h3><table><thead><tr><th>Sale type</th><th class="num">Invoices</th><th class="num">Amount</th></tr></thead><tbody>
+      <tr><td>Paid in full</td><td class="num">{{ overview.mix.cash_n }}</td><td class="num">{{ overview.mix.cash|floatformat:"0g" }}</td></tr>
+      <tr><td>Part payment</td><td class="num">{{ overview.mix.part_n }}</td><td class="num">{{ overview.mix.part|floatformat:"0g" }}</td></tr>
+      <tr><td>On credit</td><td class="num">{{ overview.mix.credit_n }}</td><td class="num">{{ overview.mix.credit|floatformat:"0g" }}</td></tr></tbody></table></div>
+    <div><h3>Best-selling models</h3><table><thead><tr><th>Model</th><th class="num">Sold</th><th class="num">Sales</th>{% if can_costs %}<th class="num">Profit</th>{% endif %}</tr></thead><tbody>{% for m in overview.models %}<tr><td>{{ m.name }}</td><td class="num">{{ m.n }}</td><td class="num">{{ m.revenue|floatformat:"0g" }}</td>{% if can_costs %}<td class="num">{{ m.profit|floatformat:"0g" }}</td>{% endif %}</tr>{% empty %}<tr><td colspan="4" class="empty-state">No phones sold in this period.</td></tr>{% endfor %}</tbody></table></div>
+    <div><h3>Sales by brand</h3><table><thead><tr><th>Brand</th><th class="num">Sold</th><th class="num">Sales</th></tr></thead><tbody>{% for b in overview.brands %}<tr><td>{{ b.name }}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.revenue|floatformat:"0g" }}</td></tr>{% empty %}<tr><td colspan="3" class="empty-state">No phones sold in this period.</td></tr>{% endfor %}</tbody></table></div>
+    {% if can_costs %}<div><h3>Most profitable phones</h3><table><thead><tr><th>Phone</th><th class="num">Profit</th></tr></thead><tbody>{% for r in overview.profitable %}<tr><td><a href="{% url 'device_history' r.device.pk %}">{{ r.device.product.name }}</a><small>{{ r.device.code }}</small></td><td class="num">{{ r.profit|floatformat:"0g" }}</td></tr>{% empty %}<tr><td colspan="2" class="empty-state">No phones sold in this period.</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+  </div>
+  {% if overview.compare|length > 1 %}<div class="table-scroll"><h3>Branch comparison</h3><table><thead><tr><th>Shop</th><th class="num">Net sales</th><th class="num">Gross profit</th><th class="num">Margin %</th><th class="num">Expenses</th><th class="num">Net profit</th><th class="num">Cash &amp; bank</th><th class="num">Customers owe</th></tr></thead><tbody>{% for r in overview.compare %}<tr><td>{{ r.shop }}</td><td class="num">{{ r.sales|floatformat:"0g" }}</td><td class="num">{{ r.gross|floatformat:"0g" }}</td><td class="num">{{ r.margin }}</td><td class="num">{{ r.expenses|floatformat:"0g" }}</td><td class="num">{{ r.net|floatformat:"0g" }}</td><td class="num">{{ r.cash|floatformat:"0g" }}</td><td class="num">{{ r.owed|floatformat:"0g" }}</td></tr>{% endfor %}</tbody></table><p><a href="{% url 'report' 'Branch Comparison' %}?from_date={{ overview.start|date:'Y-m-d' }}&amp;to_date={{ overview.end|date:'Y-m-d' }}">Open the full branch comparison report →</a></p></div>{% endif %}
+</section>
+{% endif %}
 {% if insight.chart or insight.money or insight.balances %}
 <section class="cov-insight" aria-label="Business position">
   <div class="cov-trend panel">

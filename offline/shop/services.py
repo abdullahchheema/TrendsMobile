@@ -631,7 +631,10 @@ def checkout(doc,user,payments,handler=None):
             posting_date=doc.posting_date,pos_shift=doc.pos_shift,
             data=payment_data)
         submit(pe,user)
-    doc.refresh_from_db();return doc
+    doc.refresh_from_db()
+    from . import credit
+    credit.check_limit(doc)
+    return doc
 
 def return_sale(original,user,device_ids,condition,reason,quantities=None,warehouse=None):
     from .returns import create

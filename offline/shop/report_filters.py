@@ -23,6 +23,9 @@ FIELDS={
  'Accounts Payable':['branch','to_date','party'],
  'Stock Balance':['branch','to_date','warehouse','product'],
  'Stock Ledger':['branch','from_date','to_date','warehouse','product'],
+ 'Daily Sales':['branch','from_date','to_date'],'Monthly Sales':['branch','from_date','to_date'],'Annual Sales':['branch','from_date','to_date'],
+ 'Expense Report':['branch','from_date','to_date'],'Low Stock':['branch'],'IMEI Report':['branch','status'],'Exchange Report':['branch','from_date','to_date'],
+ 'Stock Transfer Report':['branch','from_date','to_date'],'Branch Comparison':['from_date','to_date'],
 }
 
 class ReportFilters(forms.Form):
@@ -33,7 +36,7 @@ class ReportFilters(forms.Form):
             'branch':forms.ModelChoiceField(label='Shop',queryset=places,required=False,empty_label='All permitted shops'),
             'from_date':forms.DateField(label='From date',required=False,widget=forms.DateInput(attrs={'type':'date'})),
             'to_date':forms.DateField(label='As of date' if name in ('Accounts Receivable','Accounts Payable','Stock Balance','Balance Sheet') else 'To date',required=False,widget=forms.DateInput(attrs={'type':'date'})),
-            'status':forms.ChoiceField(label='Stock status',required=False,choices=[('','All statuses')]+[(s,s) for s in ('Available','Sold','Reserved','Unavailable')]),
+            'status':forms.ChoiceField(label='Stock status',required=False,choices=[('','All statuses')]+[(s,s) for s in ('Available','Sold','Reserved','Holding','Unavailable','Written off','Returned to supplier')]),
             'model':forms.ModelChoiceField(queryset=PhoneModel.objects.order_by('name'),required=False,empty_label='All models'),
             'warehouse':forms.ModelChoiceField(label='Shop / warehouse',queryset=Warehouse.objects.filter(branch__in=places).order_by('name'),required=False,empty_label='All warehouses'),
             'staff':forms.ModelChoiceField(label='Staff member',queryset=Staff.objects.filter(branch__in=places).order_by('name'),required=False,empty_label='All staff'),

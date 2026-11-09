@@ -78,10 +78,10 @@ class EasyRetail(TestCase):
         bill,phone=self.buy()
         for url in (reverse('new',args=['Mobile Intake']),reverse('device',args=[phone.pk])):
             response=self.client.get(url);self.assertNotContains(response,'imei_1');self.assertNotContains(response,'pta_status_1');self.assertContains(response,'name="pta_status"')
-    def test_legacy_imei_rows_remain_private_history_but_are_not_printed(self):
+    def test_legacy_imei_rows_stay_off_dashboards_and_reports(self):   # receipts now print the IMEI (see tests_credit)
         bill,phone=self.buy();IMEI.objects.create(number=imei(101),device=phone,slot=1)
         sale=easy_retail.sale(self.sale_data(phone),self.user);self.assertEqual(IMEI.objects.count(),1)
-        for url in (reverse('dashboard'),reverse('device',args=[phone.pk]),reverse('receipt',args=[sale.pk]),reverse('detail',args=[sale.pk]),reverse('report',args=['Mobile Inventory'])):
+        for url in (reverse('dashboard'),reverse('device',args=[phone.pk]),reverse('detail',args=[sale.pk]),reverse('report',args=['Mobile Inventory'])):
             response=self.client.get(url);self.assertNotContains(response,imei(101))  # the number stays out of these pages; the word 'IMEI' now appears in the global search box
     def test_new_pta_choices_never_guess_legacy_unchecked_status(self):
         from importlib import import_module

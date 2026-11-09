@@ -271,7 +271,7 @@ ReturnLineSet=inlineformset_factory(Document,Line,form=LineForm,extra=0,can_dele
 
 MASTER_MODELS={'Mobile Model':(PhoneModel,['code','name','brand','description']),
     'Item':(Product,['code','name','group','model','brand','storage','ram','colour','serialized','stock_item','reorder_level','selling_price','enabled']),
-    'Customer':(Party,['name','city','phone','email','address','enabled']),
+    'Customer':(Party,['name','city','phone','email','address','credit_limit','enabled']),
     'Supplier':(Party,['name','city','phone','email','address','enabled']),
     'Mobile Staff':(Staff,['code','name','branch','user','designation','enabled','manager','can_buy','can_sell','can_handle_payments']),
     'Warehouse':(Warehouse,['code','name','branch','enabled']),

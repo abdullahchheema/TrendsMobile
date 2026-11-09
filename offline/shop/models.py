@@ -92,6 +92,7 @@ class Staff(Record):
             if changed and Document.objects.filter(handler=self,kind='POS Opening Entry',state='Open',status='Submitted').exists():raise ValidationError('Close this staff member’s POS shift before changing their shop, login or payment access.')
 
 class Party(Record):
+    credit_limit=models.DecimalField(max_digits=18,decimal_places=2,default=0,help_text='Largest unpaid balance this customer may carry. 0 means no limit.')
     kind=models.CharField(max_length=10,choices=[('Customer','Customer'),('Supplier','Supplier')])
     name=models.CharField(max_length=180)
     city=models.CharField(max_length=100,blank=True)
@@ -101,6 +102,12 @@ class Party(Record):
     enabled=models.BooleanField(default=True)
     class Meta:constraints=[models.UniqueConstraint(fields=['kind','name'],name='party_kind_name')]
     def __str__(self):return self.name
+    def clean(self):
+        if self.credit_limit<0:raise ValidationError('The credit limit cannot be negative.')
+        if self.phone.strip():
+            digits=''.join(c for c in self.phone if c.isdigit())
+            if not 7<=len(digits)<=13 or any(c not in '0123456789+-() ./' for c in self.phone.strip()):
+                raise ValidationError('Enter a valid phone number, for example 0300 1234567 or +92 300 1234567.')
 
 class Brand(models.Model):
     name=models.CharField(max_length=80,unique=True)
@@ -200,6 +207,7 @@ class Document(Record):
     status=models.CharField(max_length=12,choices=[('Draft','Draft'),('Submitted','Submitted'),('Cancelled','Cancelled')],default='Draft')
     state=models.CharField(max_length=40,blank=True)
     posting_date=models.DateField(default=timezone.localdate,db_index=True)
+    due_date=models.DateField(null=True,blank=True,help_text='When the unpaid balance is promised (last instalment if a plan is set).')
     customer=models.ForeignKey(Party,on_delete=models.PROTECT,null=True,blank=True,related_name='sales')
     supplier=models.ForeignKey(Party,on_delete=models.PROTECT,null=True,blank=True,related_name='purchases')
     warehouse=models.ForeignKey(Warehouse,on_delete=models.PROTECT,null=True,blank=True)
@@ -224,6 +232,16 @@ class Document(Record):
             models.UniqueConstraint(fields=['till'],condition=Q(kind='POS Opening Entry',state='Open',status='Submitted',till__isnull=False),name='one_open_till'),
             models.UniqueConstraint(fields=['handler'],condition=Q(kind='POS Opening Entry',state='Open',status='Submitted',till__isnull=False),name='one_cashier_shift')]
     def __str__(self):return self.code
+
+class Installment(models.Model):
+    """One scheduled payment of a credit sale. Whether it is paid is derived from the invoice's payments (oldest first)."""
+    document=models.ForeignKey('Document',on_delete=models.CASCADE,related_name='installments')
+    number=models.PositiveSmallIntegerField()
+    due_date=models.DateField()
+    amount=models.DecimalField(max_digits=18,decimal_places=2)
+    class Meta:
+        ordering=['number']
+        constraints=[models.UniqueConstraint(fields=['document','number'],name='installment_number_once'),models.CheckConstraint(condition=Q(amount__gt=0),name='installment_positive')]
 
 class Line(models.Model):
     document=models.ForeignKey(Document,on_delete=models.CASCADE,related_name='lines')

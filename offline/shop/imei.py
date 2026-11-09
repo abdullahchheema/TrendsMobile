@@ -33,7 +33,8 @@ def device_history(request,pk):
     show_costs=access.costs(request.user)
     events=history(device,show_costs)
     purchase=next((e for e in events if e['label']=='Received into stock'),None)
-    return render(request,'device_history.html',dict(title=device.code,device=device,events=events,purchase=purchase,show_costs=show_costs,imeis=list(device.imeis.all()),
+    from .parties import warranty
+    return render(request,'device_history.html',dict(title=device.code,device=device,events=events,purchase=purchase,show_costs=show_costs,warranty=warranty(device),imeis=list(device.imeis.all()),
         can_edit=access.costs(request.user) or access.manager(request.user)))
 
 

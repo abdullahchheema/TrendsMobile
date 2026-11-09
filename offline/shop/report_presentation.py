@@ -19,6 +19,8 @@ MONEY={
  'Accounts Receivable':{'Outstanding'},'Accounts Payable':{'Outstanding'},
  'General Ledger':{'Debit','Credit'},'Payment Ledger':{'Debit','Credit'},'Stock Balance':{'Stock value'},'Stock Ledger':{'Value change'},
  'Staff Summary':{'Net Device Purchases','Net Sales','Money Collected','Money Paid / Refunded','Internal Transfers Handled'},'Staff Activity':{'Amount'}}
+from .report_extra import MONEY as _EXTRA_MONEY
+MONEY.update(_EXTRA_MONEY)
 QUANTITIES={'Staff Summary':{'Phones Bought (Net)','Phones Sold (Net)'},'Stock Balance':{'Quantity'},'Stock Ledger':{'Quantity change'}}
 
 

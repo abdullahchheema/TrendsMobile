@@ -94,3 +94,16 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
   .statement-summary{break-inside:avoid}.easy-steps,.easy-extra,.easy-save{display:none}
 }
 .easy-entry h2:first-of-type{margin-top:0}
+
+/* Business overview (dashboard) */
+.ov{display:flex;flex-direction:column;gap:var(--s4)}
+.ov-filter{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--s3);align-items:flex-end}
+.ov-filter h2{margin:var(--s1) 0 0;font-size:18px}
+.ov-controls{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.ov-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:var(--s3)}
+.ov-kpi{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s3) var(--s4);border:1px solid var(--line-2);border-radius:var(--r-md,12px);background:var(--surface-2);color:var(--ink)}
+.ov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
+.ov-kpi span{font-size:12px;color:var(--ink-2)}.ov-kpi strong{font-family:var(--font-display);font-weight:500;font-size:20px;overflow-wrap:anywhere}.ov-kpi small{margin:0;color:var(--ink-3)}
+.ov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s4)}
+.ov h3{font-size:13px;margin:0 0 var(--s2);color:var(--ink-2);font-weight:550}
+@media (max-width:640px){.ov-controls>*{flex:1 1 140px;min-width:0}}

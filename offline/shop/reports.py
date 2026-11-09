@@ -10,7 +10,7 @@ from .pricing import line_net,net_amount
 
 def authorize(name,user):
     if name not in REPORTS:raise ValidationError('Unknown report.')
-    if name in ('Device Profit','Mobile Device Economics','Purchase Register','Accounts Payable','General Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance') and not costs(user):raise PermissionDenied('Purchase costs and financial reports require purchasing or management access.')
+    if name in ('Device Profit','Mobile Device Economics','Purchase Register','Accounts Payable','General Ledger','Branch Comparison','Profit and Loss Statement','Balance Sheet','Trial Balance') and not costs(user):raise PermissionDenied('Purchase costs and financial reports require purchasing or management access.')
     if name in STATEMENTS and not statements(user):raise PermissionDenied('Financial statements require management access.')
     if (name.startswith('Staff ') or name=='Mobile Device Economics') and not manager(user):raise PermissionDenied('This report requires management access.')
 
@@ -25,6 +25,8 @@ def run(name,user,params):
     if start>end:raise ValidationError('From date must not be after To date.')
     from . import financial_reports
     if name in financial_reports.NAMES:return financial_reports.run(name,shops,start,end)
+    from . import report_extra
+    if name in report_extra.COLUMNS:return report_extra.run(name,shops,start,end,params,costs(user))
     docs=Document.objects.filter(branch__in=shops,status='Submitted',posting_date__range=[start,end]).select_related('branch','customer','supplier','buyer','seller','handler')
     if params.get('staff'):docs=docs.filter(Q(buyer_id=params['staff'])|Q(seller_id=params['staff'])|Q(handler_id=params['staff']))
     if params.get('party'):docs=docs.filter(Q(customer_id=params['party'])|Q(supplier_id=params['party']))
@@ -148,6 +150,8 @@ def run(name,user,params):
 def empty_columns(name,with_costs):
     from . import financial_reports
     if name in financial_reports.NAMES:return financial_reports.columns(name)
+    from . import report_extra
+    if name in report_extra.COLUMNS:return report_extra.COLUMNS[name]
     inventory=['Device','Shop','Model','Storage','Colour','PTA status','Status','Warehouse','Condition','Asking price','Days in stock']+(['Purchase cost'] if with_costs else [])
     return {
         'Mobile Inventory':inventory,'Mobile Stock Ageing':inventory+['Received','Action'],
