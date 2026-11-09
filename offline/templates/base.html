@@ -48,26 +48,29 @@
   <a href="{% url 'dashboard' %}" class="brand"><img src="{% static 'covison-logo-mark.png' %}" alt=""><span>Covison ERP<small>Mobile shop suite</small></span></a>
   <div class="quick">
     {% if can_sell %}<a href="{% url 'easy_entry' 'sale' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">New Sale</a>{% endif %}
-    {% if can_buy %}<a href="{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">Buy Stock</a>{% endif %}
+    {% if can_buy %}<a href="{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">Buy a Phone</a>{% endif %}
   </div>
   <a href="{% url 'dashboard' %}"><svg class="ico"><use href="#i-home"/></svg>Dashboard</a>
-  {% if can_sell %}<a href="{% url 'pos' %}"><svg class="ico"><use href="#i-sell-pos"/></svg>POS / Multiple items</a>{% endif %}
-  {% if can_statements %}<a href="{% url 'sales_accounts' %}{% if qs %}?branch={{ qs }}{% endif %}"><svg class="ico"><use href="#i-money"/></svg>Sales &amp; Accounts</a>{% endif %}
-  <a href="{% url 'report_center' %}" class="report-center-link"><svg class="ico"><use href="#i-reports"/></svg>All reports</a>
-  {% for section,links in navigation %}
-  <details open><summary><svg class="ico"><use href="#i-{{ section|slugify }}"/></svg>{{ section }}</summary>{% for label,target in links %}{% if target != 'Voucher' or can_accounting or is_manager %}<a href="{% if target == 'Overdue' %}{% url 'overdue' %}{% elif target == 'New Exchange' %}{% url 'exchange' %}{% if qs %}?branch={{ qs }}{% endif %}{% elif target == 'Bulk Purchase' %}{% url 'bulk_purchase' %}{% if qs %}?branch={{ qs }}{% endif %}{% elif target == 'IMEI Lookup' %}{% url 'imei_lookup' %}{% elif target == 'Voucher' %}{% url 'vouchers' %}{% if qs %}?branch={{ qs }}{% endif %}{% elif target == 'Stock Adjustment' %}{% url 'stock_adjust' %}{% if qs %}?branch={{ qs }}{% endif %}{% elif target == 'Mobile Intake' %}{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}{% else %}{% url 'collection' target %}{% endif %}">{{ label }}</a>{% endif %}{% endfor %}{% if section == 'Staff' %}{% for item in staff_report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}{% endif %}</details>
-  {% endfor %}
-  {% if user.is_superuser or can_fund_transfers %}
-  <details open><summary><svg class="ico"><use href="#i-money"/></svg>Money</summary>
-    {% if user.is_superuser %}<a href="{% url 'journals' %}">Accounting adjustments</a>{% endif %}{% if can_fund_transfers %}<a href="{% url 'fund_transfers' %}">Cash &amp; bank transfers</a>{% endif %}
+  {% if can_sell %}<details open><summary><svg class="ico"><use href="#i-sell-pos"/></svg>Sell</summary>
+    <a href="{% url 'pos' %}">POS (several items)</a><a href="{% url 'collection' 'Sales Invoice' %}">Sales &amp; returns</a>{% if is_manager %}<a href="{% url 'exchange' %}{% if qs %}?branch={{ qs }}{% endif %}">Phone exchange</a>{% endif %}<a href="{% url 'collection' 'Customer' %}">Customers</a><a href="{% url 'overdue' %}">Overdue payments</a><a href="{% url 'collection' 'Warranty Claim' %}">Warranty &amp; returns</a>
+  </details>{% endif %}
+  {% if can_buy %}<details open><summary><svg class="ico"><use href="#i-buy"/></svg>Buy</summary>
+    <a href="{% url 'bulk_purchase' %}{% if qs %}?branch={{ qs }}{% endif %}">Bulk purchase</a><a href="{% url 'collection' 'Purchase Invoice' %}">Supplier bills</a><a href="{% url 'collection' 'Supplier' %}">Suppliers</a>
+  </details>{% endif %}
+  <details open><summary><svg class="ico"><use href="#i-stock"/></svg>Stock</summary>
+    <a href="{% url 'collection' 'Mobile Device' %}">Phones in stock</a><a href="{% url 'imei_lookup' %}">Find by IMEI</a>{% if is_manager %}<a href="{% url 'stock_transfer' %}{% if qs %}?branch={{ qs }}{% endif %}">Send phones to another shop</a><a href="{% url 'stock_adjust' %}{% if qs %}?branch={{ qs }}{% endif %}">Stock adjustments</a>{% endif %}{% if can_buy %}<a href="{% url 'collection' 'Mobile Model' %}">Models</a><a href="{% url 'collection' 'Item' %}">Variants &amp; accessories</a>{% endif %}
   </details>
-  {% endif %}
-  <details open><summary><svg class="ico"><use href="#i-reports"/></svg>Reports</summary>{% if can_statements %}<a href="{% url 'ledger' %}?book=cash">Cash book</a><a href="{% url 'ledger' %}?book=bank">Bank &amp; wallet book</a><a href="{% url 'ledger' %}">Account ledger</a>{% endif %}{% for item in report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}</details>
+  {% if is_manager or can_accounting %}<details open><summary><svg class="ico"><use href="#i-payments-expenses"/></svg>Money</summary>
+    <a href="{% url 'vouchers' %}{% if qs %}?branch={{ qs }}{% endif %}">Expenses &amp; owner money</a><a href="{% url 'collection' 'Payment Entry' %}">Payments in &amp; out</a><a href="{% url 'collection' 'POS Opening Entry' %}">Cash shifts</a><a href="{% url 'collection' 'Mobile Daily Closing' %}">Daily closing</a>{% if can_fund_transfers %}<a href="{% url 'fund_transfers' %}">Cash &amp; bank transfers</a>{% endif %}
+  </details>{% endif %}
+  <details open><summary><svg class="ico"><use href="#i-reports"/></svg>Reports</summary>
+    {% if can_statements %}<a href="{% url 'sales_accounts' %}{% if qs %}?branch={{ qs }}{% endif %}">Sales &amp; profit overview</a>{% endif %}{% for item in quick_reports %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}<a href="{% url 'report_center' %}" class="report-center-link">All reports</a>{% if can_audit %}<a href="{% url 'audit_log' %}">Activity log</a>{% endif %}
+  </details>
+  {% if user.is_superuser %}<details open><summary><svg class="ico"><use href="#i-staff"/></svg>Owner</summary>
+    <a href="{% url 'users' %}">Shop accounts</a><a href="{% url 'setup' %}">Shops</a><a href="{% url 'chart' %}">Chart of accounts</a><a href="{% url 'journals' %}">Accounting adjustments</a><a href="{% url 'ledger' %}?book=cash">Cash book</a><a href="{% url 'ledger' %}">Account ledger</a><a href="{% url 'periods' %}">Lock a month</a><a href="{% url 'year_end' %}">Year-end close</a><a href="{% url 'assets' %}">Fixed assets</a><a href="{% url 'deferrals' %}">Prepaids &amp; accruals</a><a href="{% url 'loans' %}">Loans</a>
+  </details>{% endif %}
   <details open><summary><svg class="ico"><use href="#i-settings"/></svg>Settings</summary>
-    {% if user.is_superuser %}<a href="{% url 'setup' %}">Four-shop setup</a><a href="{% url 'collection' 'Shop' %}">Shops</a><a href="{% url 'collection' 'Account' %}">Posting accounts</a>{% endif %}
-    {% if can_roles %}<a href="{% url 'roles' %}">Roles &amp; permissions</a>{% endif %}{% if can_audit %}<a href="{% url 'audit_log' %}">Audit log</a>{% endif %}{% if can_accounting %}<a href="{% url 'chart' %}">Chart of accounts</a><a href="{% url 'periods' %}">Accounting periods</a><a href="{% url 'year_end' %}">Year-end close</a><a href="{% url 'assets' %}">Fixed assets</a><a href="{% url 'deferrals' %}">Prepaids &amp; accruals</a><a href="{% url 'loans' %}">Loans</a>{% endif %}
-    {% if is_manager %}<a href="{% url 'settings' %}">Shop Settings</a><a href="{% url 'collection' 'Warehouse' %}">Warehouses</a><a href="{% url 'collection' 'Till' %}">Cash tills</a><a href="{% url 'users' %}">Staff login accounts</a>{% endif %}
-    <a href="{% url 'device_check' %}">PC, scanner &amp; printer check</a><a href="{% url 'password' %}">Change password</a>
+    {% if is_manager %}<a href="{% url 'settings' %}">Shop details &amp; receipt</a>{% endif %}<a href="{% url 'device_check' %}">PC, scanner &amp; printer check</a><a href="{% url 'password' %}">Change password</a>
   </details>
 </aside>
 <main class="app-main" id="content" tabindex="-1">{% block content %}{% endblock %}</main>

@@ -61,7 +61,7 @@ class DocumentForm(forms.ModelForm):
         fields=['branch','posting_date','customer','supplier','warehouse','reference','buyer','seller','handler','till','notes']
         widgets={'posting_date':DATE,'notes':forms.Textarea(attrs={'rows':3})}
     def __init__(self,*args,user,kind,**kwargs):
-        super().__init__(*args,**kwargs);self.kind=kind
+        super().__init__(*args,**kwargs);self.kind=kind;self.user=user
         places=branches(user);self.fields['branch'].queryset=places
         self.fields['branch'].label_from_instance=lambda place:f'{place.name} ({place.code})'
         branch=self.instance.branch if self.instance.branch_id else places.first()
@@ -186,11 +186,30 @@ class DocumentForm(forms.ModelForm):
                 self.fields[name_field]=forms.CharField(label='Customer name' if field=='customer' else 'Trade-in customer name',required=False,max_length=180,
                     initial=existing.name if existing else '',widget=CustomerNameInput(attrs={'autocomplete':'off','placeholder':'Type customer name','required':kind in ('Sales Invoice','POS Invoice') and field=='customer'}),
                     help_text='Type a new name to add a customer, or an existing name to reuse their account.')
+        self.hide_shop_internals(branch,user)
         self.sections=sections(self)
+    HIDDEN=('buyer','seller','handler','warehouse','till')
+    def defaults_for(self,branch):
+        from . import shopdefaults
+        shop=shopdefaults.ensure(branch);me=shopdefaults.person(self.user,branch)
+        return dict(buyer=me,seller=me,handler=me,warehouse=shop['warehouse'],till=shop['till'])
+    def hide_shop_internals(self,branch,user):
+        """Staff, warehouse and till are never asked for: the shop (or the login) fills them in."""
+        if not branch:return
+        defaults=self.defaults_for(branch)
+        for name in self.HIDDEN:
+            if name not in self.fields or (self.instance.is_return and name=='seller'):continue
+            self.fields[name].widget=forms.HiddenInput();self.fields[name].required=False
+            if not getattr(self.instance,name+'_id',None):self.initial[name]=defaults[name].pk
     def clean(self):
         result=super().clean()
         branch=result.get('branch')
         if branch:
+            defaults=self.defaults_for(branch)
+            for name in self.HIDDEN:
+                if name in self.fields and not (self.instance.is_return and name=='seller'):
+                    value=result.get(name)
+                    if not value or value.branch_id!=branch.pk:result[name]=defaults[name]
             for name in ('warehouse','buyer','seller','handler','reference'):
                 value=result.get(name)
                 if value and value.branch_id!=branch.pk:self.add_error(name,'Select a record from this transaction’s shop.')

@@ -1,3 +1,4 @@
+import uuid
 """Owner setup operations. Creating a shop never posts opening money or stock."""
 from django.core.exceptions import ValidationError,PermissionDenied
 from django.db import transaction
@@ -50,7 +51,12 @@ def configure(branch,accounts,methods,user):
 
 def transfer_accounts(branch):
     config=ShopSettings.objects.filter(branch=branch).first()
-    if not config or not config.accounts.get('inter_shop'):raise ValidationError('Configure inventory and inter-shop clearing accounts for both shops before transferring.')
+    if not config:raise ValidationError('This shop has no accounts yet. Ask the super admin to finish setting it up.')
+    if not config.accounts.get('inter_shop'):       # created on first use so shops can send stock to each other without any setup
+        code=branch.code+'-CLEARING'
+        if Account.objects.filter(code=code).exists():code+='-'+uuid.uuid4().hex[:4].upper()
+        account=Account.objects.create(code=code,name=(branch.name+' · Inter-shop clearing')[:180],account_type='Current Asset',root_type='Asset')
+        config.accounts={**config.accounts,'inter_shop':str(account.pk)};config.save()
     ids=[config.accounts.get('inventory'),config.accounts.get('inter_shop')]
     accounts={str(a.pk):a for a in Account.objects.filter(pk__in=[value for value in ids if value],enabled=True,is_group=False)}
     if len(set(ids))!=2 or any(value not in accounts for value in ids):raise ValidationError('Select separate active inventory and inter-shop clearing accounts.')
@@ -64,8 +70,8 @@ def create_shop(values,user):
     owner(user)
     if not set(values['payment_methods']).issubset(METHODS) or 'Cash' not in values['payment_methods']:raise ValidationError('Select supported payment methods, including Cash.')
     branch=Branch(code=values['code'],name=values['name'],company=values['company']);branch.full_clean();branch.save()
-    Warehouse.objects.create(code=branch.code+'-STOCK',name=values['warehouse_name'],branch=branch)
-    Till.objects.create(code=branch.code+'-TILL',name=values['till_name'],branch=branch)
+    Warehouse.objects.create(code=branch.code+'-STOCK',name=values.get('warehouse_name') or 'Shop stock',branch=branch)
+    Till.objects.create(code=branch.code+'-TILL',name=values.get('till_name') or 'Shop till',branch=branch)
     accounts={}
     for key,(label,kind) in POSTING.items():
         account=Account.objects.create(code=branch.code+'-'+key.upper(),name=(branch.name+' · '+label)[:180],account_type=kind,root_type=SECTION.get(kind,''));accounts[key]=str(account.pk)
@@ -86,14 +92,7 @@ def readiness(branch):
         try:validate_mapping(config.accounts,config.payment_methods)
         except ValidationError:issues.append('Review posting accounts and payment methods')
     people=Staff.objects.filter(branch=branch,enabled=True)
-    for capability,label in [('can_buy','buying'),('can_sell','sales'),('can_handle_payments','payment collection')]:
-        if not people.filter(**{capability:True}).exists():issues.append('Assign staff for '+label)
     logins=people.filter(user__is_active=True)
     if settings.SUPABASE_AUTH_ENABLED:logins=logins.filter(user_id__in=SupabaseIdentity.objects.values('user_id'))
-    if not logins.exists():issues.append('Link staff login accounts')
-    else:
-        for capability,label in [('can_buy','buying'),('can_sell','sales'),('can_handle_payments','payment collection')]:
-            allowed=Q(manager=True)|Q(**{capability:True})
-            if capability=='can_sell':allowed|=Q(can_handle_payments=True)
-            if not logins.filter(allowed).exists():issues.append('Link an operator login for '+label)
+    if not logins.exists():issues.append('Create the shop login (Shop accounts)')
     return {'branch':branch,'issues':issues,'ready':not issues,'warehouses':Warehouse.objects.filter(branch=branch,enabled=True).count(),'tills':Till.objects.filter(branch=branch,enabled=True).count(),'staff_count':people.count(),'linked_logins':logins.count(),'methods':list(config.payment_methods) if config else []}

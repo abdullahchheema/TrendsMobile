@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Send phones to another shop</h1><p>From <strong>{{ branch.name }}</strong>. Tick the phones, choose the shop, and send. Stock moves immediately and a slip is printed with the phones.</p></div></div>
+{% if shops|length > 1 %}<form method="get" class="search-bar"><label>From shop<select name="branch">{% for place in shops %}<option value="{{ place.pk }}" {% if place.pk == branch.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select></label><button>Load shop</button></form>{% endif %}
+<form method="get" class="search-bar"><input type="hidden" name="branch" value="{{ branch.pk }}"><label>Find a phone<input type="search" name="q" value="{{ q }}" placeholder="Model, IMEI or stock reference"></label><button>Search</button></form>
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="branch" value="{{ branch.pk }}">
+<div class="form-grid"><div class="field"><label for="target">Send to</label><select id="target" name="target" required><option value="">Choose a shop</option>{% for t in targets %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}</select></div></div>
+<div class="table-scroll"><table><thead><tr><th></th><th>Phone</th><th>IMEI</th><th>Condition</th>{% if show_costs %}<th class="num">Cost</th>{% endif %}</tr></thead><tbody>
+{% for p in phones %}<tr><td><input type="checkbox" name="phone" value="{{ p.pk }}" aria-label="Send {{ p.product.name }}"></td><td>{{ p.product.name }}<small>{{ p.code }}</small></td><td>{% for i in p.imeis.all %}{{ i.number }} {% endfor %}</td><td>{{ p.condition }}</td>{% if show_costs %}<td class="num">{{ p.purchase_cost|floatformat:"2g" }}</td>{% endif %}</tr>
+{% empty %}<tr><td colspan="5" class="empty-state">No phones available in this shop{% if q %} matching your search{% endif %}.</td></tr>{% endfor %}</tbody></table></div>
+<div class="form-actions"><button class="primary" type="submit" data-confirm="Send the ticked phones to the other shop? They will leave this shop's stock now.">Send phones</button></div></form>
+<section class="panel table-scroll"><h2 style="margin-top:0">Recent transfers</h2><table><thead><tr><th>Date</th><th>From</th><th>To</th><th></th></tr></thead><tbody>
+{% for d in recent %}<tr><td>{{ d.posting_date|date:"j M Y" }}</td><td>{{ d.data.transfer.source_shop }}</td><td>{{ d.data.transfer.target_shop }}</td><td><a href="{% url 'transfer_slip' d.pk %}">Slip</a></td></tr>
+{% empty %}<tr><td colspan="4" class="empty-state">No transfers yet.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from .models import *
-from . import access,services,reports as reporting,pricing
+from . import access,services,reports as reporting,pricing,shopdefaults
 from .forms import DeviceForm,DocumentForm,LineSet,ReturnLineSet,MASTER_MODELS,DETAIL_FIELDS
 from .report_filters import ReportFilters,defaults as report_defaults
 from . import report_catalog,report_presentation
@@ -530,7 +530,7 @@ def setup_new(request):
         except ValidationError as error:form.add_error(None,error_text(error))
         except IntegrityError:form.add_error(None,'A shop or account code is already in use. Choose a different shop code.')
         else:
-            messages.success(request,'Shop, warehouse, till and accounts created. Add staff and login assignments next.');return redirect('setup')
+            messages.success(request,'Shop created. Now create its login so the shop can sign in.');return redirect('users')
     return render(request,'form.html',dict(title='Create shop setup',form=form,master=True))
 
 @login_required
@@ -590,7 +590,7 @@ def pos(request):
             if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,warehouse_name=warehouse.name,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False))
     shift=services.active_shift(branch,request.user)
     return render(request,'pos.html',dict(title='Point of Sale',items=items,customers=Party.objects.filter(kind='Customer',enabled=True),
-        sellers=Staff.objects.filter(branch=branch,enabled=True,can_sell=True),handlers=Staff.objects.filter(branch=branch,enabled=True,can_handle_payments=True),cash_modes=services.cash_modes(branch),
+        me=shopdefaults.person(request.user,branch),cash_modes=services.cash_modes(branch),
         branch=branch,methods=configuration.payment_methods,request_key=uuid.uuid4(),tax_rules=pricing.rules(branch),
         shift=shift,reconciliation=services.till_balance(shift) if shift else None))
 

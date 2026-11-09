@@ -48,8 +48,8 @@ def purchase(data,user,demo_batch=''):
     if data['warehouse'].branch_id!=branch.pk or not data['warehouse'].enabled:raise ValidationError('Choose this shop’s active stock location.')
     chosen=data.get('product') or catalog_entry.resolve_variant(data.get('variant') or {})
     product=Product.objects.select_for_update().get(pk=chosen.pk,enabled=True,serialized=True,stock_item=True)
-    qty=int(data['quantity']);cost=s.payment_money(data['price']);asking=s.payment_money(data['asking_price'])
-    if not 1<=qty<=20 or cost<=0 or asking<=0:raise ValidationError('Enter 1–20 phones, a buying price and an expected selling price.')
+    qty=int(data['quantity']);cost=s.payment_money(data['price']);asking=s.payment_money(data.get('asking_price') or 0)
+    if not 1<=qty<=20 or cost<=0 or asking<0:raise ValidationError('Enter 1–20 phones and a buying price.')
     if data['pta_status'] not in ('PTA','Non-PTA'):raise ValidationError('Choose PTA or Non-PTA.')
     receipt=s.new_doc('Purchase Receipt',branch,supplier=supplier,warehouse=data['warehouse'],buyer=data['staff'],posting_date=data['posting_date'],demo_batch=demo_batch,
         notes=data.get('notes',''),data={'device':dict(pta_status=data['pta_status'],device_type=data['device_type'],condition=data['condition'],inspection_status='Passed',inspection_date=str(data['posting_date']),asking_price=str(asking),line_imeis=data.get('imeis') or [],**({'details':dict(condition_notes=catalog_entry.tidy(data['phone_notes']))} if catalog_entry.tidy(data.get('phone_notes')) else {}))})

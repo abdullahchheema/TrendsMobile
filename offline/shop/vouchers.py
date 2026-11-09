@@ -59,6 +59,8 @@ def voucher_new(request):
     if not _allowed(request.user):raise PermissionDenied('You do not have access to this page.')
     branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not branch:return redirect('setup')
+    from . import coa
+    if not Account.objects.filter(code__startswith=coa.PREFIX).exists():coa.install_standard(request.user)       # expense categories ready on first use
     form=VoucherForm(request.POST or None,user=request.user,branch=branch)
     if request.method=='POST':
         try:

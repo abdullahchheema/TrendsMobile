@@ -25,7 +25,6 @@
         '<td><select data-f="condition" aria-label="Condition">'+opts(conditions,r.condition)+'</select><select data-f="device_type" aria-label="Phone type">'+opts(types,r.device_type)+'</select></td>'+
         '<td><input data-f="grade" type="number" min="1" max="10" placeholder="1-10" value="'+(r.grade||'')+'" aria-label="Grade out of 10"><select data-f="pta_status" aria-label="PTA"><option'+(r.pta_status==='PTA'?' selected':'')+'>PTA</option><option'+(r.pta_status==='Non-PTA'?' selected':'')+'>Non-PTA</option></select></td>'+
         '<td><input data-f="cost" type="number" min="0" step="0.01" value="'+(r.cost||'')+'" aria-label="Buying price"><select data-f="cost_mode" aria-label="Price is"><option value="each"'+(r.cost_mode==='each'?' selected':'')+'>each</option><option value="total"'+(r.cost_mode==='total'?' selected':'')+'>line total</option></select></td>'+
-        '<td><input data-f="asking_price" type="number" min="0" step="0.01" value="'+(r.asking_price||'')+'" aria-label="Expected selling price"></td>'+
         '<td><textarea data-f="imeis" rows="3" placeholder="One IMEI per line. Dual-SIM: both on one line." aria-label="IMEIs">'+(r.imeis||'').replace(/</g,'&lt;')+'</textarea><small data-imei-note></small></td>'+
         '<td><button type="button" data-dup title="Copy this line">Copy</button> <button type="button" data-del title="Remove this line" aria-label="Remove line">&#10005;</button></td>';
       body.appendChild(tr);
@@ -59,9 +58,9 @@
     render();scan.focus();
   });
   form.addEventListener('submit',function(e){
-    var ok=summarise();var empty=rows.some(function(r){return !(r.product||(r.brand&&r.model&&r.storage&&r.colour))||!(+r.quantity)||!(+r.cost)||!(+r.asking_price)});
+    var ok=summarise();var empty=rows.some(function(r){return !(r.product||(r.brand&&r.model&&r.storage&&r.colour))||!(+r.quantity)||!(+r.cost)});
     if(!ok){e.preventDefault();status.textContent='Fix the duplicate IMEIs before saving.';status.className='error';return}
-    if(empty){e.preventDefault();status.textContent='Every line needs a brand, model, storage, colour, quantity, buying price and selling price.';status.className='error'}
+    if(empty){e.preventDefault();status.textContent='Every line needs a brand, model, storage, colour, quantity and buying price.';status.className='error'}
   },true);
   try{var saved=JSON.parse(hidden.value||'[]');rows=Array.isArray(saved)&&saved.length?saved.map(function(r){return Object.assign(blank(),r)}):[blank()]}catch(e){rows=[blank()]}
   render();

@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Shop accounts</h1><p>One login per shop. Whoever signs in to a shop's account sells, buys and takes money for that shop, and sees only that shop. You, the super admin, see every shop.</p></div><a href="{% url 'setup_new' %}">Add a shop</a></div>
+<section class="panel table-scroll"><table><thead><tr><th>Shop</th><th>Sign-in</th><th>Status</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.branch.name }}<small>{{ r.branch.code }}</small></td><td>{{ r.login|default:"—" }}</td><td>{% if r.person %}{% if r.active %}<span class="badge ok">Active</span>{% else %}<span class="badge warn">Disabled</span>{% endif %}{% else %}<span class="badge">No login yet</span>{% endif %}</td>
+<td>{% if r.person %}<form method="post" style="margin:0">{% csrf_token %}<input type="hidden" name="action" value="toggle"><input type="hidden" name="person" value="{{ r.person.pk }}"><button type="submit" data-confirm="{% if r.active %}Disable this shop's login? Nobody will be able to sign in to it.{% else %}Enable this shop's login again?{% endif %}">{% if r.active %}Disable{% else %}Enable{% endif %}</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="4" class="empty-state">No shops yet. Add a shop first.</td></tr>{% endfor %}</tbody></table></section>
+<div class="ov-grid">
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="action" value="create"><h2 style="margin-top:0">Create a shop login</h2>{{ create.non_field_errors }}<div class="form-grid">{% include 'form_fields.html' with fields=create.visible_fields %}</div><div class="form-actions"><button class="primary" type="submit">Create login</button></div></form>
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="action" value="reset"><h2 style="margin-top:0">Change a shop's password</h2>{{ reset.non_field_errors }}<div class="form-grid">{% include 'form_fields.html' with fields=reset.visible_fields %}</div><div class="form-actions"><button class="primary" type="submit">Change password</button></div></form>
+</div>
+{% endblock %}

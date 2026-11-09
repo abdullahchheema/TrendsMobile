@@ -23,8 +23,8 @@ class ReportFeatures(TestCase):
     def sales_user(self,buy=False):
         user=get_user_model().objects.create_user('report-user');self.seller.user=user;self.seller.can_buy=buy;self.seller.save();self.client.force_login(user);return user
     def test_catalog_exposes_original_labels_all_reports_and_stock_ledger(self):
-        response=self.client.get(reverse('report_center'));self.assertEqual(response.status_code,200);self.assertEqual(response.context['report_count'],29)
-        for label in ('Phone Stock','Stock Age &amp; Prices','Device Costs &amp; Margin','Customer Balances','Supplier Balances','Staff Activity','Staff Summary','Stock Ledger'):
+        response=self.client.get(reverse('report_center'));self.assertEqual(response.status_code,200);self.assertEqual(response.context['report_count'],27)
+        for label in ('Phone Stock','Stock Age &amp; Prices','Device Costs &amp; Margin','Customer Balances','Supplier Balances','Stock Ledger'):
             self.assertContains(response,label)
     def test_catalog_search_accepts_original_report_name(self):
         response=self.client.get(reverse('report_center'),{'search':'phone stock'});self.assertEqual(response.context['report_count'],1)
@@ -33,10 +33,9 @@ class ReportFeatures(TestCase):
         self.sales_user();response=self.client.get(reverse('report_center'))
         self.assertContains(response,'Stock Ledger');self.assertNotContains(response,'Device Profit');self.assertNotContains(response,'Staff Summary');self.assertNotContains(response,'General Ledger')
         self.assertEqual(self.page('General Ledger').status_code,403)
-    def test_staff_reports_have_original_staff_shortcuts(self):
-        response=self.client.get(reverse('dashboard'))
-        sidebar=response.content.decode().split('<aside',1)[1].split('</aside>',1)[0]
-        for name in ('Staff Activity','Staff Summary'):self.assertEqual(sidebar.count(reverse('report',args=[name])),2)
+    def test_staff_reports_are_not_in_the_menu_because_each_shop_has_one_account(self):
+        sidebar=self.client.get(reverse('dashboard')).content.decode().split('<aside',1)[1].split('</aside>',1)[0]
+        for name in ('Staff Activity','Staff Summary'):self.assertNotIn(reverse('report',args=[name]),sidebar)
     @patch('django.utils.timezone.localdate',return_value=date(2026,11,1))
     def test_month_boundary_empty_report_offers_all_history_and_restores_october(self,clock):
         sale=self.sale();response=self.page('Sales Register');self.assertEqual(response.context['rows'],[])

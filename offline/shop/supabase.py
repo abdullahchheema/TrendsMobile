@@ -29,6 +29,7 @@ def refresh(token):return call('/auth/v1/token?grant_type=refresh_token',method=
 def user(token):return call('/auth/v1/user',token=token)
 def sign_out(token):return call('/auth/v1/logout?scope=local',method='POST',token=token)
 def create_user(email,password,metadata=None):return call('/auth/v1/admin/users',method='POST',payload={'email':email,'password':password,'email_confirm':True,'app_metadata':metadata or {}},admin=True)
+def update_password(uid,password):return call('/auth/v1/admin/users/'+quote(str(uid),safe=''),method='PUT',payload={'password':password},admin=True)
 def delete_user(uid):return call('/auth/v1/admin/users/'+quote(str(uid),safe=''),method='DELETE',admin=True)
 
 def tokens(request,response):

@@ -11,9 +11,7 @@ class CreateShopForm(forms.Form):
     company=forms.CharField(label='Business / company name',max_length=180)
     shop_phone=forms.CharField(label='Contact phone',max_length=180,required=False)
     shop_address=forms.CharField(label='Location / address',required=False,widget=forms.Textarea(attrs={'rows':2}))
-    warehouse_name=forms.CharField(label='Initial warehouse name',max_length=180,initial='Stock room')
-    till_name=forms.CharField(label='Initial till name',max_length=180,initial='Main till')
-    payment_methods=forms.MultipleChoiceField(choices=[(v,v) for v in METHODS],initial=['Cash'],widget=forms.CheckboxSelectMultiple)
+    payment_methods=forms.MultipleChoiceField(label='Ways customers can pay',choices=[(v,v) for v in METHODS],initial=list(METHODS),widget=forms.CheckboxSelectMultiple)
     def clean_code(self):
         code=self.cleaned_data['code'].upper()
         if Branch.objects.filter(code__iexact=code).exists():raise ValidationError('This shop code is already in use.')

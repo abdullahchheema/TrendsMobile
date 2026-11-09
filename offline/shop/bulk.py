@@ -13,7 +13,7 @@ from django.db import IntegrityError,transaction
 from django.shortcuts import redirect,render
 from django.utils import timezone
 from .models import Branch,Device,IMEI,Product,Staff,ShopSettings,Warehouse
-from . import access,catalog_entry,easy_retail,customer_names,services as s
+from . import access,catalog_entry,easy_retail,customer_names,shopdefaults,services as s
 
 MAX_ROWS=40
 MAX_PHONES=200
@@ -62,8 +62,8 @@ def parse_rows(raw,require_imei=True):
         except (TypeError,ValueError):raise ValidationError(f'Line {position}: the grade must be a whole number from 1 to 10.')
         if grade is not None and not 1<=grade<=10:raise ValidationError(f'Line {position}: the grade must be from 1 to 10.')
         if row.get('pta_status') not in ('PTA','Non-PTA'):raise ValidationError(f'Line {position}: choose PTA or Non-PTA.')
-        asking=s.payment_money(row.get('asking_price') or 0)
-        if asking<=0:raise ValidationError(f'Line {position}: enter the expected selling price.')
+        asking=s.payment_money(row.get('asking_price') or 0)      # optional: the selling price is decided at the counter
+        if asking<0:raise ValidationError(f'Line {position}: the price cannot be negative.')
         imeis=easy_retail.parse_imeis(row.get('imeis',''),qty) if (row.get('imeis') or '').strip() else []
         if require_imei and not imeis:raise ValidationError(f'Line {position} ({label}): scan or type {qty} IMEI(s), or tick “I will add IMEIs later”.')
         for index,pair in enumerate(imeis,1):
@@ -112,10 +112,10 @@ class BulkForm(forms.Form):
         self.fields['branch']=forms.ModelChoiceField(queryset=access.branches(user),initial=branch,widget=forms.HiddenInput())
         self.fields['party_name']=forms.CharField(label='Supplier',max_length=180,widget=forms.TextInput(attrs={'placeholder':'Type supplier name','autocomplete':'off'}))
         places=Warehouse.objects.filter(branch=branch,enabled=True);person=access.staff(user)
-        self.fields['warehouse']=forms.ModelChoiceField(label='Receiving stock location',queryset=places,initial=person.default_warehouse if person and person.default_warehouse_id else places.first())
+        self.fields['warehouse']=forms.ModelChoiceField(queryset=places,initial=shopdefaults.warehouse(branch).pk,required=False,widget=forms.HiddenInput())
         self.fields['posting_date']=forms.DateField(label='Purchase date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
         buyers=people.filter(can_buy=True)
-        self.fields['staff']=forms.ModelChoiceField(label='Bought by',queryset=buyers,initial=buyers.filter(user=user).first() or buyers.first())
+        me=shopdefaults.person(user,branch);self.fields['staff']=forms.ModelChoiceField(queryset=buyers,initial=me.pk,required=False,widget=forms.HiddenInput())
         can_pay=person is None or person.manager or person.can_handle_payments
         choices=[('full','Paid in full'),('part','Part payment'),('unpaid','Pay later / on credit')] if can_pay else [('unpaid','Pay later')]
         self.fields['payment_status']=forms.ChoiceField(label='Payment',choices=choices,initial='unpaid' if not can_pay else 'full')
@@ -123,20 +123,25 @@ class BulkForm(forms.Form):
         self.fields['method']=forms.ChoiceField(label='Paid from',choices=[(m,m) for m in (config.payment_methods if config else [])],initial='Cash',required=False)
         self.fields['payment_reference']=forms.CharField(label='Bank / wallet reference',required=False,max_length=180)
         handlers=people.filter(can_handle_payments=True)
-        self.fields['handler']=forms.ModelChoiceField(label='Payment handled by',queryset=handlers,required=False,initial=handlers.filter(user=user).first() or handlers.first())
+        self.fields['handler']=forms.ModelChoiceField(queryset=handlers,required=False,initial=me.pk,widget=forms.HiddenInput())
+        self.user=user
         self.fields['notes']=forms.CharField(label='Note (optional)',required=False,widget=forms.Textarea(attrs={'rows':2}))
         self.fields['later']=forms.BooleanField(label='I will add IMEIs later (not recommended)',required=False)
         self.fields['rows_json']=forms.CharField(widget=forms.HiddenInput(),required=False)
 
     @property
-    def visible_fields_head(self):return [self[n] for n in ('party_name','warehouse','posting_date','staff')]
+    def visible_fields_head(self):return [self[n] for n in ('party_name','posting_date','warehouse','staff')]
     @property
-    def visible_fields_tail(self):return [self[n] for n in ('payment_status','amount_paid','method','payment_reference','handler','later','notes')]
+    def visible_fields_tail(self):return [self[n] for n in ('payment_status','amount_paid','method','payment_reference','later','notes','handler')]
 
     def clean(self):
         data=super().clean()
+        branch=data.get('branch')
+        if branch:
+            me=shopdefaults.person(self.user,branch)
+            for name,default in (('warehouse',shopdefaults.warehouse(branch)),('staff',me),('handler',me)):
+                if not data.get(name) or data[name].branch_id!=branch.pk:data[name]=default
         if data.get('payment_status') in ('full','part'):
-            if not data.get('handler'):self.add_error('handler','Choose who handled the payment.')
             if not data.get('method'):self.add_error('method','Choose a payment method.')
             elif data['method'] not in s.cash_modes(data['branch']) and not data.get('payment_reference'):self.add_error('payment_reference','Enter the bank or wallet transaction reference.')
         return data

@@ -71,10 +71,11 @@ class Transfers(TestCase):
         last=s.submit(self.transfer(product=item,quantity=2),self.user)
         self.assertEqual(first.total,Decimal('33.33'));self.assertEqual(last.total,Decimal('66.67'))
         self.assertEqual(s.on_hand(item,self.warehouse),(0,0));self.assertEqual(s.on_hand(item,self.destination),(3,100))
-    def test_branch_manager_cannot_send_to_another_shop(self):
+    def test_a_shop_account_can_send_its_own_stock_to_another_shop_but_not_other_shops_stock(self):
         phone=self.phone();doc=self.transfer(phone)
-        with self.assertRaises(PermissionDenied):s.submit(doc,self.manager(self.branch))
-        self.assert_unmoved(phone,doc)
+        done=s.submit(doc,self.manager(self.branch));phone.refresh_from_db();self.assertEqual((phone.branch_id,phone.warehouse_id,done.status),(self.destination.branch_id,self.destination.pk,'Submitted'))
+        stranger=Branch.objects.create(code='STRANGER',name='Stranger shop',company=self.branch.company)
+        with self.assertRaises(PermissionDenied):s.submit(self.transfer(self.phone(2)),self.manager(stranger,'stranger-manager'))
     def test_same_shop_manager_transfer_still_has_no_ledger(self):
         phone=self.phone();target=Warehouse.objects.create(code='COUNTER',name='Counter',branch=self.branch)
         doc=s.submit(self.transfer(phone,target=target),self.manager(self.branch))
@@ -88,11 +89,11 @@ class Transfers(TestCase):
         s.new_doc('Mobile Daily Closing',self.other,status='Submitted')
         with self.assertRaisesMessage(ValidationError,'closed'):s.submit(doc,self.user)
         self.assert_unmoved(phone,doc)
-    def test_missing_clearing_rolls_back_phone_and_movements(self):
+    def test_missing_clearing_account_is_created_automatically_so_shops_need_no_setup(self):
         phone=self.phone();doc=self.transfer(phone);settings=ShopSettings.objects.get(branch=self.other)
         settings.accounts.pop('inter_shop');settings.save()
-        with self.assertRaisesMessage(ValidationError,'clearing'):s.submit(doc,self.user)
-        self.assert_unmoved(phone,doc)
+        done=s.submit(doc,self.user);phone.refresh_from_db();self.assertEqual(done.status,'Submitted');self.assertEqual(phone.branch_id,self.other.pk)
+        settings.refresh_from_db();self.assertTrue(settings.accounts.get('inter_shop'))
     def test_wrong_line_warehouse_rejected(self):
         phone=self.phone();doc=self.transfer(phone);line=doc.lines.get();line.warehouse=self.destination;line.save()
         with self.assertRaisesMessage(ValidationError,'source warehouse'):s.submit(doc,self.user)

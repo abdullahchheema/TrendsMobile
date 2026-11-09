@@ -25,7 +25,7 @@ class ShopSetup(TestCase):
         return services.submit(services.new_doc('Payment Entry',branch,customer=party,handler=staff,data=dict(amount=str(amount),direction='Receive',mode='Cash')),self.owner)
     def test_four_shops_create_complete_empty_configuration_through_http(self):
         for number in range(1,5):
-            response=self.client.post(reverse('setup_new'),self.values(number));self.assertRedirects(response,reverse('setup'))
+            response=self.client.post(reverse('setup_new'),self.values(number));self.assertRedirects(response,reverse('users'))
         self.assertEqual(Branch.objects.count(),4);self.assertEqual(Warehouse.objects.count(),4);self.assertEqual(Till.objects.count(),4)
         self.assertFalse(Document.objects.exists());self.assertFalse(LedgerEntry.objects.exists());self.assertFalse(StockMovement.objects.exists())
         for branch in Branch.objects.all():
@@ -124,23 +124,21 @@ class ShopSetup(TestCase):
         response=self.client.get(reverse('master_edit',args=['Shop',branch.pk]));self.assertEqual(response.status_code,200)
         response=self.client.post(reverse('master_edit',args=['Shop',branch.pk]),dict(code=branch.code,name=branch.name,company=branch.company,enabled='on'))
         self.assertEqual(response.status_code,302);branch.refresh_from_db();self.assertTrue(branch.enabled)
-    def test_transaction_form_rejects_warehouse_from_another_shop(self):
+    def test_transaction_form_never_uses_another_shops_warehouse(self):
         branch=self.shop();other=self.shop(2);seller=self.staff(branch)
         customer=Party.objects.create(code='FORM-CUSTOMER',name='QA customer',kind='Customer')
         form=DocumentForm({'branch':str(branch.pk),'posting_date':str(timezone.localdate()),'customer':str(customer.pk),'seller':str(seller.pk),'warehouse':str(Warehouse.objects.get(branch=other).pk)},user=self.owner,kind='Sales Invoice')
-        self.assertFalse(form.is_valid());self.assertIn('warehouse',form.errors)
+        self.assertTrue(form.is_valid(),form.errors);self.assertEqual(form.cleaned_data['warehouse'].branch_id,branch.pk)      # a wrong-shop stock location is replaced by the shop's own, never accepted
     @override_settings(SUPABASE_AUTH_ENABLED=True)
     def test_supabase_readiness_requires_a_provider_linked_staff_login(self):
         branch=self.shop();user=get_user_model().objects.create_user('unlinked-staff');self.staff(branch,user=user,manager=True)
         self.assertFalse(setup.readiness(branch)['ready'])
         SupabaseIdentity.objects.create(auth_id=uuid.uuid4(),user=user)
         self.assertTrue(setup.readiness(branch)['ready'])
-    def test_technician_login_does_not_mark_trade_roles_ready(self):
-        branch=self.shop();self.staff(branch,manager=True)
-        user=get_user_model().objects.create_user('technician-only')
-        Staff.objects.create(code='TECH-ONLY',name='QA technician',branch=branch,user=user)
+    def test_shop_without_a_login_is_not_ready(self):
+        branch=self.shop();Staff.objects.create(code='NO-LOGIN',name='Unlinked staff',branch=branch)
         status=setup.readiness(branch)
-        self.assertFalse(status['ready']);self.assertIn('Link an operator login for buying',status['issues'])
+        self.assertFalse(status['ready']);self.assertIn('Create the shop login (Shop accounts)',status['issues'])
     def test_same_warehouse_names_remain_separate_in_owner_stock_report(self):
         branches=[self.shop(1),self.shop(2)];product=Product.objects.create(code='QA-CHARGER',name='QA charger')
         supplier=Party.objects.create(code='QA-STOCK-SUPPLIER',name='QA stock supplier',kind='Supplier')

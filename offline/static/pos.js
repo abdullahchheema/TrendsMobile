@@ -29,7 +29,7 @@
   products.filter(p=>{const hay=`${p.code} ${p.name} ${p.barcode} ${p.brand||''} ${p.storage||''} ${p.colour||''} ${p.condition||''}`.toLowerCase();
    return terms.every(t=>hay.includes(t))&&(!brand||p.brand===brand)&&(!condition||p.condition===condition)&&(!maxPrice||Number(p.rate)<=maxPrice);}).slice(0,80).forEach(product=>{
    const button=make('button');button.type='button';button.disabled=Boolean(pending);
-   button.append(make('span',product.name),make('strong',format(product.rate)),make('small',product.imeis&&product.imeis.length?'IMEI '+product.imeis.join(' / '):product.code),make('small',product.warehouse_name||''));
+   button.append(make('span',product.name),make('strong',Number(product.rate)>0?format(product.rate):'Price at sale'),make('small',product.imeis&&product.imeis.length?'IMEI '+product.imeis.join(' / '):product.code),make('small',product.warehouse_name||''));
    if(product.serialized)button.append(make('small',[product.condition,product.grade?product.grade+'/10':'','PTA: '+product.pta_status].filter(Boolean).join(' · ')));else if(product.stock_item)button.append(make('small','In stock: '+product.stock));
    button.addEventListener('click',()=>add(product));list.append(button);
   });
@@ -41,7 +41,7 @@
    const qty=make('input');qty.type='number';qty.min='1';qty.step='1';qty.value=product.quantity;qty.disabled=product.serialized||Boolean(pending);qty.setAttribute('aria-label','Quantity');
    if(product.stock_item)qty.max=product.stock;
    qty.addEventListener('change',()=>{if(pending)return;product.quantity=Number(qty.value);render();});
-   const rate=make('input');rate.type='number';rate.min='0';rate.step='.01';rate.value=product.rate;rate.disabled=Boolean(pending);rate.setAttribute('aria-label','Selling price PKR');
+   const rate=make('input');rate.type='number';rate.min='0';rate.step='.01';rate.value=Number(product.rate)>0?product.rate:'';rate.placeholder='Selling price';rate.disabled=Boolean(pending);rate.setAttribute('aria-label','Selling price PKR');
    rate.addEventListener('change',()=>{if(pending)return;product.rate=rate.value;render();});
    const remove=make('button','Remove');remove.type='button';remove.disabled=Boolean(pending);remove.addEventListener('click',()=>{if(pending)return;cart.splice(index,1);error.textContent='';render();});
    row.append(qty,rate,remove);cartEl.append(row);
@@ -70,6 +70,7 @@
   if(!pending){
    if(!cart.length){error.textContent='Select at least one item.';return;}
    if(!form.reportValidity())return;
+   const unpriced=cart.find(item=>!(Number(item.rate)>0));if(unpriced){error.textContent='Enter the selling price for '+unpriced.name+'.';return;}
    try{totals();}catch(problem){error.textContent=problem.message;return;}
    const values=new FormData(form);
    let payments;try{payments=window.covisonPayments.read(form);}catch(problem){error.textContent=problem.message;return;}

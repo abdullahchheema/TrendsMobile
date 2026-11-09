@@ -98,22 +98,28 @@ class ExchangeForm(forms.Form):
         self.fields['price']=forms.DecimalField(label='Selling price of the new phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2)
         self.fields['posting_date']=forms.DateField(label='Date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
         sellers=people.filter(can_sell=True);buyers=people.filter(can_buy=True);handlers=people.filter(can_handle_payments=True)
-        self.fields['staff']=forms.ModelChoiceField(label='Sold by',queryset=sellers,initial=sellers.filter(user=user).first() or sellers.first())
-        self.fields['buyer']=forms.ModelChoiceField(label='Old phones valued by',queryset=buyers,initial=buyers.filter(user=user).first() or buyers.first())
-        self.fields['handler']=forms.ModelChoiceField(label='Money handled by',queryset=handlers,initial=handlers.filter(user=user).first() or handlers.first())
-        places=Warehouse.objects.filter(branch=branch,enabled=True);person=access.staff(user)
-        self.fields['warehouse']=forms.ModelChoiceField(label='Keep old phones at',queryset=places,initial=person.default_warehouse if person and person.default_warehouse_id else places.first())
+        from . import shopdefaults
+        me=shopdefaults.person(user,branch);self.user=user
+        for name,qs in (('staff',sellers),('buyer',buyers),('handler',handlers)):
+            self.fields[name]=forms.ModelChoiceField(queryset=qs,initial=me.pk,required=False,widget=forms.HiddenInput())
+        self.fields['warehouse']=forms.ModelChoiceField(queryset=Warehouse.objects.filter(branch=branch,enabled=True),initial=shopdefaults.warehouse(branch).pk,required=False,widget=forms.HiddenInput())
         self.fields['method']=forms.ChoiceField(label='Difference paid / received by',choices=[(m,m) for m in (config.payment_methods if config else [])],initial='Cash')
         self.fields['payment_reference']=forms.CharField(label='Bank / wallet reference (if not cash)',required=False,max_length=180)
         self.fields['notes']=forms.CharField(label='Note (optional)',required=False,widget=forms.Textarea(attrs={'rows':2}))
 
     @property
-    def visible_fields_new(self):return [self[n] for n in ('party_name','phone','pta_status','price','posting_date','staff')]
+    def visible_fields_new(self):return [self[n] for n in ('party_name','phone','pta_status','price','posting_date','staff','buyer','handler','warehouse')]
     @property
-    def visible_fields_settle(self):return [self[n] for n in ('buyer','handler','warehouse','method','payment_reference','notes')]
+    def visible_fields_settle(self):return [self[n] for n in ('method','payment_reference','notes')]
 
     def clean(self):
         data=super().clean()
+        if data.get('branch'):
+            from . import shopdefaults
+            me=shopdefaults.person(self.user,data['branch'])
+            for name in ('staff','buyer','handler'):
+                if not data.get(name) or data[name].branch_id!=data['branch'].pk:data[name]=me
+            if not data.get('warehouse') or data['warehouse'].branch_id!=data['branch'].pk:data['warehouse']=shopdefaults.warehouse(data['branch'])
         if data.get('method') and data['method'] not in s.cash_modes(data['branch']) and not data.get('payment_reference'):self.add_error('payment_reference','Enter the bank or wallet transaction reference.')
         return data
 
