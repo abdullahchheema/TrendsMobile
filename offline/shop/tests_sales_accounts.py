@@ -39,10 +39,6 @@ class LiveSalesAccounts(TestCase):
         unknown=Account.objects.create(code='LIVE-UNKNOWN',name='Unclassified account');doc=s.new_doc('Journal Entry',self.branch)
         LedgerEntry.objects.create(document=doc,branch=self.branch,posting_date=timezone.localdate(),account=unknown,debit=10)
         response=self.client.get(reverse('sales_accounts'));self.assertEqual(response.status_code,400);self.assertContains(response,'account classifications',status_code=400)
-    def test_financial_workspace_stays_hidden_from_sales_only_staff(self):
-        user=get_user_model().objects.create_user('live-sales-only');self.seller.user=user;self.seller.save();self.client.force_login(user)
-        response=self.client.get(reverse('sales_accounts'));self.assertRedirects(response,reverse('dashboard'))
-        self.assertNotContains(self.client.get(reverse('dashboard')),'Sales &amp; Accounts')
     def test_new_operating_transactions_do_not_inherit_demo_mode_from_stock_or_parties(self):
         self.product.demo_batch='INITIAL-STOCK';self.product.save()
         self.supplier.demo_batch='INITIAL-PARTIES';self.supplier.save()

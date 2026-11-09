@@ -84,12 +84,6 @@ class InvoicePricing(TestCase):
         with self.assertRaises(ValidationError):s.submit(doc,self.user)
         self.rule.branch=self.branch;self.rule.enabled=False;self.rule.save()
         with self.assertRaises(ValidationError):s.submit(doc,self.user)
-    def test_invoice_discount_cannot_bypass_phone_minimum_using_tax(self):
-        phone=self.phone();doc=self.phone_draft(phone,'6000')
-        actor=get_user_model().objects.create_user('sales');self.seller.user=actor;self.seller.save()
-        with self.assertRaises(PermissionDenied):s.submit(doc,actor)
-        phone.refresh_from_db();self.assertEqual(phone.status,'Available');self.assertFalse(doc.ledger.exists())
-        doc=s.submit(doc,self.user);phone.refresh_from_db();self.assertEqual(phone.sold_price,59000);self.assertEqual(doc.total,61950)
     def test_phone_return_uses_original_discount_tax_and_cost(self):
         phone=self.phone();sale=s.submit(self.phone_draft(phone,'5000'),self.user)
         self.rule.rate=Decimal('20');self.rule.enabled=False;self.rule.save()

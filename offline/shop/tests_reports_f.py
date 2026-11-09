@@ -46,14 +46,6 @@ class ExtraReports(CreditBase):
     def test_expense_report_is_limited_to_costs_staff_and_pages_render_and_export(self):
         for name in ('Daily Sales','Branch Comparison','Expense Report','IMEI Report'):
             page=self.client.get(reverse('report',args=[name]));self.assertEqual(page.status_code,200,name)
-    def test_sales_staff_cannot_open_financial_reports(self):
-        from django.contrib.auth import get_user_model
-        clerk=get_user_model().objects.create_user('clerk-rf',password='Unrelated-test-password-729!')
-        Staff.objects.create(code='CLK-RF',name='Clerk RF',branch=self.branch,user=clerk,role=Role.objects.get(code='sales'))
-        for name in ('Branch Comparison','Expense Report'):
-            with self.assertRaises(PermissionDenied):reports.run(name,clerk,{})
-
-
 class ExchangeReport(ExchangeBase):
     def test_exchange_report_shows_trade_in_difference_and_margin_after_resale(self):
         exchange.post(self.form(150000),[self.incoming(65000)],self.user)
@@ -85,8 +77,3 @@ class DashboardOverview(CreditBase):
     def test_page_renders_with_click_through_links_and_shop_selection(self):
         self.sale(60000,paid='full');page=self.get(branch=str(self.branch.pk))
         self.assertContains(page,'Business overview');self.assertContains(page,'/query-report/Daily%20Sales');self.assertContains(page,'Net sales')
-    def test_sales_staff_do_not_see_the_company_overview(self):
-        from django.contrib.auth import get_user_model
-        clerk=get_user_model().objects.create_user('clerk-ov',password='Unrelated-test-password-729!')
-        Staff.objects.create(code='CLK-OV',name='Clerk OV',branch=self.branch,user=clerk,role=Role.objects.get(code='sales'))
-        self.client.force_login(clerk);page=self.get();self.assertEqual(page.status_code,200);self.assertIsNone(page.context['overview']);self.assertNotContains(page,'Business overview')

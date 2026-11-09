@@ -18,16 +18,6 @@ class StatementPermissions(TestCase):
     def setUp(self):
         self.__dict__.update(fixtures())
         self.buyer.user=get_user_model().objects.create_user('buyer-only',password='Unrelated-test-password-729!');self.buyer.save()
-    def test_buyer_keeps_cost_reports_but_not_financial_statements(self):
-        self.client.force_login(self.buyer.user)
-        for name in ('General Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance'):
-            self.assertEqual(self.client.get(reverse('report',args=[name])).status_code,403,name)
-        self.assertEqual(self.client.get(reverse('report',args=['Accounts Payable'])).status_code,200)
-    def test_buyer_does_not_see_statements_or_profit_workspace(self):
-        self.client.force_login(self.buyer.user)
-        page=self.client.get(reverse('dashboard'))
-        self.assertNotContains(page,reverse('sales_accounts'));self.assertNotContains(page,reverse('report',args=['Profit and Loss Statement']))
-        self.assertRedirects(self.client.get(reverse('sales_accounts')),reverse('dashboard'),fetch_redirect_response=False)
     def test_owner_still_reads_statements(self):
         self.client.force_login(self.user)
         self.assertEqual(self.client.get(reverse('report',args=['Profit and Loss Statement'])).status_code,200)

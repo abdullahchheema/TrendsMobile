@@ -79,7 +79,7 @@ def post(data,rows,user):
     branch=Branch.objects.select_for_update(no_key=True).get(pk=data['branch'].pk);access.require(user,branch,'can_buy')
     if data['warehouse'].branch_id!=branch.pk or not data['warehouse'].enabled:raise ValidationError('Choose this shop’s active stock location.')
     if sum(r['qty'] for r in rows)>MAX_PHONES:raise ValidationError(f'A single purchase can hold up to {MAX_PHONES} phones.')
-    supplier=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=branch.demo_batch)
+    supplier=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=branch.demo_batch,branch=branch)
     for r in rows:
         if not r['product']:r['product']=catalog_entry.resolve_variant(r['variant'])
     rows=sorted(rows,key=lambda r:str(r['product'].pk))     # receipt lines are processed grouped by product

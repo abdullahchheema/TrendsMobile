@@ -36,7 +36,7 @@ def parse_imeis(text,quantity):
             if number in seen:raise ValidationError(f'IMEI {number} appears twice (phones {seen[number]} and {position}).')
             seen[number]=position
     for found in IMEI.objects.filter(number__in=list(seen)).select_related('device'):
-        raise ValidationError(f'IMEI {found.number} is already registered to {found.device.code} ({found.device.status}). The same phone cannot be bought twice.')
+        raise ValidationError(f'IMEI {found.number} is already registered in the system. The same phone cannot be bought twice.')
     return rows
 
 
@@ -44,7 +44,7 @@ def parse_imeis(text,quantity):
 def purchase(data,user,demo_batch=''):
     branch=Branch.objects.select_for_update(no_key=True).get(pk=data['branch'].pk);access.require(user,branch,'can_buy')
     demo_batch=demo_batch or branch.demo_batch
-    supplier=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=demo_batch)
+    supplier=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=demo_batch,branch=branch)
     if data['warehouse'].branch_id!=branch.pk or not data['warehouse'].enabled:raise ValidationError('Choose this shop’s active stock location.')
     chosen=data.get('product') or catalog_entry.resolve_variant(data.get('variant') or {})
     product=Product.objects.select_for_update().get(pk=chosen.pk,enabled=True,serialized=True,stock_item=True)
@@ -67,7 +67,7 @@ def purchase(data,user,demo_batch=''):
 def sale(data,user,demo_batch=''):
     branch=Branch.objects.select_for_update(no_key=True).get(pk=data['branch'].pk);access.require(user,branch,'can_sell')
     demo_batch=demo_batch or branch.demo_batch
-    customer=customer_names.resolve(data['party_name'],user,demo_batch=demo_batch)
+    customer=customer_names.resolve(data['party_name'],user,demo_batch=demo_batch,branch=branch)
     Product.objects.select_for_update().get(pk=data['phone'].product_id,enabled=True,serialized=True)
     phone=Device.objects.select_for_update().get(pk=data['phone'].pk,branch=branch)
     if phone.status!='Available' or not phone.warehouse_id:raise ValidationError('This phone has already been sold. Choose another available phone.')

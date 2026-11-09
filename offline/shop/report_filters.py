@@ -2,7 +2,7 @@
 from django import forms
 from django.utils import timezone
 from .models import Account,Warehouse,PhoneModel,Staff,Product,Party
-from .access import branches
+from .access import branches,scoped_parties,visible_accounts
 
 INVENTORY={'Mobile Inventory','Mobile Stock Ageing','Mobile Device Economics'}
 FIELDS={
@@ -43,8 +43,8 @@ class ReportFilters(forms.Form):
             'product':forms.ModelChoiceField(label='Variant / accessory',queryset=Product.objects.order_by('name'),required=False,empty_label='All items'),
             'pta_status':forms.ChoiceField(label='PTA status',required=False,choices=[('','All PTA statuses')]+[(s,s) for s in ('PTA','Non-PTA','Not recorded')]),
             'review_only':forms.BooleanField(label='Only phones needing review',required=False),
-            'party':forms.ModelChoiceField(label='Customer / supplier',queryset=Party.objects.order_by('name'),required=False,empty_label='All parties'),
-            'account':forms.ModelChoiceField(queryset=Account.objects.filter(is_group=False).order_by('name'),required=False,empty_label='All accounts'),
+            'party':forms.ModelChoiceField(label='Customer / supplier',queryset=scoped_parties(user).order_by('name'),required=False,empty_label='All parties'),
+            'account':forms.ModelChoiceField(queryset=visible_accounts(user).filter(is_group=False).order_by('name'),required=False,empty_label='All accounts'),
         }
         self.fields={key:self.fields[key] for key in FIELDS.get(name,[])}
         from .reports import empty_columns

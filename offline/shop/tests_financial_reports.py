@@ -82,11 +82,6 @@ class FinancialReports(TestCase):
         self.post('2026-10-09',self.accounts['cash'],self.accounts['sales'],500,other)
         self.assertEqual(self.totals(self.page('Profit and Loss Statement'))['Net profit / loss'],'660.00')
         self.assertEqual(self.totals(self.page('Profit and Loss Statement',branch=str(self.branch.pk)))['Net profit / loss'],'160.00')
-    def test_sales_role_cannot_open_or_export_statements(self):
-        user=get_user_model().objects.create_user('sales-report');self.seller.user=user;self.seller.save();self.client.force_login(user)
-        for name in financial.NAMES:
-            self.assertEqual(self.page(name).status_code,403);self.assertEqual(self.page(name,format='csv').status_code,403)
-        center=self.client.get(reverse('report_center'));self.assertNotContains(center,'Balance Sheet');self.assertNotContains(center,'Trial Balance')
     def test_shop_manager_statements_are_scoped_to_assigned_shop(self):  # purchasing-only staff no longer see statements (tests_phase1)
         other=Branch.objects.create(code='OTHER',name='Other',company='Other');self.post('2026-10-09',self.accounts['cash'],self.accounts['sales'],500,other)
         user=get_user_model().objects.create_user('buyer-report');self.buyer.user=user;self.buyer.manager=True;self.buyer.save();self.client.force_login(user)

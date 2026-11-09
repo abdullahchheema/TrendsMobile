@@ -51,16 +51,12 @@ class Postings(VoucherBase):
 
 
 class Permissions(VoucherBase):
-    def test_branch_manager_can_record_expenses_but_not_owner_entries(self):
-        vouchers.post(self.data('capital',self.capital,50000),self.user)
-        user=get_user_model().objects.create_user('mgr-v',password='Unrelated-test-password-729!');Staff.objects.create(code='MGR-V',name='Mgr V',branch=self.branch,user=user,role=Role.objects.get(code='manager'))
-        self.assertTrue(vouchers.post(self.data('expense',self.rent,1000),user).pk)
-        with self.assertRaises(PermissionDenied):vouchers.post(self.data('drawings',self.drawings,1000),user)
-    def test_sales_staff_have_no_access_and_accountant_does(self):
-        clerk=get_user_model().objects.create_user('clerk-v',password='Unrelated-test-password-729!');Staff.objects.create(code='CLK-V',name='Clerk V',branch=self.branch,user=clerk,role=Role.objects.get(code='sales'))
-        acct=get_user_model().objects.create_user('acct-v',password='Unrelated-test-password-729!');Staff.objects.create(code='ACT-V',name='Acct V',branch=self.branch,user=acct,role=Role.objects.get(code='accountant'))
-        self.client.force_login(clerk);self.assertEqual(self.client.get(reverse('vouchers')).status_code,403)
-        self.client.force_login(acct);self.assertEqual(self.client.get(reverse('vouchers')).status_code,200);self.assertEqual(self.client.get(reverse('voucher_new')).status_code,200)
+    def test_shop_login_records_expenses_and_owner_money_but_not_loans(self):
+        from . import shop_accounts
+        login=shop_accounts.create_login(self.branch,'voucher-shop','Strong-pass-for-V-77!');self.client.force_login(login)
+        types=[k for k,_ in self.client.get(reverse('voucher_new')).context['form'].fields['type'].choices]
+        self.assertEqual(sorted(types),['capital','drawings','expense'])
+        self.client.force_login(self.user);self.assertIn('loan_in',[k for k,_ in self.client.get(reverse('voucher_new')).context['form'].fields['type'].choices])
 
 
 class Screen(VoucherBase):

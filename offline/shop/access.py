@@ -25,6 +25,27 @@ def branches(user):
     person=staff(user)
     return Branch.objects.filter(enabled=True,**({'pk':person.branch_id} if person else {}))
 
+def scoped_parties(user):
+    """Customers and suppliers the user may see: the owner sees every one, a shop sees only its own shop's."""
+    from .models import Party
+    return Party.objects.all() if user.is_superuser else Party.objects.filter(branch__in=branches(user))
+
+def visible_accounts(user):
+    """Ledger accounts a user may pick: the owner sees all; a shop sees the shared chart and its own shop accounts, never another shop's."""
+    from .models import Account
+    from django.db.models import Q
+    if user.is_superuser:return Account.objects.all()
+    query=Q(code__startswith='COA-')
+    for code in branches(user).values_list('code',flat=True):query|=Q(code__startswith=code+'-')
+    return Account.objects.filter(query)
+
+def parties_for(branch,kind=None):
+    """One shop's customers or suppliers, plus not-yet-used legacy records any shop may adopt on first use."""
+    from .models import Party
+    from django.db.models import Q
+    qs=Party.objects.filter(Q(branch=branch)|Q(branch__isnull=True)) if branch else Party.objects.none()
+    return qs.filter(kind=kind) if kind else qs
+
 def manager(user):
     person=staff(user)
     return person is None or person.manager
@@ -42,7 +63,7 @@ def statements(user):
 def require(user,branch,capability=None):
     person=staff(user)
     allowed=person is None or not capability or bool(getattr(person,capability,False))
-    if person and capability=='can_sell':allowed=person.can_sell or (person.can_handle_payments and not person.role_id)   # legacy flag-only cashiers may sell; roles must grant 'sell'
+    if person and capability=='can_sell':allowed=person.can_sell or person.can_handle_payments
     if person and (person.branch_id!=branch.pk or (capability and not person.manager and not allowed)):
         raise PermissionDenied('Your role does not allow this action in this shop.')
 
@@ -51,7 +72,7 @@ def navigation(request):
     try:
         person=staff(request.user);is_manager=manager(request.user);can_costs=costs(request.user);can_statements=statements(request.user)
         can_buy=is_manager or person.can_buy
-        can_sell=is_manager or person.can_sell or (person.can_handle_payments and not person.role_id)
+        can_sell=is_manager or person.can_sell or person.can_handle_payments
         sections=[(section,links) for section,links in NAV if (section!='Buy' or can_buy) and (section not in ('Exchanges','Stock') or is_manager) and (section!='Sell / POS' or can_sell)]
         visible=[name for name in REPORTS if (name not in ('Device Profit','Mobile Device Economics','Purchase Register','Accounts Payable') or can_costs) and (name not in STATEMENTS or can_statements) and (name not in ('Staff Activity','Staff Summary','Mobile Device Economics') or is_manager)]
         from .report_catalog import label

@@ -20,7 +20,7 @@ def warranty(device,today=None):
 
 @login_required
 def profile(request,pk):
-    party=get_object_or_404(Party,pk=pk)
+    party=get_object_or_404(access.scoped_parties(request.user),pk=pk)
     if not (access.manager(request.user) or access.costs(request.user) or permissions.can(request.user,'sell') or permissions.can(request.user,'payments') or access.statements(request.user)):raise PermissionDenied('You do not have access to profiles.')
     places=access.branches(request.user);show_costs=access.costs(request.user)
     docs=Document.objects.filter(branch__in=places,status='Submitted')

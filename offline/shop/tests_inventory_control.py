@@ -97,9 +97,6 @@ class StockAdjustments(Base):
         doc=self.adjust(lines=[dict(product=self.product,device=device,quantity=-1,rate=0)]);s.cancel(doc,self.user)
         device.refresh_from_db();self.assertEqual((device.status,device.warehouse_id),('Available',self.warehouse.pk))
         self.assertEqual(s.on_hand(self.product,self.warehouse)[1],Decimal('50000.00'))
-    def test_non_managers_cannot_post_adjustments(self):
-        self.buyer.user=get_user_model().objects.create_user('clerk');self.buyer.save();self.client.force_login(self.buyer.user)
-        self.assertEqual(self.client.get(reverse('stock_adjust')).status_code,403)
     def test_screen_posts_a_phone_write_off_once_even_if_resubmitted(self):
         self.buy(imei(23));device=Device.objects.get()
         body=dict(request_key='7a1c3d5e-1111-4222-8333-444455556666',branch=str(self.branch.pk),warehouse=str(self.warehouse.pk),reason='Damaged',phone=str(device.pk),posting_date=str(timezone.localdate()))

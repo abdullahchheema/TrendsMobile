@@ -7,5 +7,6 @@
 <div class="ov-grid">
 <form method="post" class="panel">{% csrf_token %}<input type="hidden" name="action" value="create"><h2 style="margin-top:0">Create a shop login</h2>{{ create.non_field_errors }}<div class="form-grid">{% include 'form_fields.html' with fields=create.visible_fields %}</div><div class="form-actions"><button class="primary" type="submit">Create login</button></div></form>
 <form method="post" class="panel">{% csrf_token %}<input type="hidden" name="action" value="reset"><h2 style="margin-top:0">Change a shop's password</h2>{{ reset.non_field_errors }}<div class="form-grid">{% include 'form_fields.html' with fields=reset.visible_fields %}</div><div class="form-actions"><button class="primary" type="submit">Change password</button></div></form>
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="action" value="edit"><h2 style="margin-top:0">Edit shop details</h2>{{ edit.non_field_errors }}<div class="form-grid">{% include 'form_fields.html' with fields=edit.visible_fields %}</div><div class="form-actions"><button class="primary" type="submit">Save shop details</button></div></form>
 </div>
 {% endblock %}

@@ -59,8 +59,8 @@ def post(data,incoming,user):
     price=s.payment_money(data['price'])
     if price<=0:raise ValidationError('Enter the selling price of the new phone.')
     trade_value=sum((r['value'] for r in incoming),Decimal('0.00'))
-    customer=customer_names.resolve(data['party_name'],user,demo_batch=branch.demo_batch)
-    trader=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=branch.demo_batch)
+    customer=customer_names.resolve(data['party_name'],user,demo_batch=branch.demo_batch,branch=branch)
+    trader=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=branch.demo_batch,branch=branch)
     if data.get('pta_status') in ('PTA','Non-PTA'):phone.pta_status=data['pta_status'];phone.save(update_fields=['pta_status','modified'])
     # 1. the sale, left open so the settlement can offset the trade-in value against it
     sale=s.new_doc('Sales Invoice',branch,customer=customer,seller=data['staff'],warehouse=phone.warehouse,posting_date=data['posting_date'],demo_batch=branch.demo_batch,notes=data.get('notes',''),data={'exchange':True})

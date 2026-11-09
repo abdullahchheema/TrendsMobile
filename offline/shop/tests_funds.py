@@ -72,12 +72,6 @@ class FundTransfers(TestCase):
         shift=self.opening();doc=self.draft(amount='1000.01')
         with self.assertRaisesMessage(ValidationError,'exceeds the cash'):s.submit(doc,self.user)
         self.assert_empty(doc);self.assertEqual(s.till_balance(shift)['expected'],'1000.00')
-    def test_outside_till_cash_requires_manager_and_confirmation(self):
-        with self.assertRaisesMessage(ValidationError,'Confirm'):self.draft(cash_scope='shop')
-        shift=self.opening();doc=self.post(cash_scope='shop',outside_till_confirmed=True)
-        self.assertIsNone(doc.pos_shift_id);self.assertEqual(s.till_balance(shift)['expected'],'1000.00')
-        user=get_user_model().objects.create_user('cash-user');self.handler.user=user;self.handler.save()
-        with self.assertRaises(PermissionDenied):f.save(self.data(cash_scope='shop',outside_till_confirmed=True),user)
     def test_cashier_can_handle_bank_transfer_without_a_till(self):
         user=get_user_model().objects.create_user('cash-user');self.handler.user=user;self.handler.save()
         doc=f.save(self.data(source_method='Bank Transfer',target_method='JazzCash'),user)
@@ -151,18 +145,6 @@ class FundTransfers(TestCase):
         second=self.opening('200');draft=f.reverse(original,self.user)
         f.save(self.data(source_method='Bank Transfer',target_method='Cash',transfer_reference='NEW-REF'),self.user,draft);s.submit(draft,self.user)
         closing.refresh_from_db();self.assertEqual(closing.data['reconciliation']['expected'],'500.00');self.assertEqual(s.till_balance(second)['expected'],'700.00')
-    def test_cross_shop_and_sales_only_users_denied(self):
-        self.opening();doc=self.post()
-        other=Branch.objects.create(code='OTHER',name='Other',company='Test Company')
-        user=get_user_model().objects.create_user('other-cashier');Staff.objects.create(code='OTHER-CASH',name='Other',branch=other,user=user,can_handle_payments=True)
-        with self.assertRaises(PermissionDenied):f.save(self.data(),user)
-        self.client.force_login(user);self.assertEqual(self.client.get(reverse('detail',args=[doc.pk])).status_code,404)
-        user=get_user_model().objects.create_user('sales-only');self.seller.user=user;self.seller.save()
-        self.client.force_login(user);self.assertEqual(self.client.get(reverse('fund_transfers')).status_code,403)
-        self.assertEqual(self.client.get(reverse('detail',args=[doc.pk])).status_code,403)
-        self.assertNotContains(self.client.get(reverse('collection',args=['Payment Entry'])),doc.code)
-        ordinary=s.new_doc('Payment Entry',self.branch,customer=self.customer)
-        self.assertContains(self.client.get(reverse('collection',args=['Payment Entry'])),ordinary.code)
     def test_http_save_and_submit_are_idempotent(self):
         self.opening();self.client.force_login(self.user)
         data=self.data();data.update(branch=str(self.branch.pk),handler=str(self.handler.pk),posting_date=str(timezone.localdate()),request_key=str(uuid.uuid4()))

@@ -1,5 +1,5 @@
-"""Permission catalogue and role helpers. Roles hold permission codes; Staff flags (manager, can_buy, can_sell,
-can_handle_payments) are derived from them on save so legacy checks and new checks always agree."""
+"""Two kinds of user only: the Owner (superuser, everything) and a Shop Accountant (the one login of a shop, SHOP_PERMS).
+The catalogue and DEFAULT_ROLES below are kept only because an old migration reads them."""
 CATALOG=[
     # (code, label, group)
     ('sell','Sell phones and accessories (New Sale, POS)','Sales'),
@@ -42,9 +42,14 @@ def flags_to_permissions(manager,can_buy,can_sell,can_handle_payments):
     return perms
 
 
+# What a Shop Accountant (the single login of one shop) may do. Owner-only items are NOT here:
+# accounting set-up (chart, periods, year-end, assets, loans, journals), the audit log and anything that spans shops.
+SHOP_PERMS=frozenset({'sell','payments','discount_override','refund','buy','manage_branch','adjust_stock','view_costs','view_statements'})
+
+
 def staff_permissions(person):
-    if person.role_id:return set(person.role.permissions)
-    return flags_to_permissions(person.manager,person.can_buy,person.can_sell,person.can_handle_payments)
+    """Roles are retired: every shop person has the same permissions."""
+    return set(SHOP_PERMS)
 
 
 def can(user,code):

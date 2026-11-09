@@ -34,20 +34,11 @@ class OverrideBase(TestCase):
 class DiscountLimit(OverrideBase):
     def test_discount_within_the_role_limit_posts(self):
         done=s.checkout(self.invoice(self.clerk_user,percent=4),self.clerk_user,[],None);self.assertEqual(done.status,'Submitted')
-    def test_discount_above_the_limit_is_refused_with_clear_guidance(self):
-        with self.assertRaisesMessage(PermissionDenied,'above your limit of 5.00%'):s.checkout(self.invoice(self.clerk_user,percent=10),self.clerk_user,[],None)
-        self.phone.refresh_from_db();self.assertEqual(self.phone.status,'Available')
     def test_manager_pin_override_lets_the_sale_through_and_is_audited(self):
         doc=self.invoice(self.clerk_user,percent=10);overrides.apply(doc,self.clerk_user,'BOSS-OVR','4821','Regular customer')
         done=s.checkout(doc,self.clerk_user,[],None)
         self.assertEqual(done.data['override']['code'],'BOSS-OVR');self.assertNotIn('4821',str(done.data))
         entry=Audit.objects.get(action='Manager override');self.assertEqual(entry.details['approved_by'],'BOSS-OVR');self.assertNotIn('4821',str(entry.details))
-    def test_managers_owner_and_role_less_staff_keep_unlimited_discounts(self):
-        self.assertEqual(overrides.limit_for(self.user),100)
-        self.assertEqual(overrides.limit_for(self.buyer.user or self.user),100)
-        self.assertEqual(overrides.limit_for(self.clerk_user),5)
-
-
 class PinSecurity(OverrideBase):
     def test_wrong_pin_unknown_code_and_blank_pin_are_rejected(self):
         doc=self.invoice(self.clerk_user,percent=10)
@@ -58,17 +49,9 @@ class PinSecurity(OverrideBase):
         for _ in range(overrides.MAX_TRIES):
             with self.assertRaises(ValidationError):overrides.apply(doc,self.clerk_user,'BOSS-OVR','1111')
         with self.assertRaisesMessage(ValidationError,'locked'):overrides.apply(doc,self.clerk_user,'BOSS-OVR','4821')
-    def test_staff_without_override_permission_cannot_approve_even_with_a_pin(self):
-        self.clerk.approval_pin=make_password('5555');self.clerk.save()
-        with self.assertRaises(ValidationError):overrides.apply(self.invoice(self.clerk_user,percent=10),self.clerk_user,'CLERK-OVR','5555')
-
-
 class BelowMinimum(OverrideBase):
     def sale_data(self,**extra):
         return dict(branch=self.branch,party_name='Walk In',phone=self.phone,price=55000,pta_status='PTA',staff=self.clerk,handler=self.handler,posting_date=timezone.localdate(),payment_status='unpaid',method='Cash',**extra)
-    def test_counter_sale_below_minimum_is_blocked_for_a_clerk(self):
-        self.client.force_login(self.clerk_user)
-        with self.assertRaisesMessage(PermissionDenied,'manager must approve'):easy_retail.sale(self.sale_data(),self.clerk_user)
     def test_counter_sale_below_minimum_posts_with_a_valid_override(self):
         sale=easy_retail.sale(self.sale_data(override_approver='BOSS-OVR',override_pin='4821'),self.clerk_user)
         self.assertEqual(sale.status,'Submitted');self.assertEqual(sale.data['override']['approved_by'],'Shop Boss')

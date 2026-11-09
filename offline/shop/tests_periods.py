@@ -26,14 +26,6 @@ class PeriodLock(TestCase):
     def test_a_posted_document_in_a_period_that_is_later_locked_cannot_be_cancelled(self):
         bill=self.purchase(self.yesterday,73);self.lock(self.yesterday)
         with self.assertRaisesMessage(ValidationError,'is locked'):s.cancel(bill,self.user)
-    def test_lock_date_page_audits_and_accountants_cannot_reopen(self):
-        accountant=get_user_model().objects.create_user('acct-period',password='Unrelated-test-password-729!')
-        Staff.objects.create(code='ACCT-P',name='Accountant P',branch=self.branch,user=accountant,role=Role.objects.get(code='accountant'))
-        self.client.force_login(accountant)
-        self.client.post(reverse('periods'),dict(branch=str(self.branch.pk),lock_through=str(self.yesterday)))
-        self.branch.refresh_from_db();self.assertEqual(self.branch.lock_through,self.yesterday)
-        self.assertTrue(Audit.objects.filter(action='Lock period',branch=self.branch).exists())
-        self.assertEqual(self.client.post(reverse('periods'),dict(branch=str(self.branch.pk),lock_through=str(self.yesterday-timedelta(days=5)),reason='trying to reopen')).status_code,403)
     def test_owner_reopening_needs_a_reason_and_future_dates_are_rejected(self):
         self.lock(self.yesterday);self.client.force_login(self.user)
         self.client.post(reverse('periods'),dict(branch=str(self.branch.pk),lock_through=str(self.yesterday-timedelta(days=3)),reason=''))

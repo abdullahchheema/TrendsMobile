@@ -84,12 +84,6 @@ class OverdueList(CreditBase):
         self.assertEqual((group['customer'].name,group['total'],group['oldest']),('Late Larry',Decimal('70000.00'),10))
         self.assertIn('PKR 70,000',group['message']);self.assertIn('Late Larry',group['message']);self.assertTrue(group['whatsapp'].startswith('https://wa.me/923001234567?text='))
         self.assertContains(page,'Open in WhatsApp')
-    def test_current_and_paid_credit_are_not_listed_and_sales_staff_have_no_access(self):
-        ok=self.sale(40000);credit.plan(ok,self.user,0,self.today+timedelta(days=9))
-        late=self.sale(40000,on=self.today-timedelta(days=9));credit.plan(late,self.user,0,self.today-timedelta(days=2));self.pay(late,40000)
-        self.assertEqual(self.client.get(reverse('overdue')).context['groups'],[])
-        clerk=get_user_model().objects.create_user('clerk-od',password='Unrelated-test-password-729!');Staff.objects.create(code='CLK-OD',name='Clerk OD',branch=self.branch,user=clerk,role=Role.objects.get(code='sales'))
-        self.client.force_login(clerk);self.assertEqual(self.client.get(reverse('overdue')).status_code,403)
     def test_phone_numbers_are_normalised_for_whatsapp(self):
         for raw,out in (('0300-1234567','923001234567'),('+92 300 1234567','923001234567'),('0092 300 1234567','923001234567'),('3001234567','923001234567'),('123','')):
             self.assertEqual(credit.whatsapp_number(raw),out,raw)

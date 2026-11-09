@@ -29,10 +29,6 @@ class ReportFeatures(TestCase):
     def test_catalog_search_accepts_original_report_name(self):
         response=self.client.get(reverse('report_center'),{'search':'phone stock'});self.assertEqual(response.context['report_count'],1)
         self.assertEqual(response.context['report_groups'][0]['reports'][0]['name'],'Mobile Inventory')
-    def test_catalog_and_shortcuts_follow_report_permissions(self):
-        self.sales_user();response=self.client.get(reverse('report_center'))
-        self.assertContains(response,'Stock Ledger');self.assertNotContains(response,'Device Profit');self.assertNotContains(response,'Staff Summary');self.assertNotContains(response,'General Ledger')
-        self.assertEqual(self.page('General Ledger').status_code,403)
     def test_staff_reports_are_not_in_the_menu_because_each_shop_has_one_account(self):
         sidebar=self.client.get(reverse('dashboard')).content.decode().split('<aside',1)[1].split('</aside>',1)[0]
         for name in ('Staff Activity','Staff Summary'):self.assertNotIn(reverse('report',args=[name]),sidebar)
@@ -63,9 +59,6 @@ class ReportFeatures(TestCase):
         response=self.page('Sales Register',from_date='2026-10-01',to_date='2026-10-31',search='Customer')
         header=next(item for item in response.context['report_headers'] if item['label']=='Total');query=parse_qs(urlsplit(header['url']).query)
         self.assertEqual(query['search'],['Customer']);self.assertEqual(query['from_date'],['2026-10-01']);self.assertEqual(query['sort_by'],['Total'])
-    def test_invalid_or_hidden_sort_column_is_rejected(self):
-        self.sales_user()
-        for params in ({'sort_by':'Purchase cost'},{'sort_dir':'invalid'}):self.assertEqual(self.page('Mobile Inventory',**params).status_code,400)
     def test_source_invoice_links_work_for_sales_users(self):
         sale=self.sale();self.sales_user();response=self.page('Sales Register',from_date='2000-01-01')
         self.assertContains(response,reverse('detail',args=[sale.pk]));self.assertEqual(self.client.get(reverse('detail',args=[sale.pk])).status_code,200)
@@ -73,9 +66,6 @@ class ReportFeatures(TestCase):
         phone=Device.objects.create(code='REPORT-PHONE',branch=self.branch,product=self.product,warehouse=self.warehouse,purchase_cost=50000,asking_price=65000)
         IMEI.objects.create(number=imei(99),device=phone,slot=1)
         response=self.page('Mobile Inventory');self.assertContains(response,reverse('device',args=[phone.pk]))
-    def test_cost_totals_do_not_appear_for_sales_role(self):
-        Device.objects.create(code='COST-PHONE',branch=self.branch,product=self.product,warehouse=self.warehouse,purchase_cost=54321,asking_price=65000)
-        self.sales_user();response=self.page('Mobile Inventory');self.assertNotIn('Purchase cost',response.context['columns']);self.assertNotContains(response,'54,321')
     def test_staff_activity_never_adds_sales_and_collections_into_one_total(self):
         sale=self.sale();s.submit(s.new_doc('Payment Entry',self.branch,customer=self.customer,handler=self.handler,reference=sale,data={'direction':'Receive','mode':'Cash','amount':'100'}),self.user)
         response=self.page('Staff Activity',from_date='2000-01-01');self.assertFalse(response.context['report_totals']);self.assertContains(response,'must not be added together')

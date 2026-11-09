@@ -22,13 +22,6 @@ class ScreenParity(TestCase):
         return s.checkout(doc,self.user,[],None)
     def payment(self,amount,invoice=None):
         return s.submit(s.new_doc('Payment Entry',self.branch,customer=self.customer,reference=invoice,handler=self.handler,data=dict(amount=amount,direction='Receive',mode='Cash')),self.user)
-    def test_purchase_draft_costs_are_not_exposed_through_edit_routes(self):
-        draft=s.new_doc('Purchase Invoice',self.branch,supplier=self.supplier,buyer=self.buyer)
-        Line.objects.create(document=draft,product=self.product,quantity=1,rate=54321)
-        sales=get_user_model().objects.create_user('restricted-sales');self.seller.user=sales;self.seller.save();self.client.force_login(sales)
-        for url in (reverse('edit',args=[draft.kind,draft.pk]),reverse('new',args=['Purchase Invoice']),reverse('detail',args=[draft.pk])):
-            with self.subTest(url=url):self.assertEqual(self.client.get(url).status_code,403)
-        response=self.client.get(reverse('dashboard'));self.assertNotContains(response,'Supplier Bills / Expenses');self.assertNotContains(response,'Device Profit')
     def test_intake_defaults_and_inspection_choices_render_as_usable_inputs(self):
         response=self.client.get(reverse('new',args=['Mobile Intake']))
         self.assertContains(response,'value="'+str(timezone.localdate())+'"')
@@ -36,12 +29,6 @@ class ScreenParity(TestCase):
         self.assertEqual(response.context['form']['device_type'].value(),'Used');self.assertEqual(response.context['form']['condition'].value(),'Not Inspected')
         self.assertContains(response,'name="display_condition"');self.assertContains(response,'Original / Working')
         self.assertContains(response,'Condition and inspection');self.assertContains(response,'Phone variant and purchase price')
-    def test_read_only_device_form_disables_inputs(self):
-        phone=self.phone();sales=get_user_model().objects.create_user('view-only-sales');self.seller.user=sales;self.seller.save();self.client.force_login(sales)
-        response=self.client.get(reverse('device',args=[phone.pk]))
-        self.assertTrue(all(field.disabled for field in response.context['form'].fields.values()))
-        self.assertNotIn('minimum_price',response.context['form'].fields)
-        self.assertContains(response,'Device details are read-only')
     def test_inventory_filters_status_model_and_pta_without_duplicates(self):
         sold=self.phone();available=self.phone(22);self.sale(sold)
         available.pta_status='Non-PTA';available.save()
@@ -57,10 +44,6 @@ class ScreenParity(TestCase):
             for export in ('','csv'):
                 response=self.client.get(reverse('report',args=['Mobile Inventory']),{**data,'format':export});self.assertEqual(response.status_code,400)
         response=self.client.get(reverse('report',args=['Sales Register']),{'from_date':'2026-12-01','to_date':'2026-01-01'});self.assertEqual(response.status_code,400)
-    def test_empty_csv_retains_role_safe_headers(self):
-        user=get_user_model().objects.create_user('empty-sales');self.seller.user=user;self.seller.save();self.client.force_login(user)
-        response=self.client.get(reverse('report',args=['Mobile Inventory']),{'status':'Sold','format':'csv'})
-        self.assertEqual(response.status_code,200);self.assertIn('PTA status',response.content.decode());self.assertNotIn('IMEI',response.content.decode());self.assertNotIn('Purchase cost',response.content.decode())
     def test_receivables_as_of_date_does_not_use_current_paid_balance(self):
         sale=self.sale(self.phone());self.payment('25000',sale)
         _,past=reports.run('Accounts Receivable',self.user,{'to_date':str(timezone.localdate()-timedelta(days=1))})

@@ -14,14 +14,14 @@ from . import access,permissions,services as s
 class VoucherForm(forms.Form):
     def __init__(self,*args,user,branch,**kwargs):
         super().__init__(*args,**kwargs)
-        full=permissions.can(user,'accounting')
-        kinds=[(k,v[0]) for k,v in s.VOUCHER_TYPES.items() if k not in s.SYSTEM_VOUCHERS and (full or k=='expense')]
+        owner=user.is_superuser
+        kinds=[(k,v[0]) for k,v in s.VOUCHER_TYPES.items() if k not in s.SYSTEM_VOUCHERS and (owner or k in s.SHOP_VOUCHERS)]
         self.fields['request_key']=forms.UUIDField(widget=forms.HiddenInput(),initial=uuid.uuid4)
         self.fields['branch']=forms.ModelChoiceField(queryset=access.branches(user),initial=branch,widget=forms.HiddenInput())
         self.fields['type']=forms.ChoiceField(label='What is this for?',choices=kinds,initial=kinds[0][0])
         self.fields['posting_date']=forms.DateField(label='Date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
         self.fields['amount']=forms.DecimalField(label='Amount (PKR)',min_value=0,max_digits=15,decimal_places=2)
-        accounts=Account.objects.filter(enabled=True,is_group=False).exclude(root_type='').exclude(account_type__in=['Payable','Receivable','Stock','Cash','Bank','Stock Received But Not Billed','Cost of Goods Sold']).order_by('root_type','code')
+        accounts=access.visible_accounts(user).filter(enabled=True,is_group=False).exclude(root_type='').exclude(account_type__in=['Payable','Receivable','Stock','Cash','Bank','Stock Received But Not Billed','Cost of Goods Sold']).order_by('root_type','code')
         choices=[('','Choose an account')]
         for root,label in (('Expense','Expense accounts'),('Equity','Owner equity accounts'),('Liability','Loan and liability accounts')):
             choices.append((label,[(str(a.pk),f'{a.name}') for a in accounts if a.root_type==root]))
@@ -40,7 +40,7 @@ def post(data,user):
     return s.submit(doc,user)
 
 
-def _allowed(user):return permissions.can(user,'accounting') or access.manager(user)
+def _allowed(user):return access.manager(user)
 
 
 @login_required

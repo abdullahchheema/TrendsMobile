@@ -68,8 +68,5 @@ class Screen(ExchangeBase):
     def test_missing_imei_or_old_phone_is_reported_without_posting(self):
         page=self.client.post(reverse('exchange'),self.body(in_imeis_1=''));self.assertContains(page,'enter its IMEI');self.assertEqual(Device.objects.filter(status='Holding').count(),0)
         page=self.client.post(reverse('exchange'),self.body(in_product_1='',in_value_1='',in_imeis_1=''));self.assertContains(page,'at least one old phone')
-    def test_only_managers_can_open_it(self):
-        user=get_user_model().objects.create_user('sales-ex',password='Unrelated-test-password-729!');Staff.objects.create(code='SAL-EX',name='Sales EX',branch=self.branch,user=user,role=Role.objects.get(code='sales'))
-        self.client.force_login(user);self.assertEqual(self.client.get(reverse('exchange')).status_code,403)
     def test_page_renders_for_a_manager(self):
         page=self.client.get(reverse('exchange'));self.assertContains(page,'Old phone 1');self.assertContains(page,'iPhone 12 64GB')

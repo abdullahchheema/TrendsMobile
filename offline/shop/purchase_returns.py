@@ -18,7 +18,7 @@ ZERO=Decimal('0.00')
 RETURNED='Returned to supplier'
 
 
-def _allowed(user):return permissions.can(user,'accounting') or access.manager(user)
+def _allowed(user):return access.manager(user)
 
 
 def returnable(bill):

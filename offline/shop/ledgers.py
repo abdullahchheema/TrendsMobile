@@ -62,7 +62,7 @@ def ledger(request):
     if request.GET.get('format')=='csv':
         return _respond_csv('ledger',['Date','Reference','Description','Account','Party','Shop','Debit','Credit','Balance'],[[r['date'],r['code'],r['description'],r['account'],r['party'],r['shop'],r['debit'],r['credit'],r['balance']] for r in data['rows']])
     return render(request,'ledger.html',dict(title=title,data=data,account=account,book=book,branch=branch,shops=places,start=start,end=end,
-        accounts=Account.objects.filter(is_group=False,enabled=True).order_by('code'),nature='credit' if credit else 'debit'))
+        accounts=access.visible_accounts(request.user).filter(is_group=False,enabled=True).order_by('code'),nature='credit' if credit else 'debit'))
 
 
 def party_statement_data(party,start,end,places,branch=None):
@@ -87,7 +87,7 @@ def party_statement_data(party,start,end,places,branch=None):
 
 @login_required
 def party_statement(request,pk):
-    party=get_object_or_404(Party,pk=pk)
+    party=get_object_or_404(access.scoped_parties(request.user),pk=pk)
     if not (access.statements(request.user) or permissions.can(request.user,'payments') or access.costs(request.user)):raise PermissionDenied('You do not have access to statements.')
     start,end=_dates(request);places=access.branches(request.user)
     branch=places.filter(pk=request.GET['branch']).first() if request.GET.get('branch') else None

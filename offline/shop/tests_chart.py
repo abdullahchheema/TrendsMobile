@@ -59,11 +59,6 @@ class StatementsUseSections(TestCase):
 
 class Access(TestCase):
     def setUp(self):self.__dict__.update(fixtures())
-    def test_accountant_can_open_and_edit_accounts_but_sales_staff_cannot(self):
-        acct=get_user_model().objects.create_user('acct-coa',password='Unrelated-test-password-729!');Staff.objects.create(code='ACCT-C',name='Acct C',branch=self.branch,user=acct,role=Role.objects.get(code='accountant'))
-        clerk=get_user_model().objects.create_user('clerk-coa',password='Unrelated-test-password-729!');Staff.objects.create(code='CLERK-C',name='Clerk C',branch=self.branch,user=clerk,role=Role.objects.get(code='sales'))
-        self.client.force_login(acct);self.assertEqual(self.client.get(reverse('chart')).status_code,200);self.assertEqual(self.client.get(reverse('master_new',args=['Account'])).status_code,200)
-        self.client.force_login(clerk);self.assertEqual(self.client.get(reverse('chart')).status_code,403);self.assertEqual(self.client.get(reverse('master_new',args=['Account'])).status_code,403)
     def test_account_form_creates_a_sub_account_under_a_group(self):
         coa.install_standard(self.user);self.client.force_login(self.user);parent=Account.objects.get(code='COA-6000')
         self.client.post(reverse('master_new',args=['Account']),dict(code='COA-6950',name='Zakat and donations',account_type='Expense Account',parent=str(parent.pk),enabled='on'))

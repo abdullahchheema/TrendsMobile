@@ -23,7 +23,7 @@ def global_search(request):
     for d in phones:
         imei=', '.join(i.number for i in d.imeis.all())
         results.append(dict(kind='Phone',label=d.product.name,hint=' · '.join(x for x in (imei,d.status,d.branch.name) if x),href=reverse('device_history',args=[d.pk])))
-    for p in Party.objects.filter(Q(name__icontains=q)|Q(phone__icontains=q)).order_by('name')[:LIMIT]:
+    for p in access.scoped_parties(request.user).filter(Q(name__icontains=q)|Q(phone__icontains=q)).order_by('name')[:LIMIT]:
         results.append(dict(kind=p.kind,label=p.name,hint=p.phone,href=reverse('collection',args=[p.kind])+'?search='+q))
     for doc in scoped(request.user).filter(code__icontains=q).order_by('-posting_date','-created')[:LIMIT]:
         results.append(dict(kind='Document',label=doc.code,hint=f'{doc.kind} · {doc.posting_date:%d %b %Y}',href=reverse('detail',args=[doc.pk])))

@@ -66,10 +66,6 @@ class EasyRetail(TestCase):
     def test_sale_prefill_selects_exact_phone_price_and_pta(self):
         bill,phone=self.buy();response=self.client.get(reverse('easy_entry',args=['sale']),{'phone':str(phone.pk)})
         form=response.context['form'];self.assertEqual(form['phone'].value(),phone.pk);self.assertEqual(form['price'].value(),65000);self.assertEqual(form['pta_status'].value(),'Non-PTA')
-    def test_sales_staff_cannot_buy_stock_or_collect_without_payment_permission(self):
-        user=get_user_model().objects.create_user('simple-seller');self.seller.user=user;self.seller.save();self.client.force_login(user)
-        self.assertEqual(self.client.get(reverse('easy_entry',args=['purchase'])).status_code,403)
-        response=self.client.get(reverse('easy_entry',args=['sale']));self.assertEqual([value for value,label in response.context['form'].fields['payment_status'].choices],['unpaid'])
     def test_foreign_phone_and_warehouse_are_rejected(self):
         other=Branch.objects.create(code='OTHER-EASY',name='Other shop',company='Other');place=Warehouse.objects.create(code='OTHER-EASY-WH',name='Other stock',branch=other)
         user=get_user_model().objects.create_user('easy-local');self.buyer.user=user;self.buyer.save();self.client.force_login(user)

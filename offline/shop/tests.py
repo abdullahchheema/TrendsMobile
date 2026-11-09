@@ -79,10 +79,6 @@ class Workflows(TestCase):
     def test_double_selling_rejected(self):
         _,_,device=self.intake();s.checkout(self.sale(device),self.user,[],None)
         with self.assertRaises(ValidationError):s.checkout(self.sale(device),self.user,[],None)
-    def test_sale_below_minimum_requires_manager(self):
-        _,_,device=self.intake();user=get_user_model().objects.create_user('seller',password='Seller-pass-9722!');self.seller.user=user;self.seller.save()
-        with self.assertRaises(PermissionDenied):s.checkout(self.sale(device,59000),user,[],None)
-        self.assertEqual(s.checkout(self.sale(device,59000),self.user,[],None).total,59000)
     def test_cross_shop_denied(self):
         other=Branch.objects.create(code='OTHER',name='Other',company='Test')
         user=get_user_model().objects.create_user('cashier',password='Some-test-password-729!');self.handler.user=user;self.handler.save()
@@ -180,11 +176,6 @@ class Workflows(TestCase):
         for name in REPORTS:
             columns,rows=run(name,self.user,{})
             self.assertIsInstance(columns,list);self.assertIsInstance(rows,list)
-    def test_sales_role_does_not_receive_cost_reports(self):
-        user=get_user_model().objects.create_user('sales',password='Sales-test-password-974!');self.seller.user=user;self.seller.save()
-        for report in ('Device Profit','General Ledger','Accounts Payable','Staff Summary'):
-            with self.assertRaises(PermissionDenied):run(report,user,{})
-        self.client.force_login(user);response=self.client.get(reverse('dashboard'));self.assertEqual(response.status_code,200);self.assertNotContains(response,'Inventory value')
     def test_authenticated_views_and_forms_render(self):
         self.client.force_login(self.user)
         _,_,device=self.intake()

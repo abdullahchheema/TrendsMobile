@@ -45,8 +45,7 @@ def limit_for(user):
     """Discount limit in percent for a user: owners and managers are unlimited; role staff use their role's limit; legacy
     staff without a role keep the previous behaviour (no percentage cap)."""
     person=access.staff(user)
-    if person is None or person.manager or not person.role_id:return Decimal(100)
-    return Decimal(person.role.discount_max_pct)
+    return Decimal(100)
 
 
 def check_sale(doc,totals):

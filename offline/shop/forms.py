@@ -3,9 +3,10 @@ from django.forms import inlineformset_factory
 from django.utils import timezone
 from .models import *
 from .access import branches,manager,costs
+from . import access
 from .services import balances,till_balance
 from . import customer_names
-from .customer_widgets import CustomerNameInput
+from .customer_widgets import CustomerNameInput,name_input
 
 DATE=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'})
 DETAIL_FIELDS=['manufacturer_serial','regional_version','market_description','display_condition','biometrics','camera_test','charging_test',
@@ -68,8 +69,8 @@ class DocumentForm(forms.ModelForm):
         selected=self.data.get('branch') if self.is_bound else None
         if selected:branch=places.filter(pk=selected).first()
         if branch:self.fields['branch'].initial=branch;self.initial['branch']=branch.pk
-        self.fields['customer'].queryset=Party.objects.filter(kind='Customer',enabled=True)
-        self.fields['supplier'].queryset=Party.objects.filter(kind='Supplier',enabled=True)
+        self.fields['customer'].queryset=access.parties_for(branch,'Customer').filter(enabled=True)
+        self.fields['supplier'].queryset=access.parties_for(branch,'Supplier').filter(enabled=True)
         self.fields['warehouse'].queryset=Warehouse.objects.filter(branch__in=places,enabled=True)
         self.fields['warehouse'].label_from_instance=lambda place:f'{place.name} · {place.branch.name} ({place.branch.code})'
         people=Staff.objects.filter(branch__in=places,enabled=True)
@@ -125,7 +126,7 @@ class DocumentForm(forms.ModelForm):
             if shift:self.pos_reconciliation=till_balance(shift)
         if kind=='Mobile Intake':
             add('purchase_source',forms.ChoiceField(choices=[(x,x) for x in ('Distributor','Walk-in Seller','Customer Trade-In','Other')]))
-            add('trade_in_customer',forms.ModelChoiceField(queryset=Party.objects.filter(kind='Customer'),required=False))
+            add('trade_in_customer',forms.ModelChoiceField(queryset=access.parties_for(branch,'Customer'),required=False))
             for name,options in [('device_type',['New','Used','Refurbished','Repaired']),('condition',['Excellent','Very Good','Good','Fair','Not Inspected','For Parts']),('inspection_status',['Pending','Passed','Repair Needed','Failed'])]:
                 add(name,forms.ChoiceField(choices=[(x,x) for x in options],initial={'device_type':'Used','condition':'Not Inspected','inspection_status':'Pending'}[name]))
             add('inspection_date',forms.DateField(required=False,widget=DATE));add('battery_checked',forms.BooleanField(required=False))
@@ -182,9 +183,9 @@ class DocumentForm(forms.ModelForm):
                 self.fields[field].widget=forms.HiddenInput()
                 existing=getattr(self.instance,field,None) if field=='customer' else None
                 if field=='trade_in_customer' and self.instance.data.get(field):
-                    existing=Party.objects.filter(pk=self.instance.data[field],kind='Customer').first()
+                    existing=access.parties_for(branch,'Customer').filter(pk=self.instance.data[field]).first()
                 self.fields[name_field]=forms.CharField(label='Customer name' if field=='customer' else 'Trade-in customer name',required=False,max_length=180,
-                    initial=existing.name if existing else '',widget=CustomerNameInput(attrs={'autocomplete':'off','placeholder':'Type customer name','required':kind in ('Sales Invoice','POS Invoice') and field=='customer'}),
+                    initial=existing.name if existing else '',widget=name_input(branch,attrs={'autocomplete':'off','placeholder':'Type customer name','required':kind in ('Sales Invoice','POS Invoice') and field=='customer'}),
                     help_text='Type a new name to add a customer, or an existing name to reuse their account.')
         self.hide_shop_internals(branch,user)
         self.sections=sections(self)
@@ -218,7 +219,7 @@ class DocumentForm(forms.ModelForm):
             if name:
                 try:
                     result[name_field]=customer_names.clean_name(name)
-                    result[field]=customer_names.find(name,result.get(field))
+                    result[field]=customer_names.find(name,result.get(field),branch=branch)
                 except ValidationError as error:self.add_error(name_field,error)
             elif name_field in self.data:result[field]=None
         if self.kind in ('Sales Invoice','POS Invoice') and not self.instance.is_return and not result.get('customer') and not result.get('customer_name'):
@@ -236,7 +237,7 @@ class DocumentForm(forms.ModelForm):
         for field,name_field in self.typed_customers.items():
             name=self.cleaned_data.get(name_field)
             if name:
-                customer=customer_names.resolve(name,user,self.cleaned_data.get(field))
+                customer=customer_names.resolve(name,user,self.cleaned_data.get(field),branch=doc.branch)
                 self.cleaned_data[field]=customer
                 if field=='customer':doc.customer=customer
 

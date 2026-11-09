@@ -302,6 +302,7 @@ VOUCHER_TYPES={
     'prepaid':('Prepaid expense paid','out','Asset'),
 }
 SYSTEM_VOUCHERS={'asset','asset_sale','prepaid'}
+SHOP_VOUCHERS={'expense','capital','drawings'}       # what a shop login may post; loans and the rest are owner-only
 
 
 def account_balance(branch,account):
@@ -318,7 +319,7 @@ def _voucher(doc):
     if kind not in VOUCHER_TYPES:raise ValidationError('Choose what this voucher is for.')
     label,flow,root=VOUCHER_TYPES[kind]
     user=doc.posted_by
-    if not (permissions.can(user,'accounting') or (kind=='expense' and manager(user))):raise PermissionDenied('You do not have permission to record this kind of voucher.')
+    if not (user.is_superuser or (kind in SHOP_VOUCHERS and manager(user))):raise PermissionDenied('You do not have permission to record this kind of voucher.')
     amount=payment_money(spec.get('amount'))
     if amount<=0:raise ValidationError('Enter an amount greater than zero.')
     try:account=Account.objects.get(pk=spec.get('account'))

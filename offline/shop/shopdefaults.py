@@ -2,7 +2,7 @@
 in that shop. The records still exist underneath (so ledgers, stock and reports keep working), but the screens never ask
 who bought, who sold, who took the money or which warehouse. Nothing here changes existing data."""
 import uuid
-from .models import Role,Staff,Till,Warehouse
+from .models import Staff,Till,Warehouse
 
 
 def _unique(model,code):
@@ -25,8 +25,7 @@ def shop_person(branch):
     code=branch.code+'-SHOP'
     person=Staff.objects.filter(branch=branch,code=code).first()
     if person:return person
-    role=Role.objects.filter(code='manager').first()
-    person=Staff(code=_unique(Staff,code),name=branch.name,branch=branch,designation='Shop',manager=True,can_buy=True,can_sell=True,can_handle_payments=True,role=role,default_warehouse=warehouse(branch))
+    person=Staff(code=_unique(Staff,code),name=branch.name,branch=branch,designation='Shop',manager=True,can_buy=True,can_sell=True,can_handle_payments=True,default_warehouse=warehouse(branch))
     person.save();return person
 
 

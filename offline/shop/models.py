@@ -80,9 +80,8 @@ class Staff(Record):
     approval_pin=models.CharField(max_length=128,blank=True,editable=False)
     def __str__(self):return self.name
     def save(self,*args,**kwargs):
-        if self.role_id:
-            perms=set(self.role.permissions)
-            self.manager='manage_branch' in perms;self.can_buy='buy' in perms;self.can_sell='sell' in perms;self.can_handle_payments='payments' in perms
+        if self.user_id:       # exactly two kinds of user: the owner, and a shop login that runs its whole shop
+            self.manager=self.can_buy=self.can_sell=self.can_handle_payments=True
         return super().save(*args,**kwargs)
     def clean(self):
         if self.default_warehouse_id and (self.default_warehouse.branch_id!=self.branch_id or not self.default_warehouse.enabled):raise ValidationError('Select an active default warehouse in this staff member’s shop.')
@@ -100,7 +99,9 @@ class Party(Record):
     email=models.EmailField(blank=True)
     address=models.TextField(blank=True)
     enabled=models.BooleanField(default=True)
-    class Meta:constraints=[models.UniqueConstraint(fields=['kind','name'],name='party_kind_name')]
+    branch=models.ForeignKey('Branch',on_delete=models.PROTECT,null=True,blank=True,related_name='parties',help_text='The shop this customer or supplier belongs to. Empty only for old records that were never used.')
+    class Meta:constraints=[models.UniqueConstraint(fields=['branch','kind','name'],name='party_branch_kind_name'),
+                           models.UniqueConstraint(fields=['kind','name'],condition=Q(branch__isnull=True),name='party_unassigned_kind_name')]
     def __str__(self):return self.name
     def clean(self):
         if self.credit_limit<0:raise ValidationError('The credit limit cannot be negative.')

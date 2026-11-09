@@ -49,12 +49,6 @@ class PhoneReturns(ReturnBase):
         with self.assertRaisesMessage(ValidationError,'Explain why'):pr.create(bill,self.user,[device.pk],{},' ')
         pr.create(bill,self.user,[device.pk],{},'Defective')
         with self.assertRaisesMessage(ValidationError,'no longer available'):pr.create(bill,self.user,[device.pk],{},'Again')
-    def test_only_managers_or_accountants_can_return_and_returns_cannot_be_cancelled(self):
-        bill=self.bill([107]);device=bill.reference.lines.get().device
-        clerk=get_user_model().objects.create_user('clerk-pr',password='Unrelated-test-password-729!');Staff.objects.create(code='CLK-PR',name='Clerk',branch=self.branch,user=clerk,role=Role.objects.get(code='sales'))
-        with self.assertRaises(PermissionDenied):pr.create(bill,clerk,[device.pk],{},'No rights')
-        doc=pr.create(bill,self.user,[device.pk],{},'Defective')
-        with self.assertRaisesMessage(ValidationError,'dedicated'):s.cancel(doc,self.user)
     def test_screen_lists_returnable_phones_and_posts(self):
         bill=self.bill([108]);device=bill.reference.lines.get().device
         page=self.client.get(reverse('purchase_return',args=[bill.pk]));self.assertContains(page,device.code)

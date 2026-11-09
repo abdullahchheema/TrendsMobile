@@ -87,6 +87,3 @@ class Screen(BulkBase):
         data=self.payload();data['rows_json']=json.dumps([self.row(self.product,2,50000,[imei(373)])])
         page=self.client.post(reverse('bulk_purchase'),data);self.assertContains(page,'one line per phone');self.assertContains(page,'&quot;quantity&quot;: 2')
         self.assertEqual(Device.objects.count(),0)
-    def test_sales_staff_cannot_open_it(self):
-        user=get_user_model().objects.create_user('sales-bulk',password='Unrelated-test-password-729!');Staff.objects.create(code='SAL-B',name='Sales B',branch=self.branch,user=user,role=Role.objects.get(code='sales'))
-        self.client.force_login(user);self.assertEqual(self.client.get(reverse('bulk_purchase')).status_code,403)

@@ -4,7 +4,7 @@ from django import forms
 from django.utils import timezone
 from .models import Branch,Warehouse,Product,Device,Staff,ShopSettings
 from . import access,catalog_entry,easy_retail,services,shopdefaults
-from .customer_widgets import CustomerNameInput
+from .customer_widgets import CustomerNameInput,name_input
 
 
 class SalesAccountsForm(forms.Form):
@@ -25,7 +25,7 @@ class EasyEntryForm(forms.Form):
         config=ShopSettings.objects.filter(branch=branch).first();people=Staff.objects.filter(branch=branch,enabled=True)
         self.fields['request_key']=forms.UUIDField(widget=forms.HiddenInput(),initial=uuid.uuid4)
         self.fields['branch']=forms.ModelChoiceField(queryset=access.branches(user),initial=branch,widget=forms.HiddenInput())
-        self.fields['party_name']=forms.CharField(label='Customer name' if kind=='sale' else 'Who are you buying from?',max_length=180,widget=CustomerNameInput(attrs={'placeholder':'Type full name','autocomplete':'off'}) if kind=='sale' else forms.TextInput(attrs={'placeholder':'Type supplier / seller name'}))
+        self.fields['party_name']=forms.CharField(label='Customer name' if kind=='sale' else 'Who are you buying from?',max_length=180,widget=name_input(branch,attrs={'placeholder':'Type full name','autocomplete':'off'}) if kind=='sale' else forms.TextInput(attrs={'placeholder':'Type supplier / seller name'}))
         if kind=='sale':
             phones=Device.objects.filter(branch=branch,status='Available',warehouse__isnull=False,warehouse__enabled=True,product__enabled=True).select_related('product','warehouse').prefetch_related('imeis')
             self.fields['find_imei']=forms.CharField(label='Find by IMEI (optional)',required=False,widget=forms.TextInput(attrs={'placeholder':'Type or scan an IMEI to narrow the list','autocomplete':'off','inputmode':'numeric','data-imei-filter':'phone'}))

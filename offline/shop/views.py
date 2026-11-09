@@ -30,6 +30,8 @@ from .journal_forms import JournalForm,JournalRows
 from . import permissions
 from .setup_forms import CreateShopForm,PostingAccountsForm,PaymentMethods,payment_mapping,StaffSetupForm,AccountSetupForm
 
+OWNER_ONLY_RECORDS={'Account','Mobile Staff','Warehouse','Till','Shop'}        # shops never manage these
+
 def error_text(error):return '; '.join(error.messages) if isinstance(error,ValidationError) else str(error)
 def paginate(request,rows,per_page=50):
     """Page a list/queryset. Returns (page_obj, query string for the pager links without 'page')."""
@@ -120,14 +122,14 @@ def dashboard(request):
 
 @login_required
 def collection(request,kind):
-    if kind=='Account' and not permissions.can(request.user,'accounting'):raise PermissionDenied('You do not have access to the accounts.')
+    if kind in OWNER_ONLY_RECORDS and not request.user.is_superuser:raise PermissionDenied('Only the owner can open this list.')
     if kind=='Mobile Shop Settings':return redirect('settings')
     if kind=='Mobile Device':
         objects=scoped_devices(request.user).select_related('product','warehouse').prefetch_related('imeis').order_by('code')
         rows=[dict(id=d.pk,code=d.code,name=d.product.name,state=d.status,amount=d.asking_price,party=str(d.warehouse or '')) for d in objects]
     elif kind in MASTER_MODELS:
         model=MASTER_MODELS[kind][0];objects=model.objects.all()
-        if kind in ('Customer','Supplier'):objects=objects.filter(kind=kind)
+        if kind in ('Customer','Supplier'):objects=access.scoped_parties(request.user).filter(kind=kind)
         if kind in ('Mobile Staff','Warehouse','Till'):objects=objects.filter(branch__in=access.branches(request.user))
         if kind=='Shop':objects=Branch.objects.all() if request.user.is_superuser else access.branches(request.user)
         rows=[dict(id=o.pk,code=o.code,name=o.name,state=getattr(o,'designation','') or ('Active' if getattr(o,'enabled',True) else 'Inactive'),party=str(getattr(o,'branch','')),amount=None) for o in objects.order_by('code')]
@@ -157,10 +159,10 @@ def master_edit(request,kind,pk=None):
     if kind=='Shop':
         shop_setup.owner(request.user)
         if not pk:return redirect('setup_new')
-    if kind=='Account':
-        if not permissions.can(request.user,'accounting'):raise PermissionDenied('You do not have access to the accounts.')
+    if kind in OWNER_ONLY_RECORDS or kind in ('Item','Mobile Model'):
+        if not request.user.is_superuser:raise PermissionDenied('Only the owner can change this.')
     elif kind not in ('Customer','Supplier') and not access.manager(request.user):raise PermissionDenied('A manager must edit setup records.')
-    instance=get_object_or_404(model,pk=pk) if pk else model()
+    instance=(get_object_or_404(access.scoped_parties(request.user) if kind in ('Customer','Supplier') else model,pk=pk)) if pk else model()
     if kind in ('Customer','Supplier'):
         if pk and instance.kind!=kind:raise Http404
         instance.kind=kind
@@ -193,6 +195,8 @@ def master_edit(request,kind,pk=None):
                     if pk and kind!='Shop' and model.objects.get(pk=pk).branch_id not in ids:raise ValidationError('The shop assignment changed while editing. Reload this record.')
                 if kind=='Account' and pk:Account.objects.select_for_update().get(pk=pk)
                 obj=form.save(commit=False)
+                if kind in ('Customer','Supplier') and not obj.branch_id:
+                    obj.branch=selected_branch(request.user,request.GET.get('branch') or request.POST.get('branch'))
                 if not obj.code:obj.code=services.code(kind.upper())
                 obj.full_clean()
                 obj.save()
@@ -589,7 +593,7 @@ def pos(request):
             qty,_=services.on_hand(p,warehouse)
             if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,warehouse_name=warehouse.name,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False))
     shift=services.active_shift(branch,request.user)
-    return render(request,'pos.html',dict(title='Point of Sale',items=items,customers=Party.objects.filter(kind='Customer',enabled=True),
+    return render(request,'pos.html',dict(title='Point of Sale',items=items,customers=access.parties_for(branch,'Customer').filter(enabled=True),
         me=shopdefaults.person(request.user,branch),cash_modes=services.cash_modes(branch),
         branch=branch,methods=configuration.payment_methods,request_key=uuid.uuid4(),tax_rules=pricing.rules(branch),
         shift=shift,reconciliation=services.till_balance(shift) if shift else None))
@@ -603,7 +607,7 @@ def pos_checkout(request):
         def perform():
             Branch.objects.select_for_update(no_key=True).get(pk=branch.pk)
             if not Document.objects.filter(branch=branch,kind='POS Opening Entry',status='Submitted',state='Open',posted_by=request.user).exists():raise ValidationError('Start your POS shift first.')
-            customer=customer_names.resolve(data['customer_name'],request.user,demo_batch=branch.demo_batch) if 'customer_name' in data else Party.objects.get(pk=data['customer'],kind='Customer',enabled=True)
+            customer=customer_names.resolve(data['customer_name'],request.user,demo_batch=branch.demo_batch,branch=branch) if 'customer_name' in data else access.parties_for(branch,'Customer').get(pk=data['customer'],enabled=True)
             seller=Staff.objects.get(pk=data['seller']);handler=Staff.objects.get(pk=data['handler']) if data.get('handler') else None
             doc=services.new_doc('POS Invoice',branch,customer=customer,seller=seller)
             adjustments=data.get('adjustments',{})

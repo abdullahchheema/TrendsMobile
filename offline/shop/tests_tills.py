@@ -78,13 +78,6 @@ class TillReconciliation(TestCase):
         shift.branch=self.branch;shift.save(update_fields=['branch'])
         shift.handler=self.buyer;shift.save(update_fields=['handler'])
         with self.assertRaisesMessage(ValidationError,'shift cashier'):self.payment(pos_shift=shift)
-    def test_cashier_cannot_open_another_staff_shift_or_close_others(self):
-        shift=self.opening();user=get_user_model().objects.create_user('cashier')
-        self.handler.user=user;self.handler.save()
-        with self.assertRaises(PermissionDenied):s.submit(self.closing(shift),user)
-        self.buyer.can_handle_payments=True;self.buyer.save()
-        doc=s.new_doc('POS Opening Entry',self.branch,handler=self.buyer,till=self.till,data={'opening_float':'0'})
-        with self.assertRaises(PermissionDenied):s.submit(doc,user)
     def test_invalid_and_missing_counts_are_rejected(self):
         for value in (None,'','-1','NaN','Infinity'):
             with self.subTest(opening=value),self.assertRaises(ValidationError):self.opening(value)

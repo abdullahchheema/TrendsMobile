@@ -7,10 +7,12 @@ from .models import Device,Document,Line,StockMovement
 from . import access
 
 
-def history(device,show_costs):
+def history(device,show_costs,places=None):
     """Chronological events for one device, built from the documents that touched it."""
     events=[]
-    for line in Line.objects.filter(device=device).select_related('document__customer','document__supplier','document__branch','warehouse'):
+    lines=Line.objects.filter(device=device)
+    if places is not None:lines=lines.filter(document__branch__in=places)       # a shop never sees another shop's purchases, sales or parties
+    for line in lines.select_related('document__customer','document__supplier','document__branch','warehouse'):
         d=line.document
         if d.kind=='Purchase Invoice':continue            # the supplier bill repeats the receipt; show the receipt only
         if d.status=='Cancelled':label=f'{d.kind} (cancelled)'
@@ -31,7 +33,7 @@ def device_history(request,pk):
     from .views import scoped_devices
     device=get_object_or_404(scoped_devices(request.user).select_related('product__model','branch','warehouse','customer','sale').prefetch_related('imeis'),pk=pk)
     show_costs=access.costs(request.user)
-    events=history(device,show_costs)
+    events=history(device,show_costs,None if request.user.is_superuser else access.branches(request.user))
     purchase=next((e for e in events if e['label']=='Received into stock'),None)
     from .parties import warranty
     return render(request,'device_history.html',dict(title=device.code,device=device,events=events,purchase=purchase,show_costs=show_costs,warranty=warranty(device),imeis=list(device.imeis.all()),

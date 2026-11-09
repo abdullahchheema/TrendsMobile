@@ -31,11 +31,6 @@ class Lookup(LookupBase):
         page=self.client.get(reverse('device_history',args=[device.pk]));labels=[e['label'] for e in page.context['events']]
         self.assertEqual(labels,['Received into stock','Sold']);self.assertContains(page,'History Supplier');self.assertContains(page,'History Buyer')
         self.assertEqual(page.context['events'][0]['amount'],Decimal('50000.00'));self.assertContains(page,imei(202))
-    def test_costs_are_hidden_from_users_without_cost_access(self):
-        _,device=self.stock(203)
-        user=get_user_model().objects.create_user('seller-hist',password='Unrelated-test-password-729!');Staff.objects.create(code='SEL-H',name='Seller H',branch=self.branch,user=user,role=Role.objects.get(code='sales'))
-        self.client.force_login(user);page=self.client.get(reverse('device_history',args=[device.pk]))
-        self.assertEqual(page.status_code,200);self.assertNotContains(page,'Bought for');self.assertIsNone(page.context['events'][0]['amount'])
     def test_other_shops_phones_are_not_visible(self):
         _,device=self.stock(204);other=Branch.objects.create(code='HOTH',name='Other',company='X')
         user=get_user_model().objects.create_user('mgr-hist',password='Unrelated-test-password-729!');Staff.objects.create(code='MGR-H',name='Mgr H',branch=other,user=user,role=Role.objects.get(code='manager'))
@@ -61,13 +56,6 @@ class HoldingGate(LookupBase):
         self.client.post(reverse('accept_holding',args=[device.pk]));device.refresh_from_db()
         self.assertEqual((device.status,device.inspection_status),('Available','Passed'));self.assertTrue(Audit.objects.filter(action='Accept phone into stock').exists())
         self.assertTrue(self.sell(device,70000).pk)
-    def test_only_managers_or_buyers_can_accept(self):
-        _,device=self.stock(208);Device.objects.filter(pk=device.pk).update(status='Holding')
-        user=get_user_model().objects.create_user('sales-hold',password='Unrelated-test-password-729!');Staff.objects.create(code='SAL-HD',name='Sales HD',branch=self.branch,user=user,role=Role.objects.get(code='sales'))
-        self.client.force_login(user);self.assertEqual(self.client.post(reverse('accept_holding',args=[device.pk])).status_code,403)
-        device.refresh_from_db();self.assertEqual(device.status,'Holding')
-
-
 class BrandCatalog(TestCase):
     def test_standard_brands_are_seeded_and_grade_is_validated(self):
         names=set(Brand.objects.values_list('name',flat=True))

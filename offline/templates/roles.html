@@ -1,7 +1,0 @@
-{% extends 'base.html' %}{% block content %}
-<div class="page-head"><div><h1>Roles &amp; permissions</h1><p>A role decides what a staff member can see and do. Change a role here and everyone in it follows immediately.</p></div><a class="button primary" href="{% url 'role_new' %}">New role</a></div>
-<div class="panel table-scroll"><table><thead><tr><th>Role</th><th>What it is for</th><th class="num">Permissions</th><th class="num">Discount limit</th><th class="num">Staff</th><th></th></tr></thead><tbody>
-{% for r in rows %}<tr><td><strong>{{ r.role.name }}</strong>{% if r.role.system %} <span class="badge">Built in</span>{% endif %}{% if not r.role.enabled %} <span class="badge warn">Disabled</span>{% endif %}</td><td>{{ r.role.description }}</td><td class="num">{{ r.perms }}</td><td class="num">{{ r.role.discount_max_pct }}%</td><td class="num">{{ r.staff }}</td><td><a href="{% url 'role_edit' r.role.code %}">{% if r.role.code == 'owner' %}View{% else %}Edit{% endif %}</a></td></tr>{% endfor %}
-</tbody></table></div>
-<p class="muted">The business owner is the main administrator account and always has every permission in every shop. Assign roles to staff under Settings &rsaquo; Staff.</p>
-{% endblock %}
