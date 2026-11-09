@@ -8,7 +8,7 @@ INVENTORY={'Mobile Inventory','Mobile Stock Ageing','Mobile Device Economics'}
 FIELDS={
  'Profit and Loss Statement':['branch','from_date','to_date'],
  'Balance Sheet':['branch','to_date'],
- 'Trial Balance':['branch','from_date','to_date'],
+ 'Trial Balance':['branch','from_date','to_date'],'Unadjusted Trial Balance':['branch','from_date','to_date'],'Adjusted Trial Balance':['branch','from_date','to_date'],'Cash Flow Statement':['branch','from_date','to_date'],
  'Mobile Inventory':['branch','status','model','warehouse','pta_status'],
  'Mobile Stock Ageing':['branch','warehouse','review_only'],
  'Mobile Device Economics':['branch','warehouse'],

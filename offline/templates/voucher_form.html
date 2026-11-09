@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% load static %}{% block content %}
+<div class="page-head"><div><h1>New voucher</h1><p>{{ branch.name }} · all amounts in PKR</p></div><a href="{% url 'vouchers' %}">Back to vouchers</a></div>
+<form method="post" class="panel easy-entry" data-voucher>{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.non_field_errors }}
+<div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields %}</div>
+<p class="muted">Cash and bank balances are checked: money cannot leave an account that does not hold it. Record the owner's starting cash as <strong>Owner capital introduced</strong>. For services bought on credit, use a Supplier Bill instead so the supplier balance is tracked.</p>
+<div class="form-actions"><button class="primary easy-save" type="submit">Post voucher</button></div></form>
+{% endblock %}{% block scripts %}<script src="{% static 'voucher.js' %}" defer></script>{% endblock %}

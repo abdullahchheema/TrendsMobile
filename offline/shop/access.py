@@ -3,13 +3,13 @@ from .models import Branch,Staff
 from . import permissions
 
 REPORTS=['Mobile Inventory','Mobile Stock Ageing','Device Profit','Mobile Device Economics','Staff Activity','Staff Summary',
-         'Purchase Register','Sales Register','Payment Ledger','Accounts Receivable','Accounts Payable','General Ledger','Stock Balance','Stock Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance']
+         'Purchase Register','Sales Register','Payment Ledger','Accounts Receivable','Accounts Payable','General Ledger','Stock Balance','Stock Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance','Cash Flow Statement']
 NAV=[('Phones',[('Phone Inventory','Mobile Device'),('Models','Mobile Model'),('Variants & Accessories','Item')]),
     ('Buy',[('Buy a Phone','Mobile Intake'),('Purchase Receipts','Purchase Receipt'),('Supplier Bills / Expenses','Purchase Invoice'),('Purchase Orders','Purchase Order')]),
     ('Sell / POS',[('Sales & Returns','Sales Invoice')]),('Exchanges',[('Phone Exchanges','Mobile Exchange')]),
     ('Stock',[('Stock transfers','Stock Entry'),('Stock adjustments','Stock Adjustment')]),
     ('Customers & Suppliers',[('Customers','Customer'),('Suppliers','Supplier')]),
-    ('Payments & Expenses',[('Payments / Advances','Payment Entry'),('Daily Closing','Mobile Daily Closing'),('Open / Past Shifts','POS Opening Entry'),('Till Closings','POS Closing Entry')]),
+    ('Payments & Expenses',[('Expenses & owner entries','Voucher'),('Payments / Advances','Payment Entry'),('Daily Closing','Mobile Daily Closing'),('Open / Past Shifts','POS Opening Entry'),('Till Closings','POS Closing Entry')]),
     ('Staff',[('Staff Names','Mobile Staff')]),('Warranty',[('Warranty / Returns','Warranty Claim')])]
 
 def staff(user):
@@ -32,7 +32,7 @@ def costs(user):
     person=staff(user)
     return person is None or person.manager or person.can_buy or permissions.can(user,'view_costs')
 
-STATEMENTS=('General Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance')
+STATEMENTS=('General Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance','Cash Flow Statement')
 
 def statements(user):
     """Profit, ledger and balance-sheet figures: managers, the owner and roles granted view_statements (Accountant). Buyers keep cost reports only."""

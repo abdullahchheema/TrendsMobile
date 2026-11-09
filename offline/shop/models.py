@@ -184,7 +184,7 @@ class IMEI(models.Model):
         if self.pta_status!='Not Checked' and not self.verified_on:raise ValidationError('Record the PTA verification date.')
 
 KINDS=['Mobile Intake','Purchase Order','Purchase Receipt','Purchase Invoice','Sales Invoice','POS Invoice',
-       'Payment Entry','Journal Entry','Stock Entry','Mobile Exchange','Warranty Claim','Mobile Daily Closing','POS Opening Entry','POS Closing Entry','Stock Adjustment']
+       'Payment Entry','Journal Entry','Stock Entry','Mobile Exchange','Warranty Claim','Mobile Daily Closing','POS Opening Entry','POS Closing Entry','Stock Adjustment','Voucher','Purchase Return']
 class Document(Record):
     kind=models.CharField(max_length=40,choices=[(k,k) for k in KINDS],db_index=True)
     branch=models.ForeignKey(Branch,on_delete=models.PROTECT)

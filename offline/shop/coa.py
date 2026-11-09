@@ -35,7 +35,7 @@ STANDARD=[
  ('2200','Customer advances','Current Liability','Liability','2000',False),
  ('2300','Accrued expenses','Current Liability','Liability','2000',False),
  ('2400','Tax payable','Current Liability','Liability','2000',False),
- ('2500','Business loans','Current Liability','Liability','2000',False),
+ ('2500','Business loans','Loan','Liability','2000',False),
  ('3000','Owner\'s equity','','Equity',None,True),
  ('3100','Owner\'s capital','Equity','Equity','3000',False),
  ('3200','Additional capital','Equity','Equity','3000',False),
@@ -61,6 +61,7 @@ STANDARD=[
  ('6800','Depreciation','Depreciation','Expense','6000',False),
  ('6850','Bank and wallet charges','Expense Account','Expense','6000',False),
  ('6900','Other operating expenses','Expense Account','Expense','6000',False),
+ ('6950','Cash short and over','Expense Account','Expense','6000',False),
 ]
 PREFIX='COA-'
 

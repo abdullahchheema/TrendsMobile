@@ -5,9 +5,12 @@ LABELS={'Mobile Inventory':'Phone Stock','Mobile Stock Ageing':'Stock Age & Pric
     'Accounts Receivable':'Customer Balances','Accounts Payable':'Supplier Balances'}
 GROUPS=[('Stock & devices',['Mobile Inventory','Mobile Stock Ageing','Device Profit','Mobile Device Economics','Stock Balance','Stock Ledger']),
     ('Sales & purchases',['Sales Register','Purchase Register']),('Staff',['Staff Activity','Staff Summary']),
-    ('Financial statements',['Profit and Loss Statement','Balance Sheet','Trial Balance']),
+    ('Financial statements',['Profit and Loss Statement','Balance Sheet','Cash Flow Statement','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance']),
     ('Accounts & payments',['Accounts Receivable','Accounts Payable','Payment Ledger','General Ledger'])]
 DESCRIPTIONS={
+    'Cash Flow Statement':'Where cash came from and went: operating, investing and financing activities, proved against the actual change in cash and bank balances.',
+    'Unadjusted Trial Balance':'Trial balance before the owner or accountant adjusting journals and before year-end closing entries.',
+    'Adjusted Trial Balance':'Trial balance including adjusting journals, before year-end closing entries.',
     'Profit and Loss Statement':'Ledger income and expenses for the selected period, including returns, repair expenses and posted adjustments. Accrual basis; not cash collected.',
     'Balance Sheet':'Ledger assets, liabilities and equity through the selected date, including unclosed profit/loss. Uses posted ledger valuation, not current asking prices.',
     'Trial Balance':'Account opening balances, period debits/credits and closing balances. Includes reversal entries and unclassified accounts; does not hide an imbalance.',

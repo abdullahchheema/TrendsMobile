@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Expenses &amp; owner entries</h1><p>Rent, salaries and other shop expenses, plus owner capital, drawings and loans. Each one moves real cash or bank money and posts to the books.</p></div><a class="button primary" href="{% url 'voucher_new' %}{% if branch %}?branch={{ branch.pk }}{% endif %}">New voucher</a></div>
+<div class="panel table-scroll"><table><thead><tr><th>Reference</th><th>Date</th><th>Shop</th><th>What</th><th>Account</th><th>Paid via</th><th class="num">Amount (PKR)</th><th>Status</th></tr></thead><tbody>
+{% for d in rows %}<tr><td><a href="{% url 'detail' d.pk %}">{{ d.code }}</a></td><td>{{ d.posting_date|date:"j M Y" }}</td><td>{{ d.branch.name }}</td><td>{{ d.data.label }}<small>{{ d.data.description }}</small></td><td>{{ d.data.account_name }}</td><td>{{ d.data.mode }}</td><td class="num">{{ d.total|floatformat:"2g" }}</td><td>{{ d.status }}</td></tr>{% empty %}<tr><td colspan="8" class="empty-state">No vouchers yet. Record the first expense or owner entry.</td></tr>{% endfor %}
+</tbody></table></div>{% include 'pager.html' %}
+{% endblock %}

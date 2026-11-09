@@ -157,7 +157,7 @@ def open_date(doc):
 
 def new_doc(kind,branch,**values):
     values.setdefault('demo_batch',branch.demo_batch)
-    return Document.objects.create(kind=kind,branch=branch,code=code({'Sales Invoice':'SALE','POS Invoice':'POS','Purchase Receipt':'RECEIPT','Purchase Invoice':'BILL','Payment Entry':'PAY','Journal Entry':'JOURNAL','Stock Adjustment':'ADJ'}.get(kind,'COV')),**values)
+    return Document.objects.create(kind=kind,branch=branch,code=code({'Sales Invoice':'SALE','POS Invoice':'POS','Purchase Receipt':'RECEIPT','Purchase Invoice':'BILL','Payment Entry':'PAY','Journal Entry':'JOURNAL','Stock Adjustment':'ADJ','Voucher':'VCH','Purchase Return':'PRET'}.get(kind,'COV')),**values)
 
 def copy_lines(source,target):
     for line in source.lines.all():
@@ -281,6 +281,63 @@ def quantity_signed(value):
     value=Decimal(str(value))
     if value==0:raise ValidationError('A stock change of zero is not an adjustment.')
     return value
+
+
+VOUCHER_TYPES={
+    # code: (label, money flow relative to the shop, section the chosen account must belong to)
+    'expense':('Shop expense','out','Expense'),
+    'capital':('Owner capital introduced','in','Equity'),
+    'drawings':('Owner drawings','out','Equity'),
+    'loan_in':('Loan received','in','Liability'),
+    'loan_out':('Loan repayment','out','Liability'),
+}
+
+
+def account_balance(branch,account):
+    rows=LedgerEntry.objects.filter(branch=branch,account=account).aggregate(d=Sum('debit'),c=Sum('credit'))
+    return money(rows['d'])-money(rows['c'])
+
+
+def _voucher(doc):
+    """One-step money voucher: a shop expense, owner capital or drawings, a loan received or repaid.
+    Money moves through one of the shop's cash, bank or wallet accounts, so cash and bank balances always match the ledger.
+    Credit purchases of services stay on Supplier Bills so they keep a supplier balance."""
+    from . import permissions
+    spec=doc.data;kind=spec.get('type')
+    if kind not in VOUCHER_TYPES:raise ValidationError('Choose what this voucher is for.')
+    label,flow,root=VOUCHER_TYPES[kind]
+    user=doc.posted_by
+    if not (permissions.can(user,'accounting') or (kind=='expense' and manager(user))):raise PermissionDenied('You do not have permission to record this kind of voucher.')
+    amount=payment_money(spec.get('amount'))
+    if amount<=0:raise ValidationError('Enter an amount greater than zero.')
+    try:account=Account.objects.get(pk=spec.get('account'))
+    except (Account.DoesNotExist,ValueError,ValidationError):raise ValidationError('Choose the account for this voucher.')
+    if not account.enabled or account.is_group or account.root_type!=root:raise ValidationError(f'Choose an active {root.lower()} account for a {label.lower()}.')
+    if account.account_type in ('Payable','Receivable','Stock','Cash','Bank','Stock Received But Not Billed','Cost of Goods Sold'):raise ValidationError('That account is a control account with its own workflow. Choose another.')
+    mode=spec.get('mode','Cash');conf=settings(doc).payment_methods.get(mode)
+    if not conf:raise ValidationError('Choose a payment method set up for this shop.')
+    cash=Account.objects.get(pk=conf)
+    if cash.account_type not in ('Cash','Bank') or not cash.enabled or cash.is_group:raise ValidationError('The payment method must use an enabled cash or bank account.')
+    if cash.account_type=='Bank' and not str(spec.get('reference','')).strip():raise ValidationError('Enter the bank or wallet transaction reference.')
+    if not str(spec.get('description','')).strip():raise ValidationError('Describe what this voucher is for.')
+    if flow=='out':
+        available=account_balance(doc.branch,cash)
+        if available<amount:raise ValidationError(f'{mode} has only PKR {available:,.2f} recorded for this shop, so PKR {amount:,.2f} cannot be paid from it. Record owner capital or a deposit first.')
+    shift=active_shift(doc.branch,user)
+    cash_change=ZERO
+    if cash.account_type=='Cash':
+        cash_change=amount if flow=='in' else -amount
+        if shift and shift.till_id and shift.posting_date==doc.posting_date:
+            shift=Document.objects.select_for_update().get(pk=shift.pk)
+            if shift.state=='Open':doc.pos_shift=shift;doc.till=shift.till
+    doc.data['direction']='Receive' if flow=='in' else 'Pay'
+    doc.data['mode']=mode
+    doc.data['till_cash']=str(cash_change) if doc.pos_shift_id else '0.00'
+    doc.data['label']=label;doc.data['account_name']=account.name
+    doc.total=amount
+    if flow=='out':entry(doc,account,debit=amount);entry(doc,cash,credit=amount)
+    else:entry(doc,cash,debit=amount);entry(doc,account,credit=amount)
+
 
 def _sale(doc):
     if doc.is_return:
@@ -409,7 +466,7 @@ def till_balance(shift):
     legacy=not shift.till_id or 'opening_float' not in shift.data
     rows=[];received=ZERO;paid=ZERO;bank_received=ZERO;bank_paid=ZERO
     transferred_in=ZERO;transferred_out=ZERO;internal_bank_in=ZERO;internal_bank_out=ZERO
-    for payment in shift.shift_transactions.filter(kind='Payment Entry',status='Submitted').order_by('created'):
+    for payment in shift.shift_transactions.filter(kind__in=['Payment Entry','Voucher'],status='Submitted').order_by('created'):
         cash=money(payment.data.get('till_cash'))
         received+=max(cash,ZERO);paid+=max(-cash,ZERO)
         internal=payment.data.get('direction')=='Internal Transfer'
@@ -463,6 +520,7 @@ def submit(doc,user):
         doc.total=receipt.total
     elif doc.kind=='Purchase Receipt':_receive(doc)
     elif doc.kind=='Stock Adjustment':_adjust(doc)
+    elif doc.kind=='Voucher':_voucher(doc)
     elif doc.kind in SELL:_sale(doc)
     elif doc.kind=='Purchase Invoice':_bill(doc)
     elif doc.kind=='Purchase Order':
@@ -484,6 +542,16 @@ def submit(doc,user):
             row['difference']=str(money(row['counted'])-money(row['expected']))
             if money(row['difference']) and not row['notes'].strip():raise ValidationError('Explain each closing difference.')
         doc.data['balances']=expected
+        over_short=Account.objects.filter(code='COA-6950',enabled=True,is_group=False).first()
+        if over_short:
+            # Book each counted difference so the ledger agrees with the cash and bank that were actually counted.
+            for row in expected:
+                diff=money(row['difference'])
+                if not diff:continue
+                counted_account=Account.objects.get(pk=row['account'])
+                if diff<0:entry(doc,over_short,debit=-diff);entry(doc,counted_account,credit=-diff)
+                else:entry(doc,counted_account,debit=diff);entry(doc,over_short,credit=diff)
+            doc.data['differences_posted']=True
     elif doc.kind=='POS Opening Entry':
         assigned(doc,'handler','can_handle_payments')
         person=staff(doc.posted_by)
@@ -644,7 +712,7 @@ def cancel(doc,user):
     if doc.kind=='Payment Entry' and doc.data.get('direction')=='Internal Transfer':raise ValidationError('Record a new reverse internal transfer instead of cancelling a completed movement.')
     open_date(doc)
     if doc.is_return:raise ValidationError('Posted returns require a stock and credit review rather than cancellation.')
-    if doc.kind in ('Mobile Daily Closing','POS Opening Entry','POS Closing Entry','Mobile Exchange','Journal Entry'):
+    if doc.kind in ('Mobile Daily Closing','POS Opening Entry','POS Closing Entry','Mobile Exchange','Journal Entry','Purchase Return'):
         raise ValidationError('This record requires a dedicated reconciliation review rather than cancellation.')
     if doc.linked.exclude(status='Cancelled').exists() or doc.allocations.exclude(document=doc).exists():raise ValidationError('Reverse linked invoices, returns or payments first.')
     for exchange in Document.objects.filter(kind='Mobile Exchange').exclude(state='Cancelled'):

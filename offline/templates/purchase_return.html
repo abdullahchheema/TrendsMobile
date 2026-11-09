@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Return to supplier</h1><p>{{ bill.code }} · {{ bill.supplier.name }} · bill total PKR {{ bill.total|floatformat:"2g" }}, still owed PKR {{ bill.outstanding|floatformat:"2g" }}</p></div><a href="{% url 'detail' bill.pk %}">Back to bill</a></div>
+<form method="post" class="panel">{% csrf_token %}
+{% if devices %}<h2 style="margin-top:0">Phones still in stock</h2><div class="table-scroll"><table><thead><tr><th></th><th>Phone</th><th>Reference</th><th>Condition</th></tr></thead><tbody>{% for d in devices %}<tr><td><input type="checkbox" name="devices" value="{{ d.pk }}" aria-label="Return {{ d.code }}"></td><td>{{ d.product.name }}</td><td>{{ d.code }}</td><td>{{ d.condition }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if accessories %}<h2>Accessories</h2><div class="table-scroll"><table><thead><tr><th>Item</th><th class="num">Can return</th><th class="num">Return quantity</th></tr></thead><tbody>{% for a in accessories %}<tr><td>{{ a.line.product.name }}</td><td class="num">{{ a.left }}</td><td class="num"><input type="number" min="0" max="{{ a.left }}" step="1" name="qty_{{ a.line.pk }}" value="0"></td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if not devices and not accessories %}<p class="empty-state">Nothing from this bill is left to return.</p>{% else %}
+<div class="field" style="margin-top:16px"><label for="why">Reason for the return</label><input id="why" name="reason" maxlength="240" required placeholder="e.g. Faulty on arrival, supplier agreed to take back"></div>
+<p class="muted">The amount comes off what you owe this supplier. If the bill was already paid, the supplier now owes you a credit: record it as a supplier payment received, or use it against the next bill.</p>
+<div class="form-actions"><button class="primary" type="submit" data-confirm="Post this return to the supplier? Phones leave your stock at their purchase cost.">Post return</button></div>{% endif %}</form>
+{% endblock %}

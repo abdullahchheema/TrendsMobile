@@ -10,6 +10,8 @@ from . import access,report_catalog
 MONEY={
  'Profit and Loss Statement':{'Amount'},'Balance Sheet':{'Amount'},
  'Trial Balance':{'Opening debit','Opening credit','Period debit','Period credit','Closing debit','Closing credit'},
+ 'Unadjusted Trial Balance':{'Opening debit','Opening credit','Period debit','Period credit','Closing debit','Closing credit'},
+ 'Adjusted Trial Balance':{'Opening debit','Opening credit','Period debit','Period credit','Closing debit','Closing credit'},'Cash Flow Statement':{'Amount'},
  'Mobile Inventory':{'Asking price','Purchase cost'},'Mobile Stock Ageing':{'Asking price','Purchase cost'},
  'Mobile Device Economics':{'Current / Last Valuation','Expensed Repairs (Net)','Valuation + Repairs','Lifetime Net Sales','Net Posted Stock Cost','Posted Margin After Repairs'},
  'Device Profit':{'Sale','Cost','Margin'},'Purchase Register':{'Total','Outstanding'},
@@ -45,7 +47,7 @@ def display(value,column,name):
 
 def context(name,columns,rows,params,documents,devices,user):
     totals={}
-    if name not in ('Staff Activity','Profit and Loss Statement','Balance Sheet'):
+    if name not in ('Staff Activity','Profit and Loss Statement','Balance Sheet','Cash Flow Statement'):
         for column in columns:
             if column in MONEY.get(name,set())|QUANTITIES.get(name,set()):totals[column]=sum((Decimal(str(row[column])) for row in rows if isinstance(row.get(column),(int,float,Decimal))),Decimal(0))
     # Resolve only identities the caller may actually open; never link forbidden records.

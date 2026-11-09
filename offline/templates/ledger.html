@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><p>Every posting with its running balance, shown on the account's normal {{ nature }} side.</p></div></div>
+<form method="get" class="search-bar report-screen-only">
+  {% if book %}<input type="hidden" name="book" value="{{ book }}">{% else %}<label>Account<select name="account"><option value="">Choose an account</option>{% for a in accounts %}<option value="{{ a.pk }}" {% if account and account.pk == a.pk %}selected{% endif %}>{{ a.code }} · {{ a.name }}</option>{% endfor %}</select></label>{% endif %}
+  <label>Shop<select name="branch"><option value="">All permitted shops</option>{% for sh in shops %}<option value="{{ sh.pk }}" {% if branch and branch.pk == sh.pk %}selected{% endif %}>{{ sh.name }}</option>{% endfor %}</select></label>
+  <label>From<input type="date" name="from_date" value="{{ start|date:'Y-m-d' }}"></label><label>To<input type="date" name="to_date" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="primary">Show</button><a class="button" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}format=csv">Export CSV</a><button type="button" data-print>Print</button>
+</form>
+{% if not book and not account %}<p class="empty-state">Choose an account to see its ledger, or open the Cash book or Bank book from the Reports menu.</p>{% else %}
+<div class="panel table-scroll report-table"><table><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Account</th><th>Party</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead><tbody>
+<tr><td colspan="7"><strong>Opening balance</strong></td><td class="num"><strong>{{ data.opening|floatformat:"2g" }}</strong></td></tr>
+{% for r in data.rows %}<tr><td>{{ r.date|date:"j M Y" }}</td><td><a href="{% url 'detail' r.document.pk %}">{{ r.code }}</a></td><td>{{ r.description }}</td><td>{{ r.account }}</td><td>{{ r.party }}</td><td class="num">{% if r.debit %}{{ r.debit|floatformat:"2g" }}{% endif %}</td><td class="num">{% if r.credit %}{{ r.credit|floatformat:"2g" }}{% endif %}</td><td class="num">{{ r.balance|floatformat:"2g" }}</td></tr>{% empty %}<tr><td colspan="8" class="empty-state">No postings in this period.</td></tr>{% endfor %}
+</tbody><tfoot><tr><td colspan="5">Totals and closing balance</td><td class="num">{{ data.debit|floatformat:"2g" }}</td><td class="num">{{ data.credit|floatformat:"2g" }}</td><td class="num">{{ data.closing|floatformat:"2g" }}</td></tr></tfoot></table></div>{% endif %}
+{% endblock %}

@@ -313,7 +313,7 @@ def detail(request,pk):
         related=related,methods=config.payment_methods,cash_modes=services.cash_modes(doc.branch),cash_summary=services.cash_summary(doc),staff=Staff.objects.filter(branch=doc.branch,enabled=True,can_handle_payments=True),
         request_key=uuid.uuid4(),can_checkout=doc.kind in services.SELL and not doc.is_return,kind=doc.kind,
         return_rows=return_rows,return_warning=return_warning,is_sale_return=doc.is_return and doc.kind in services.SELL,has_returnable=any(line.returnable for line in return_rows),
-        return_warehouses=Warehouse.objects.filter(branch=doc.branch,enabled=True).order_by('code'),credit_to_apply=credit_to_apply,credit_available=credit_available,can_refund=can_refund,
+        return_warehouses=Warehouse.objects.filter(branch=doc.branch,enabled=True).order_by('code'),credit_to_apply=credit_to_apply,credit_available=credit_available,can_purchase_return=access.manager(request.user) or permissions.can(request.user,'accounting'),can_refund=can_refund,
         internal_transfer=funds.is_transfer(doc),frozen_fund_transfer=funds.is_transfer(doc) and bool(doc.source),
         owner_journal=journals.is_manual(doc),journal_rows=doc.data.get('manual_journal',{}).get('lines',[]) if journals.is_manual(doc) else [],
         can_correct_journal=journals.is_manual(doc) and doc.status=='Submitted' and not doc.source and not doc.data['manual_journal'].get('reversal_of'),
