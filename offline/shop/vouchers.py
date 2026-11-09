@@ -15,7 +15,7 @@ class VoucherForm(forms.Form):
     def __init__(self,*args,user,branch,**kwargs):
         super().__init__(*args,**kwargs)
         full=permissions.can(user,'accounting')
-        kinds=[(k,v[0]) for k,v in s.VOUCHER_TYPES.items() if full or k=='expense']
+        kinds=[(k,v[0]) for k,v in s.VOUCHER_TYPES.items() if k not in s.SYSTEM_VOUCHERS and (full or k=='expense')]
         self.fields['request_key']=forms.UUIDField(widget=forms.HiddenInput(),initial=uuid.uuid4)
         self.fields['branch']=forms.ModelChoiceField(queryset=access.branches(user),initial=branch,widget=forms.HiddenInput())
         self.fields['type']=forms.ChoiceField(label='What is this for?',choices=kinds,initial=kinds[0][0])

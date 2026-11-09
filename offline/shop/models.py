@@ -361,3 +361,63 @@ class ImportRun(models.Model):
 class SupabaseIdentity(models.Model):
     auth_id=models.UUIDField(unique=True)
     user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='supabase_identity')
+
+
+class FixedAsset(Record):
+    """A long-lived item (shelving, counter, computer). Cost is depreciated month by month into the expense account."""
+    branch=models.ForeignKey(Branch,on_delete=models.PROTECT)
+    name=models.CharField(max_length=180)
+    purchase_date=models.DateField()
+    cost=models.DecimalField(max_digits=18,decimal_places=2)
+    salvage=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    life_months=models.PositiveIntegerField()
+    method=models.CharField(max_length=20,choices=[('Straight line','Straight line'),('Reducing balance','Reducing balance')],default='Straight line')
+    rate=models.DecimalField(max_digits=5,decimal_places=2,default=0,help_text='Yearly rate for reducing balance, in percent.')
+    asset_account=models.ForeignKey(Account,on_delete=models.PROTECT,related_name='+')
+    accumulated_account=models.ForeignKey(Account,on_delete=models.PROTECT,related_name='+')
+    expense_account=models.ForeignKey(Account,on_delete=models.PROTECT,related_name='+')
+    depreciated_through=models.DateField(null=True,blank=True)
+    accumulated=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    status=models.CharField(max_length=10,choices=[('Active','Active'),('Disposed','Disposed')],default='Active')
+    disposed_on=models.DateField(null=True,blank=True)
+    disposal_amount=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    class Meta:
+        constraints=[models.CheckConstraint(condition=Q(cost__gt=0,salvage__gte=0,salvage__lte=models.F('cost'),life_months__gt=0),name='asset_sane_values')]
+    @property
+    def book_value(self):return self.cost-self.accumulated
+
+
+class Deferral(Record):
+    """A prepaid expense (paid now, used over months) or an accrual (used now, paid later, reversed when paid)."""
+    branch=models.ForeignKey(Branch,on_delete=models.PROTECT)
+    kind=models.CharField(max_length=10,choices=[('Prepaid','Prepaid'),('Accrual','Accrual')])
+    description=models.CharField(max_length=240)
+    amount=models.DecimalField(max_digits=18,decimal_places=2)
+    start_date=models.DateField()
+    months=models.PositiveIntegerField(default=1)
+    expense_account=models.ForeignKey(Account,on_delete=models.PROTECT,related_name='+')
+    balance_account=models.ForeignKey(Account,on_delete=models.PROTECT,related_name='+')
+    released=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    released_through=models.DateField(null=True,blank=True)
+    reverse_on=models.DateField(null=True,blank=True)
+    status=models.CharField(max_length=10,choices=[('Open','Open'),('Complete','Complete')],default='Open')
+    class Meta:
+        constraints=[models.CheckConstraint(condition=Q(amount__gt=0,months__gt=0),name='deferral_sane_values')]
+
+
+class Loan(Record):
+    """Money borrowed. The liability balance is the principal still owed; repayments split principal and interest."""
+    branch=models.ForeignKey(Branch,on_delete=models.PROTECT)
+    lender=models.CharField(max_length=180)
+    principal=models.DecimalField(max_digits=18,decimal_places=2)
+    annual_rate=models.DecimalField(max_digits=5,decimal_places=2,default=0)
+    start_date=models.DateField()
+    term_months=models.PositiveIntegerField(default=12)
+    liability_account=models.ForeignKey(Account,on_delete=models.PROTECT,related_name='+')
+    interest_account=models.ForeignKey(Account,on_delete=models.PROTECT,related_name='+')
+    principal_paid=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    interest_paid=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    class Meta:
+        constraints=[models.CheckConstraint(condition=Q(principal__gt=0,principal_paid__gte=0,principal_paid__lte=models.F('principal')),name='loan_sane_values')]
+    @property
+    def outstanding(self):return self.principal-self.principal_paid

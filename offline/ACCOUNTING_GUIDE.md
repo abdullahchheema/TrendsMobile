@@ -43,3 +43,14 @@ override is written to the audit log.
 ## Audit log
 **Audit log** (Settings) shows who did what and when: cancellations, overrides, role changes, period locks, returns and more. It cannot be
 edited. Branch managers see their own shop; the owner sees everything.
+
+## Fixed assets, prepaids, accruals and loans (Accounts menu)
+
+All of these need the standard chart of accounts installed (Chart of accounts > Install).
+
+- **Fixed assets.** Add an asset with its cost, scrap value and useful life. Pay for it from cash/bank, or mark it "already owned" to take it in against owner equity. Each month, open Fixed assets and press **Post depreciation**: it posts straight-line (or reducing-balance) depreciation for every whole month up to the date you pick, once only. To sell or scrap an asset, bring depreciation up to date, then use **Sell / dispose**; the gain or loss is posted for you (Other income / Other operating expenses).
+- **Prepaid expenses.** Pay a larger bill now (for example a quarter of rent). It sits in Prepaid expenses and **Release prepaids** moves one month at a time into the expense account.
+- **Accruals.** Record an expense you have used but not yet paid (electricity). It is booked now against Accrued expenses and reverses automatically on the date you choose; then enter the real payment as a normal expense.
+- **Loans.** Record money borrowed (cash/bank goes up, the loan account owes it). Each repayment is split into principal and interest; the screen suggests one month of interest.
+
+Journal entries posted by these screens cannot be cancelled; correct a mistake with a reversing entry. Locked periods are respected.
