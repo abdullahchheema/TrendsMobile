@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><p>{{ branch.name }}{% if scope_shops|length > 1 %} · all shops shown{% endif %}. {{ intro }}</p></div></div>
+{% if user.is_superuser and shops|length > 1 %}<form method="get" class="search-bar"><label>Shop<select name="branch"><option value="">All shops</option>{% for place in shops %}<option value="{{ place.pk }}" {% if scope_shops|length == 1 and branch.pk == place.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select></label><button>Show</button></form>{% endif %}
+{% for p in panels %}<details class="panel money-panel"{% if p.form.errors %} open{% endif %}><summary><strong>{{ p.title }}</strong></summary>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="{{ p.action }}"><input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="branch" value="{{ branch.pk }}">{{ p.form.non_field_errors }}<div class="form-grid">{% include 'form_fields.html' with fields=p.form.visible_fields %}</div><div class="form-actions"><button class="primary" type="submit">Save</button></div></form></details>{% endfor %}
+{% include 'money_table.html' %}
+{% endblock %}

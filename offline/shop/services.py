@@ -292,13 +292,14 @@ VOUCHER_TYPES={
     'drawings':('Owner drawings','out','Equity'),
     'loan_in':('Loan received','in','Liability'),
     'loan_out':('Loan repayment','out','Liability'),
+    'income':('Other income','in','Income'),
     # posted only by the advanced accounting screens (fixed assets and prepaid expenses), never from the manual voucher form
     'asset':('Fixed asset purchase','out','Asset'),
     'asset_sale':('Fixed asset sale proceeds','in','Asset'),
     'prepaid':('Prepaid expense paid','out','Asset'),
 }
 SYSTEM_VOUCHERS={'asset','asset_sale','prepaid'}
-SHOP_VOUCHERS={'expense','capital','drawings'}       # what a shop login may post; loans and the rest are owner-only
+SHOP_VOUCHERS={'expense','capital','drawings','income'}       # what a shop login may post; loans and the rest are owner-only
 
 
 def account_balance(branch,account):

@@ -23,7 +23,7 @@ class VoucherForm(forms.Form):
         self.fields['amount']=forms.DecimalField(label='Amount (PKR)',min_value=0,max_digits=15,decimal_places=2)
         accounts=access.visible_accounts(user).filter(enabled=True,is_group=False).exclude(root_type='').exclude(account_type__in=['Payable','Receivable','Stock','Cash','Bank','Stock Received But Not Billed','Cost of Goods Sold']).order_by('root_type','code')
         choices=[('','Choose an account')]
-        for root,label in (('Expense','Expense accounts'),('Equity','Owner equity accounts'),('Liability','Loan and liability accounts')):
+        for root,label in (('Expense','Expense accounts'),('Income','Income accounts'),('Equity','Owner equity accounts'),('Liability','Loan and liability accounts')):
             choices.append((label,[(str(a.pk),f'{a.name}') for a in accounts if a.root_type==root]))
         self.fields['account']=forms.ChoiceField(label='Account / category',choices=choices,help_text='Expenses: pick the category (rent, salaries, electricity...). Install the standard chart first if the list is empty.')
         config=ShopSettings.objects.filter(branch=branch).first()

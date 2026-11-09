@@ -55,7 +55,7 @@ class Permissions(VoucherBase):
         from . import shop_accounts
         login=shop_accounts.create_login(self.branch,'voucher-shop','Strong-pass-for-V-77!');self.client.force_login(login)
         types=[k for k,_ in self.client.get(reverse('voucher_new')).context['form'].fields['type'].choices]
-        self.assertEqual(sorted(types),['capital','drawings','expense'])
+        self.assertEqual(sorted(types),['capital','drawings','expense','income'])
         self.client.force_login(self.user);self.assertIn('loan_in',[k for k,_ in self.client.get(reverse('voucher_new')).context['form'].fields['type'].choices])
 
 

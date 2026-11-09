@@ -95,7 +95,7 @@ class Transfer(Base):
         self.assertEqual(self.send(phone,'00000000-0000-4000-8000-0000000000b1',self.shop_a).status_code,403);phone.refresh_from_db();self.assertEqual(phone.branch_id,self.branch.pk)
         self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),0)
     def test_the_owner_sends_phones_and_the_slip_names_the_sender_at_the_top(self):
-        phone=self.stock();page=self.client.get(reverse('stock_transfer'));self.login(self.user);page=self.client.get(reverse('stock_transfer'));self.assertContains(page,phone.code);self.assertContains(page,self.other.name)
+        phone=self.stock();self.login(self.user);page=self.client.get(reverse('stock_transfer'),{'branch':str(self.branch.pk)});self.assertContains(page,phone.code);self.assertContains(page,self.other.name)
         post=self.send(phone,'00000000-0000-4000-8000-0000000000b2');self.assertEqual(post.status_code,302);phone.refresh_from_db()
         self.assertEqual((phone.branch_id,phone.status,phone.warehouse.branch_id),(self.other.pk,'Available',self.other.pk))
         doc=Document.objects.get(kind='Stock Entry');slip=self.client.get(reverse('transfer_slip',args=[doc.pk]));self.assertContains(slip,'<h1>'+self.branch.name+'</h1>');self.assertContains(slip,'to <strong>'+self.other.name)

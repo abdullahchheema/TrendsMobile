@@ -23,7 +23,7 @@ def staff(user):
 
 def branches(user):
     person=staff(user)
-    return Branch.objects.filter(enabled=True,**({'pk':person.branch_id} if person else {}))
+    return Branch.objects.filter(enabled=True,**({'pk':person.branch_id} if person else {})).order_by('name','code')
 
 def scoped_parties(user):
     """Customers and suppliers the user may see: the owner sees every one, a shop sees only its own shop's."""
@@ -81,7 +81,7 @@ def menu_for(user,visible,path=''):
     reports=[(label,report(name)) for label,name in (('Sales Reports','Daily Sales'),('Purchase Reports','Purchase Register'),('Inventory Reports','Mobile Inventory'),('Expense Reports','Expense Report'),
              ('Profit Reports' if owner else 'Profit Summary','Profit and Loss Statement')) if has(name)]
     if owner:reports+=[(label,report(name)) for label,name in (('Financial Summaries','Balance Sheet'),('Branch Performance','Branch Comparison')) if has(name)]
-    money=[('Money In',coll('Payment Entry')),('Money Out',r('vouchers')),('Expenses',r('vouchers')),('Cash and Bank',r('ledger')+'?book=cash'),('Transaction History',r('ledger'))]
+    money=[('Money In',r('money_in')),('Money Out',r('money_out')),('Expenses',r('money_expenses')),('Customer Dues',r('customer_dues')),('Supplier Dues',r('supplier_dues')),('Cash and Bank',r('cash_and_bank')),('Transaction History',r('money_history'))]
     sections=[('Dashboard','home',r('dashboard'),[])]
     if owner:
         sections.append(('Shops','shops',r('setup'),[('All Shops',r('setup')),('Shop Accounts',r('users')),('Branch Information',r('settings'))]))
@@ -92,9 +92,9 @@ def menu_for(user,visible,path=''):
     sections.append(('Inventory','stock',coll('Mobile Device'),inventory))
     sections.append(('Purchases','buy',r('easy_entry',args=['purchase']),[('New Purchase',r('easy_entry',args=['purchase'])),('Bulk Purchase',r('bulk_purchase')),('Purchase History',coll('Purchase Invoice')),('Supplier Records' if owner else 'Suppliers',coll('Supplier'))]))
     if owner:sections.append(('Stock Transfers','exchanges',r('stock_transfer'),[('All Transfers',r('stock_transfer'))]))
-    sections.append(('Customers','customers-suppliers',coll('Customer'),[('Customer Directory',coll('Customer')),('Customer Outstanding Balances' if owner else 'Customer Dues',r('overdue')),('Customer Payment History',coll('Payment Entry'))]))
-    sections.append(('Suppliers','buy',coll('Supplier'),[('Supplier Directory',coll('Supplier')),('Supplier Outstanding Balances' if owner else 'Supplier Dues',report('Accounts Payable')),('Supplier Payment History',coll('Payment Entry'))]))
-    sections.append(('Accounts & Finance','payments-expenses',r('vouchers'),money))
+    sections.append(('Customers','customers-suppliers',coll('Customer'),[('Customer Directory',coll('Customer')),('Customer Outstanding Balances' if owner else 'Customer Dues',r('customer_dues')),('Customer Payment History',coll('Payment Entry'))]))
+    sections.append(('Suppliers','buy',coll('Supplier'),[('Supplier Directory',coll('Supplier')),('Supplier Outstanding Balances' if owner else 'Supplier Dues',r('supplier_dues')),('Supplier Payment History',coll('Payment Entry'))]))
+    sections.append(('Accounts & Finance','payments-expenses',r('money_in'),money))
     sections.append(('Reports','reports',r('report_center'),reports+[('All Reports',r('report_center'))]))
     if owner:
         settings=[('Business Settings',r('setup')),('Shop Settings',r('settings')),('Payment Methods',r('setup')),('Product Settings',coll('Item')),('System Preferences',r('password')),
