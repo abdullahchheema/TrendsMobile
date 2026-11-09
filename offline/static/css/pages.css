@@ -111,3 +111,8 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 /* Typed phone details in the bulk purchase rows */
 .phone-cell{min-width:220px;display:flex;flex-direction:column;gap:var(--s1)}
 .phone-cell input,.phone-cell select{width:100%}
+
+/* Dashboard 6-month trend bars */
+.trend td{white-space:nowrap}
+.trend .bar{display:inline-block;height:8px;width:calc(var(--w) * 1.4);max-width:140px;border-radius:4px;background:var(--accent);margin-right:8px;vertical-align:middle}
+.trend .bar.alt{background:var(--ink-3)}.trend .bar.ok{background:#3fb97a}.trend .bar.neg{background:#e5655a}

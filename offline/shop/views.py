@@ -86,39 +86,19 @@ def device_print_test(request):
 
 @login_required
 def dashboard(request):
-    devices=scoped_devices(request.user).select_related('product__model','warehouse').prefetch_related('imeis')
-    branch=selected_branch(request.user,request.GET['branch']) if request.GET.get('branch') else None
-    if branch:devices=devices.filter(branch=branch)
-    all_devices=list(devices);available=[d for d in all_devices if d.status=='Available']
-    search=request.GET.get('search','').strip().lower();status=request.GET.get('status','Available')
-    rows=[d for d in all_devices if (status=='All' or d.status==status) and (not request.GET.get('model') or str(d.product.model_id)==request.GET['model'])
-        and (not request.GET.get('condition') or d.condition==request.GET['condition']) and (not request.GET.get('pta_status') or d.pta_status==request.GET['pta_status'])
-        and (not search or any(search in str(v).lower() for v in [d.code,d.product.name,d.product.storage,d.product.colour,*[i.number for i in d.imeis.all()]]))]
-    summary=dict(available=len(available),stock_value=sum((d.purchase_cost for d in available),Decimal(0)),
-        pending=sum(d.inspection_status!='Passed' for d in available),missing=sum(d.pta_status=='Not recorded' for d in available),
-        sold_today=sum(d.status=='Sold' and d.sold_on==timezone.localdate() for d in all_devices))
-    groups={}
-    for d in rows:
-        key=(d.product.model_id,d.product.storage,d.product.ram,d.product.colour)
-        if key not in groups:groups[key]=dict(model_id=d.product.model_id,name=d.product.model.name if d.product.model_id else d.product.name,storage=d.product.storage,ram=d.product.ram,colour=d.product.colour,phones=[])
-        groups[key]['phones'].append(d)
-    for g in groups.values():g['min']=min(d.asking_price for d in g['phones']);g['max']=max(d.asking_price for d in g['phones'])
-    query=request.GET.copy();query.pop('view',None)
-    insight=dict(shop=branch or selected_branch(request.user))
-    if insight['shop'] and access.costs(request.user):
-        from . import dashboard_metrics as dm
-        trend=dm.sales_trend(insight['shop'])
-        manager_view=access.statements(request.user)
-        insight.update(money=dm.finance(request.user,insight['shop']) if manager_view else None,balances=dm.balances(insight['shop']) if manager_view else [],trend=trend,
-                       low_stock=dm.low_stock(insight['shop']),chart=dm.chart_geometry(trend),recent=dm.recent(insight['shop']),week=sum((p['net'] for p in trend[-7:]),Decimal(0)))
-    overview=None
-    if access.statements(request.user):
-        from . import dashboard_metrics as dm
-        key,start,end=dm.period(request.GET);places=list(access.branches(request.user).filter(pk=branch.pk) if branch else access.branches(request.user))
-        overview=dm.overview(places,start,end);overview.update(range=key,ranges=dm.RANGES,scope=branch.name if branch else 'All shops',qs=urlencode({**({'branch':branch.pk} if branch else {}),'from_date':start.isoformat(),'to_date':end.isoformat()}))
-    device_page,pager_query=paginate(request,rows,25)
-    return render(request,'dashboard.html',dict(insight=insight,overview=overview,title='Mobile Shop',devices=device_page.object_list,page_obj=device_page,pager_query=pager_query,device_total=device_page.paginator.count,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
-        models=PhoneModel.objects.order_by('name')))
+    """Owner: every shop (or one you pick). Shop Accountant: only their own shop. Every figure comes from posted records."""
+    from . import dashboard_metrics as dm
+    owner=request.user.is_superuser
+    branch=selected_branch(request.user,request.GET.get('branch') or None) if (request.GET.get('branch') or not owner) else None
+    places=list(access.branches(request.user).filter(pk=branch.pk) if branch else access.branches(request.user))
+    overview=recent=None;low=[]
+    if access.statements(request.user) and places:
+        key,start,end=dm.period(request.GET)
+        overview=dm.snapshot(places,start,end);overview.update(range=key,ranges=dm.RANGES,scope=branch.name if branch else 'All shops',qs=urlencode({**({'branch':branch.pk} if branch else {}),'from_date':start.isoformat(),'to_date':end.isoformat()}))
+        recent=dm.recent(places)
+        for place in places:
+            for row in dm.low_stock(place):low.append(dict(row,shop=place.name))
+    return render(request,'dashboard.html',dict(overview=overview,title='Dashboard',selected_shop=branch,branch=branch,is_owner=owner,recent=recent,low_stock=low))
 
 @login_required
 def collection(request,kind):

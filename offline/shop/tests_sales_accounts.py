@@ -24,7 +24,7 @@ class LiveSalesAccounts(TestCase):
         for report in response.context['reports']:self.assertIn('branch='+str(self.branch.pk),report['url'])
     def test_workspace_exists_without_any_demo_shop(self):
         response=self.client.get(reverse('sales_accounts'));self.assertEqual(response.status_code,200);self.assertContains(response,'PKR 0.00')
-        self.assertContains(self.client.get(reverse('dashboard')),'Sales &amp; Accounts');self.assertNotContains(self.client.get(reverse('dashboard')),'Demo dataset')
+        self.assertEqual(self.client.get(reverse('dashboard')).status_code,200);self.assertNotContains(self.client.get(reverse('dashboard')),'Demo dataset')
     def test_customer_and_supplier_advances_are_shown_separately_from_dues(self):
         for party,direction in ((self.customer,'Receive'),(self.supplier,'Pay')):
             s.submit(s.new_doc('Payment Entry',self.branch,handler=self.handler,customer=party if party.kind=='Customer' else None,supplier=party if party.kind=='Supplier' else None,data=dict(direction=direction,mode='Cash',amount='500')),self.user)

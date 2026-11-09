@@ -76,4 +76,4 @@ class DashboardOverview(CreditBase):
         self.assertEqual((o['models'][0]['n'],o['models'][0]['revenue'],o['models'][0]['profit']),(1,Decimal('60000.00'),Decimal('10000.00')));self.assertEqual(o['profitable'][0]['profit'],Decimal('10000.00'))
     def test_page_renders_with_click_through_links_and_shop_selection(self):
         self.sale(60000,paid='full');page=self.get(branch=str(self.branch.pk))
-        self.assertContains(page,'Business overview');self.assertContains(page,'/query-report/Daily%20Sales');self.assertContains(page,'Net sales')
+        self.assertContains(page,'Total sales');self.assertContains(page,'/query-report/Daily%20Sales');self.assertContains(page,'Cash sales')

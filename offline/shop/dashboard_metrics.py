@@ -3,7 +3,7 @@
 Money figures reuse the same engines as Sales & Accounts (financial_reports / reports) so the dashboard and the
 reports can never disagree. Sales trend uses SQL aggregates (one query), not Python loops over documents.
 """
-from datetime import timedelta
+from datetime import date,timedelta
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db.models import Case,Count,DecimalField,F,Sum,When
@@ -58,8 +58,9 @@ def balances(branch):
     return [dict(name=name,amount=amount) for name,amount in merged.items()]
 
 
-def recent(branch,limit=6):
-    docs=list(Document.objects.filter(branch=branch,status='Submitted',kind__in=SALE_KINDS+['Purchase Invoice','Payment Entry'])
+def recent(branches,limit=6):
+    branches=branches if isinstance(branches,(list,tuple)) else [branches]
+    docs=list(Document.objects.filter(branch__in=branches,status='Submitted',kind__in=SALE_KINDS+['Purchase Invoice','Payment Entry'])
               .exclude(pk__in=_consolidated()).select_related('customer','supplier').order_by('-posting_date','-created')[:limit])
     for doc in docs:doc.party_name=(doc.customer or doc.supplier).name if (doc.customer or doc.supplier) else '—'
     return docs
@@ -118,16 +119,76 @@ def overview(shops,start,end):
     total=lambda key:sum((r[key] for r in rows),ZERO)
     income=total('Net sales');gross=total('Gross profit')
     sales=Document.objects.filter(branch__in=shops,status='Submitted',kind__in=SALE_KINDS,is_return=False,posting_date__range=[start,end]).exclude(pk__in=_consolidated())
-    mix=dict(cash=ZERO,credit=ZERO,part=ZERO,cash_n=0,credit_n=0,part_n=0)
-    for row in sales.values('total','outstanding'):
-        kind='cash' if row['outstanding']<=0 else 'credit' if row['outstanding']>=row['total'] else 'part'
-        mix[kind]+=row['total'];mix[kind+'_n']+=1
+    mix=dict(cash=ZERO,credit=ZERO,part=ZERO,cash_n=0,credit_n=0,part_n=0,cash_sales=ZERO,credit_sales=ZERO)
+    # Cash or credit is decided when the sale is made: money taken on the sale date is a cash sale, the rest is credit.
+    # Paying a credit invoice later never turns it into a cash sale.
+    sale_rows=list(sales.values('pk','total'))
+    paid=dict(Document.objects.filter(kind='Payment Entry',status='Submitted',reference__in=[r['pk'] for r in sale_rows],posting_date=F('reference__posting_date')).values_list('reference_id').annotate(t=Sum('total')))
+    for row in sale_rows:
+        at_sale=min(paid.get(row['pk'],ZERO),row['total']);kind='cash' if at_sale>=row['total'] else 'credit' if at_sale<=0 else 'part'
+        mix[kind]+=row['total'];mix[kind+'_n']+=1;mix['cash_sales']+=at_sale;mix['credit_sales']+=row['total']-at_sale
     sold=Device.objects.filter(branch__in=shops,status='Sold',sold_on__range=[start,end])
     def top(field,limit=5):
         return list(sold.values(field).annotate(n=Count('pk'),revenue=Sum('sold_price'),cost=Sum('purchase_cost')).order_by('-revenue')[:limit])
     models=[dict(name=r['product__model__name'] or r['product__name'],n=r['n'],revenue=r['revenue'] or ZERO,profit=(r['revenue'] or ZERO)-(r['cost'] or ZERO)) for r in top('product__model__name')]
     brands=[dict(name=r['product__model__brand'] or 'Other',n=r['n'],revenue=r['revenue'] or ZERO) for r in top('product__model__brand')]
     profitable=[dict(device=d,profit=d.sold_price-d.purchase_cost) for d in sorted(sold.select_related('product'),key=lambda d:d.purchase_cost-d.sold_price)[:5]]
-    compare=[dict(shop=r['Shop'],sales=r['Net sales'],gross=r['Gross profit'],margin=r['Gross margin %'],expenses=r['Expenses'],net=r['Net profit'],cash=r['Cash and bank'],owed=r['Customers owe']) for r in rows]
+    compare=[dict(shop=r['Shop'],sales=r['Net sales'],purchases=r['Purchases'],gross=r['Gross profit'],margin=r['Gross margin %'],expenses=r['Expenses'],net=r['Net profit'],cash=r['Cash and bank'],owed=r['Customers owe'],payable=r['You owe suppliers'],stock=r['Stock value']) for r in rows]
     return dict(rows=rows,compare=compare,shops=shops,start=start,end=end,income=income,purchases=total('Purchases'),gross=gross,margin=(gross*100/income).quantize(Decimal('0.1')) if income else ZERO,expenses=total('Expenses'),net=total('Net profit'),
                 stock=total('Stock value'),cash=total('Cash and bank'),receivable=total('Customers owe'),payable=total('You owe suppliers'),phones=sum(r['Phones sold'] for r in rows),mix=mix,models=models,brands=brands,profitable=profitable)
+
+
+def month_start(day):return day.replace(day=1)
+
+
+def trend(shops,months=6,today=None):
+    """Sales, purchases and profit per month for the last `months` months (oldest first), with bar widths for a simple chart."""
+    from . import report_extra
+    import calendar
+    today=today or timezone.localdate();shops=list(shops);rows=[]
+    year,month=today.year,today.month
+    spans=[]
+    for _ in range(months):
+        spans.append((year,month));month-=1
+        if month==0:year,month=year-1,12
+    for year,month in reversed(spans):
+        start=date(year,month,1);end=min(date(year,month,calendar.monthrange(year,month)[1]),today)
+        parts=report_extra.branch_comparison(shops,start,end)
+        rows.append(dict(label=start.strftime('%b %Y'),sales=sum((p['Net sales'] for p in parts),ZERO),purchases=sum((p['Purchases'] for p in parts),ZERO),profit=sum((p['Net profit'] for p in parts),ZERO)))
+    peak=max([abs(v) for r in rows for v in (r['sales'],r['purchases'],r['profit'])] or [ZERO]) or Decimal('1')
+    for r in rows:
+        for key in ('sales','purchases','profit'):r[key+'_w']=int(abs(r[key])*100/peak)
+    return rows
+
+
+def stock_counts(shops):
+    """Phones available and accessory units on hand in the given shops."""
+    from .models import Device,StockMovement
+    phones=Device.objects.filter(branch__in=shops,status='Available').count()
+    units=StockMovement.objects.filter(warehouse__branch__in=shops,product__serialized=False).aggregate(q=Sum('quantity'))['q'] or ZERO
+    return phones,units
+
+
+def pending_transfers(shops):
+    """Transfers still on their way: (incoming, outgoing) counts for the given shops."""
+    ids=[str(s.pk) for s in shops];states=['Pending','Dispatched']
+    docs=Document.objects.filter(kind='Stock Entry',state__in=states).exclude(status='Cancelled')
+    return docs.filter(data__target_branch__in=ids).count(),docs.filter(branch__in=shops).count()
+
+
+def snapshot(shops,start,end,today=None):
+    """Everything the dashboards show, for the given shops and period. Owner passes all shops; a shop passes only itself."""
+    from . import money
+    from . import report_extra
+    today=today or timezone.localdate();shops=list(shops)
+    data=overview(shops,start,end)
+    now=report_extra.branch_comparison(shops,today,today);month=report_extra.branch_comparison(shops,month_start(today),today)
+    data['today_sales']=sum((r['Net sales'] for r in now),ZERO);data['month_sales']=sum((r['Net sales'] for r in month),ZERO)
+    data['today_expenses']=sum((r['Expenses'] for r in now),ZERO);data['month_expenses']=sum((r['Expenses'] for r in month),ZERO)
+    balances=money.balances(shops)
+    data['cash_in_hand']=sum((b['amount'] for b in balances if b['kind']=='Cash'),ZERO);data['bank_total']=sum((b['amount'] for b in balances if b['kind']!='Cash'),ZERO)
+    data['accounts']=balances
+    data['stock_phones'],data['stock_units']=stock_counts(shops)
+    data['pending_in'],data['pending_out']=pending_transfers(shops)
+    data['trend']=trend(shops,6,today)
+    return data
