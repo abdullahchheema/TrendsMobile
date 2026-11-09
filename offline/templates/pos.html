@@ -1,2 +1,59 @@
-{% extends 'base.html' %}{% load static %}{% block content %}<div class="page-head"><h1>Point of Sale</h1>{% if shift %}<span>{{ shift.till.name|default:"Legacy till" }} · {{ shift.handler.name }} · Shift {{ shift.code }}</span><a href="{% url 'new' 'POS Closing Entry' %}?shift={{ shift.pk }}">End shift</a>{% else %}<a class="button primary" href="{% url 'new' 'POS Opening Entry' %}?branch={{ branch.pk }}">Start shift</a>{% endif %}</div>
-{% if shift and not shift.till_id %}<p class="notice">A manager must review and close this legacy shift before starting a till with counted opening cash.</p>{% endif %}<p><a href="{% url 'collection' 'POS Opening Entry' %}">Shift history</a> · <a href="{% url 'collection' 'POS Closing Entry' %}">Till closings</a></p>{% include 'till_reconciliation.html' %}<form method="get" class="search-bar"><label>Shop<select name="branch">{% for place in shops %}<option value="{{ place.pk }}" {% if place.pk == branch.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select></label><button>Load POS</button></form><p data-server-status class="notice" role="status" aria-live="polite">Checking the local server…</p><button type="button" data-check-server>Check connection</button><div id="pos" data-shift-open="{% if shift and shift.till_id %}true{% else %}false{% endif %}" data-endpoint="{% url 'pos_checkout' %}" data-branch="{{ branch.pk }}" data-request-key="{{ request_key }}"><div class="pos-grid"><section><input type="search" id="pos-search" placeholder="Search phone model, stock reference or accessory" aria-label="Find an item"><div class="search-bar" style="margin-top:8px"><select id="pos-brand" aria-label="Brand"><option value="">All brands</option></select><select id="pos-condition" aria-label="Condition"><option value="">Any condition</option><option>Excellent</option><option>Very Good</option><option>Good</option><option>Fair</option><option>For Parts</option></select><input id="pos-max" type="number" min="0" step="1000" placeholder="Max price" aria-label="Maximum price" style="max-width:150px"></div><div id="pos-products" class="pos-products"></div></section><section class="panel"><h2>Current sale</h2><form id="pos-cart">{% csrf_token %}<label for="pos-customer-name">Customer name<input id="pos-customer-name" name="customer_name" type="text" maxlength="180" required autocomplete="off" list="pos-customer-suggestions" placeholder="Type customer name"></label><datalist id="pos-customer-suggestions">{% for p in customers %}<option value="{{ p.name }}"></option>{% endfor %}</datalist><p class="muted">Type a new name to add a customer, or an existing name to reuse their account.</p><input type="hidden" name="seller" value="{{ me.pk }}"><div id="cart-items"></div><fieldset class="form-section"><legend>Invoice pricing</legend><label>Discount type<select name="discount_type"><option value="amount">PKR amount</option><option value="percent">Percentage</option></select></label><label>Invoice discount<input name="discount_value" type="number" min="0" step="0.01" value="0" required></label><details class="easy-extra"><summary>Credit terms (if the customer pays later)</summary><label>Pays the balance by<input name="credit_due" type="date"></label><label>Monthly instalments (0 = one payment)<input name="credit_instalments" type="number" min="0" max="24" value="0"></label></details><details class="easy-extra"><summary>Manager override (discount above your limit or price below minimum)</summary><label>Manager code<input name="override_approver" autocomplete="off"></label><label>Manager PIN<input name="override_pin" type="password" inputmode="numeric" autocomplete="new-password"></label></details><label>Sales tax<select name="tax_rule"><option value="">No tax added</option>{% for rule in tax_rules %}<option value="{{ rule.id }}">{{ rule.name }} · {{ rule.rate }}%</option>{% endfor %}</select></label><p class="muted">Discount is applied before tax.</p><p id="cart-breakdown" aria-live="polite"></p></fieldset><h2 id="cart-total">PKR 0.00</h2><input type="hidden" name="handler" value="{{ me.pk }}">{% include 'payment_rows.html' %}<p id="pos-error" class="error" role="alert"></p><button class="primary" {% if not shift or not shift.till_id %}disabled{% endif %}>Complete sale</button></form></section></div></div>{{ items|json_script:'pos-data' }}{{ tax_rules|json_script:'pos-tax-rules' }}{% endblock %}{% block scripts %}<script src="{% static 'connection.js' %}" defer></script><script src="{% static 'pricing.js' %}" defer></script><script src="{% static 'pos.js' %}" defer></script>{% endblock %}
+{% extends 'base.html' %}{% load static %}{% block content %}
+<div class="page-head"><div><h1>New Sale</h1><p>{{ branch.name }} · all prices in PKR</p></div>
+  <div class="actions" style="margin:0">{% if shops|length > 1 %}<form method="get" class="search-bar" style="margin:0"><select name="branch" aria-label="Shop">{% for place in shops %}<option value="{{ place.pk }}" {% if place.pk == branch.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select><button>Switch shop</button></form>{% endif %}
+  <span class="pos-status" data-server-status role="status" aria-live="polite">Checking connection…</span><button type="button" data-check-server hidden>Check connection</button></div></div>
+{% if stale_shift %}<p class="notice">You have an old till shift still open. <a href="{% url 'new' 'POS Closing Entry' %}?shift={{ shift.pk }}">Close it</a> before selling today.</p>{% endif %}
+<div id="pos" data-endpoint="{% url 'pos_checkout' %}" data-branch="{{ branch.pk }}" data-request-key="{{ request_key }}" data-shop="{{ branch.name }}" data-add-device="{{ add_device }}">
+<div class="pos-terminal">
+  <section class="pos-catalog panel" aria-label="Phones and products">
+    <div class="pos-filters">
+      <input type="search" id="pos-search" placeholder="Scan an IMEI or type a model, brand or storage…" aria-label="Find an item" autocomplete="off" autofocus>
+      <div class="pos-filter-row">
+        <select id="pos-brand" aria-label="Brand"><option value="">All brands</option></select>
+        <select id="pos-model" aria-label="Model"><option value="">All models</option></select>
+        <select id="pos-storage" aria-label="Storage"><option value="">Any storage</option></select>
+        <select id="pos-condition" aria-label="Condition"><option value="">Any condition</option><option>Excellent</option><option>Very Good</option><option>Good</option><option>Fair</option><option>For Parts</option></select>
+        <input id="pos-max" type="number" min="0" step="1000" placeholder="Max price" aria-label="Maximum price">
+      </div>
+      <p class="muted" id="pos-count" aria-live="polite"></p>
+    </div>
+    <div id="pos-products" class="pos-products pos-cards"></div>
+  </section>
+
+  <aside class="pos-order panel" aria-label="Current order">
+    <h2 style="margin-top:0">Current order</h2>
+    <form id="pos-cart">{% csrf_token %}
+      <div class="pos-customer">
+        <label for="pos-customer-name">Customer<input id="pos-customer-name" name="customer_name" type="text" maxlength="180" required autocomplete="off" list="pos-customer-suggestions" placeholder="Type a name or pick a customer" value="{{ prefill }}"></label>
+        <label for="pos-customer-phone">Phone<input id="pos-customer-phone" name="customer_phone" type="tel" maxlength="40" autocomplete="off" placeholder="0300 1234567"></label>
+      </div>
+      <datalist id="pos-customer-suggestions"></datalist>
+      <input type="hidden" name="seller" value="{{ me.pk }}"><input type="hidden" name="handler" value="{{ me.pk }}">
+      <div id="cart-items" class="pos-cart"></div>
+      <p class="muted pos-empty" id="pos-empty">Tap a phone on the left, or scan its IMEI, to add it.</p>
+      <details class="easy-extra"><summary>Discount, tax and credit terms</summary>
+        <label>Discount type<select name="discount_type"><option value="amount">PKR amount</option><option value="percent">Percentage</option></select></label>
+        <label>Discount<input name="discount_value" type="number" min="0" step="0.01" value="0" required></label>
+        <label>Sales tax<select name="tax_rule"><option value="">No tax added</option>{% for rule in tax_rules %}<option value="{{ rule.id }}">{{ rule.name }} · {{ rule.rate }}%</option>{% endfor %}</select></label>
+        <label>Pays the balance by<input name="credit_due" type="date"></label>
+        <label>Monthly instalments (0 = one payment)<input name="credit_instalments" type="number" min="0" max="24" value="0"></label>
+        <label>Manager code<input name="override_approver" autocomplete="off"></label><label>Manager PIN<input name="override_pin" type="password" inputmode="numeric" autocomplete="new-password"></label>
+      </details>
+      <div class="pos-totals">
+        <p id="cart-breakdown" aria-live="polite" class="muted"></p>
+        <div class="pos-total-row"><span>Total payable</span><strong id="cart-total">PKR 0.00</strong></div>
+        <div class="pos-total-row"><span>Received</span><strong id="pos-received">PKR 0.00</strong></div>
+        <div class="pos-total-row remaining"><span>Remaining balance</span><strong id="pos-remaining">PKR 0.00</strong></div>
+      </div>
+      {% include 'payment_rows.html' %}
+      <p id="pos-error" class="error" role="alert"></p>
+      <button class="primary pos-complete" type="submit">Complete sale</button>
+    </form>
+    <div id="pos-done" class="pos-done" hidden>
+      <h2 style="margin-top:0">Sale complete</h2><p id="pos-done-text"></p>
+      <div class="actions"><a class="button primary" id="pos-print" href="#" target="_blank" rel="noopener">Print receipt</a><a class="button" id="pos-share" href="#" target="_blank" rel="noopener">Share on WhatsApp</a><a class="button" id="pos-view" href="#">View sale</a><a class="button" href="{% url 'pos' %}?branch={{ branch.pk }}">New sale</a></div>
+    </div>
+  </aside>
+</div></div>
+{{ items|json_script:'pos-data' }}{{ tax_rules|json_script:'pos-tax-rules' }}{{ customers|json_script:'pos-customers' }}
+{% endblock %}{% block scripts %}<script src="{% static 'connection.js' %}" defer></script><script src="{% static 'pricing.js' %}" defer></script><script src="{% static 'pos.js' %}" defer></script>{% endblock %}

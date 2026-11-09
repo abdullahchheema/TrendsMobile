@@ -22,6 +22,9 @@ def entry(request,kind):
     branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not branch:return redirect('setup')
     access.require(request.user,branch,'can_sell' if kind=='sale' else 'can_buy')
+    if kind=='sale' and request.method=='GET':       # selling now happens in the one POS screen
+        from django.urls import reverse
+        return redirect(reverse('pos')+'?'+('branch='+str(branch.pk))+('&phone='+request.GET['phone'] if request.GET.get('phone') else ''))
     phone=None
     if kind=='sale' and request.GET.get('phone') and not request.GET.get('branch') and request.method!='POST':
         phone=get_object_or_404(scoped_devices(request.user),pk=request.GET['phone'],status='Available');branch=phone.branch

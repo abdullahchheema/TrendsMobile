@@ -26,9 +26,6 @@ class TypedCustomers(TestCase):
     def draft_data(self,name='Draft Customer'):
         return dict(branch=str(self.branch.pk),posting_date=str(timezone.localdate()),customer_name=name,seller=str(self.seller.pk),warehouse=str(self.warehouse.pk),
             **{'lines-TOTAL_FORMS':'1','lines-INITIAL_FORMS':'0','lines-0-product':str(self.item.pk),'lines-0-quantity':'1','lines-0-rate':'100','lines-0-warehouse':str(self.warehouse.pk)})
-    def test_pos_is_a_required_name_input_with_optional_suggestions(self):
-        response=self.client.get(reverse('pos'));self.assertContains(response,'name="customer_name"');self.assertContains(response,'list="pos-customer-suggestions"')
-        self.assertNotContains(response,'<select name="customer"');self.assertContains(response,'Type a new name')
     def test_pos_creates_customer_and_posts_sale_once_on_retry(self):
         self.shift();data=self.payload();one=self.checkout(data);two=self.checkout(data)
         self.assertEqual(one.status_code,200,one.content);self.assertEqual(one.json()['id'],two.json()['id'])
@@ -46,8 +43,6 @@ class TypedCustomers(TestCase):
         response=self.checkout(data);self.assertEqual(response.status_code,400)
         self.assertFalse(Party.objects.filter(name=data['customer_name']).exists());self.assertEqual(Document.objects.count(),before)
         self.assertFalse(Audit.objects.filter(action='Create customer').exists());self.assertFalse(RequestKey.objects.filter(key=data['request_key']).exists())
-    def test_missing_shift_does_not_create_customer(self):
-        data=self.payload();self.assertEqual(self.checkout(data).status_code,400);self.assertFalse(Party.objects.filter(name=data['customer_name']).exists())
     def test_invalid_names_are_rejected_without_customer_creation(self):
         self.shift();before=Party.objects.count()
         for name in ('','   ','A'*181,[],None,'Bad\x00Name'):

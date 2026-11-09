@@ -1,5 +1,7 @@
-{% if doc.status == 'Submitted' and can_checkout %}<details class="panel"><summary>Return phones or accessories</summary>
+{% if doc.status == 'Submitted' and can_checkout %}<details class="panel"><summary>Return, refund or exchange</summary>
+<div class="actions" style="margin:0 0 var(--s3)"><a class="button" href="{% url 'exchange' %}?branch={{ doc.branch_id }}&amp;customer={{ doc.customer.name|urlencode }}">Exchange for another phone</a><a class="button" href="{% url 'pos' %}?branch={{ doc.branch_id }}&amp;customer={{ doc.customer.name|urlencode }}">Sell a replacement to this customer</a></div>
 {% if return_warning %}<p class="notice">{{ return_warning }}</p>{% else %}
+<p><button type="button" data-select-returns>Select every phone on this invoice</button></p>
 <p>Select the exact invoice lines and quantities received back. Original prices and stock costs are preserved. Saving creates a draft; submitting it records the stock return and credit note. Refunds are recorded separately.</p>
 <form method="post" action="{% url 'action' doc.pk 'return' %}" data-return-form>{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}">
 <div class="table-scroll"><table><thead><tr><th>Original item / phone</th><th>Sold</th><th>Returned</th><th>Remaining</th><th>Return quantity</th><th>Original unit price PKR</th></tr></thead><tbody>

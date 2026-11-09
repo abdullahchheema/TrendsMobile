@@ -132,6 +132,7 @@ def exchange(request):
     access.require(request.user,branch,'can_sell')
     if not access.manager(request.user):raise PermissionDenied('A manager must value and approve a phone exchange.')
     form=ExchangeForm(request.POST or None,user=request.user,branch=branch)
+    if request.method=='GET' and request.GET.get('customer'):form.fields['party_name'].initial=request.GET['customer'][:180]
     incoming_error=None;posted=request.POST
     if request.method=='POST':
         try:

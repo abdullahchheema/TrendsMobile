@@ -69,8 +69,8 @@ class CustomersAreSeparatePerShop(Base):
         got=customer_names.resolve('Legacy Larry',self.a,branch=self.branch);self.assertEqual(got.pk,legacy.pk);legacy.refresh_from_db();self.assertEqual(legacy.branch_id,self.branch.pk)
         other=customer_names.resolve('Legacy Larry',self.b,branch=self.other);self.assertNotEqual(other.pk,legacy.pk)
     def test_pos_and_forms_suggest_only_this_shops_customers(self):
-        self.login(self.a);names=[p.name for p in self.client.get(reverse('pos')).context['customers']];self.assertIn('Alice Customer',names);self.assertNotIn('Bilal Customer',names)
-        page=self.client.get(reverse('easy_entry',args=['sale'])).content.decode();self.assertIn('Alice Customer',page);self.assertNotIn('Bilal Customer',page)
+        self.login(self.a);names=[p['name'] for p in self.client.get(reverse('pos')).context['customers']];self.assertIn('Alice Customer',names);self.assertNotIn('Bilal Customer',names)
+        page=self.client.get(reverse('pos')).content.decode();self.assertIn('Alice Customer',page);self.assertNotIn('Bilal Customer',page)
     def test_credit_limit_only_counts_this_shops_debt(self):
         from . import credit
         self.assertEqual(credit.customer_balance(self.cust_a),0)

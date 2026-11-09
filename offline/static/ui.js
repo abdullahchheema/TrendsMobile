@@ -84,3 +84,6 @@
     });
   }
 })();
+
+/* Sale detail: tick every returnable phone for a full return */
+document.addEventListener('click',function(e){var b=e.target.closest('[data-select-returns]');if(!b)return;var f=b.closest('form');if(!f)return;f.querySelectorAll('input[type=checkbox][name=devices]').forEach(function(c){c.checked=true});f.querySelectorAll('input[name^=return_qty_]').forEach(function(i){i.value=i.max||i.value})});

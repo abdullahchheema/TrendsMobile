@@ -567,13 +567,15 @@ def pos(request):
         imeis=[i.number for i in d.imeis.all()]
         items.append(dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),code=d.code,
             name=d.product.name,rate=str(d.asking_price),stock=1,pta_status=d.pta_status,barcode=' '.join([d.code]+imeis),barcodes=[d.code]+imeis,imeis=imeis,warehouse_name=d.warehouse.name,serialized=True,
-            brand=(d.product.model.brand if d.product.model_id else d.product.brand) or '',storage=d.product.storage,colour=d.product.colour,condition=d.condition,grade=d.grade))
+            model=(d.product.model.name if d.product.model_id else d.product.name),brand=(d.product.model.brand if d.product.model_id else d.product.brand) or '',storage=d.product.storage,colour=d.product.colour,condition=d.condition,grade=d.grade))
     for p in Product.objects.filter(enabled=True,serialized=False):
-        for warehouse in Warehouse.objects.filter(branch=branch,enabled=True):
+        for warehouse in [shopdefaults.warehouse(branch)]:
             qty,_=services.on_hand(p,warehouse)
             if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,warehouse_name=warehouse.name,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False))
     shift=services.active_shift(branch,request.user)
-    return render(request,'pos.html',dict(title='Point of Sale',items=items,customers=access.parties_for(branch,'Customer').filter(enabled=True),
+    customers=[dict(name=p.name,phone=p.phone) for p in access.parties_for(branch,'Customer').filter(enabled=True).order_by('name')[:2000]]
+    stale_shift=bool(shift and shift.posting_date!=timezone.localdate())
+    return render(request,'pos.html',dict(title='New Sale',items=items,customers=customers,stale_shift=stale_shift,prefill=request.GET.get('customer',''),add_device=request.GET.get('phone',''),
         me=shopdefaults.person(request.user,branch),cash_modes=services.cash_modes(branch),
         branch=branch,methods=configuration.payment_methods,request_key=uuid.uuid4(),tax_rules=pricing.rules(branch),
         shift=shift,reconciliation=services.till_balance(shift) if shift else None))
@@ -586,10 +588,14 @@ def pos_checkout(request):
         access.require(request.user,branch,'can_sell')
         def perform():
             Branch.objects.select_for_update(no_key=True).get(pk=branch.pk)
-            if not Document.objects.filter(branch=branch,kind='POS Opening Entry',status='Submitted',state='Open',posted_by=request.user).exists():raise ValidationError('Start your POS shift first.')
+            shift=services.active_shift(branch,request.user)
+            if shift and shift.posting_date!=timezone.localdate():raise ValidationError('Close your earlier till shift before selling today.')
             customer=customer_names.resolve(data['customer_name'],request.user,demo_batch=branch.demo_batch,branch=branch) if 'customer_name' in data else access.parties_for(branch,'Customer').get(pk=data['customer'],enabled=True)
+            phone=' '.join(str(data.get('customer_phone') or '').split())
+            if phone and not customer.phone:
+                customer.phone=phone;customer.clean();customer.save(update_fields=['phone','modified'])
             seller=Staff.objects.get(pk=data['seller']);handler=Staff.objects.get(pk=data['handler']) if data.get('handler') else None
-            doc=services.new_doc('POS Invoice',branch,customer=customer,seller=seller)
+            doc=services.new_doc('POS Invoice' if shift and shift.till_id else 'Sales Invoice',branch,customer=customer,seller=seller)
             adjustments=data.get('adjustments',{})
             if not isinstance(adjustments,dict):raise ValidationError('Invalid invoice adjustment values.')
             pricing.inputs(doc,adjustments.get('discount_type','amount'),adjustments.get('discount_value','0'),adjustments.get('tax_rule',''),adjustments.get('tax_version',''))
@@ -615,7 +621,7 @@ def pos_checkout(request):
                 credit.plan(sale,request.user,terms.get('instalments') or 0,_date.fromisoformat(terms['due_date']))
             return sale
         result=services.once(uuid.UUID(data['request_key']),request.user,data,perform)
-        return JsonResponse(dict(id=str(result.pk),url=reverse('detail',args=[result.pk]),receipt=reverse('receipt',args=[result.pk])))
+        return JsonResponse(dict(id=str(result.pk),code=result.code,total=str(result.total),outstanding=str(result.outstanding),shop=result.branch.name,url=reverse('detail',args=[result.pk]),receipt=reverse('receipt',args=[result.pk])))
     except (ValidationError,IntegrityError,ValueError,KeyError,TypeError,AttributeError,ObjectDoesNotExist) as error:  # ValueError covers malformed JSON
         return JsonResponse({'error':'Invalid checkout request.' if isinstance(error,(TypeError,AttributeError)) else error_text(error)},status=400)
 

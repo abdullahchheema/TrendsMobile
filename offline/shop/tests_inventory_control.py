@@ -43,7 +43,7 @@ class ImeiOnPurchase(Base):
         self.assertContains(page,'cannot be bought twice')
     def test_sale_screen_lists_the_imei_and_search_finds_it(self):
         number=imei(10);self.buy(number)
-        page=self.client.get(reverse('easy_entry',args=['sale']));self.assertContains(page,'IMEI '+number)
+        items=self.client.get(reverse('pos')).context['items'];self.assertTrue(any(number in i.get('imeis',[]) for i in items))
 
 
 class CancelledReceiptFreesImei(Base):

@@ -58,7 +58,3 @@ class BelowMinimum(OverrideBase):
     def test_a_wrong_pin_blocks_the_sale_and_leaves_stock_untouched(self):
         with self.assertRaises(ValidationError):easy_retail.sale(self.sale_data(override_approver='BOSS-OVR',override_pin='9999'),self.clerk_user)
         self.phone.refresh_from_db();self.assertEqual(self.phone.status,'Available')
-    def test_the_sale_form_shows_the_override_fields_for_sales_only(self):
-        self.client.force_login(self.clerk_user)
-        self.assertContains(self.client.get(reverse('easy_entry',args=['sale'])),'Manager PIN')
-        self.client.force_login(self.user);self.assertNotContains(self.client.get(reverse('easy_entry',args=['purchase'])),'Manager PIN')
