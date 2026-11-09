@@ -8,7 +8,7 @@
   try{const response=await fetch('/health/',{cache:'no-store',redirect:'error',signal:controller.signal});online=response.ok&&(await response.json()).status==='ok';}catch{}finally{clearTimeout(timeout);}
   if(ticket!==sequence)return;
   reachable=online;status.dataset.reachable=String(online);
-  status.textContent=online?'Local server reachable · '+Math.round(performance.now()-started)+' ms':'Local server unavailable. Check the LAN and server; keep this page open.';
+  status.textContent=online?'Server reachable · '+Math.round(performance.now()-started)+' ms':'Server unreachable. Check the internet connection; keep this page open.';
   status.classList.toggle('error',!online);
   document.dispatchEvent(new CustomEvent('covison-server-status',{detail:{reachable:online}}));
  }

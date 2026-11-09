@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070a14">
+<meta name="theme-color" content="#0b0c0f">
 <title>Sign in · Covison ERP</title>
 <link rel="icon" href="{% static 'covison-logo-mark.png' %}" type="image/png">
-<link rel="stylesheet" href="{% static 'offline.css' %}">
-<link rel="stylesheet" href="{% static 'glass.css' %}">
+<link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'css/base.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages.css' %}">
 </head>
 <body class="login">
 <main>
   <div class="login-brand"><img src="{% static 'covison-logo-mark.png' %}" alt=""><div><h1>Covison ERP</h1><p style="margin:2px 0 0">Sign in to your shop</p></div></div>
   <form method="post">{% csrf_token %}{{ form.as_p }}<input type="hidden" name="next" value="{{ next }}"><button class="primary">Sign in</button></form>
-  <p class="muted">Your shop server must be running. Internet is not required.</p>
   <p class="tagline">Designed &amp; developed by <a href="https://covison.com" rel="noopener">covison.com</a></p>
 </main>
 </body>

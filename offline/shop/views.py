@@ -29,6 +29,13 @@ from .journal_forms import JournalForm,JournalRows
 from .setup_forms import CreateShopForm,PostingAccountsForm,PaymentMethods,payment_mapping,StaffSetupForm,AccountSetupForm
 
 def error_text(error):return '; '.join(error.messages) if isinstance(error,ValidationError) else str(error)
+def paginate(request,rows,per_page=50):
+    """Page a list/queryset. Returns (page_obj, query string for the pager links without 'page')."""
+    from django.core.paginator import Paginator
+    page=Paginator(rows,per_page).get_page(request.GET.get('page'))
+    query=request.GET.copy();query.pop('page',None)
+    return page,(query.urlencode()+'&' if query else '')
+
 def scoped(user):
     places=access.branches(user)
     query=Q(branch__in=places)
@@ -100,7 +107,8 @@ def dashboard(request):
         manager_view=access.statements(request.user)
         insight.update(money=dm.finance(request.user,insight['shop']) if manager_view else None,balances=dm.balances(insight['shop']) if manager_view else [],trend=trend,
                        chart=dm.chart_geometry(trend),recent=dm.recent(insight['shop']),week=sum((p['net'] for p in trend[-7:]),Decimal(0)))
-    return render(request,'dashboard.html',dict(insight=insight,title='Mobile Shop',devices=rows,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
+    device_page,pager_query=paginate(request,rows,25)
+    return render(request,'dashboard.html',dict(insight=insight,title='Mobile Shop',devices=device_page.object_list,page_obj=device_page,pager_query=pager_query,device_total=device_page.paginator.count,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
         models=PhoneModel.objects.order_by('name')))
 
 @login_required
@@ -132,7 +140,8 @@ def collection(request,kind):
     else:raise Http404
     query=request.GET.get('search','').lower()
     if query:rows=[r for r in rows if any(query in str(value).lower() for value in r.values())]
-    return render(request,'list.html',dict(title=kind,kind=kind,rows=rows))
+    page,pager_query=paginate(request,rows)
+    return render(request,'list.html',dict(title=kind,kind=kind,rows=page.object_list,page_obj=page,pager_query=pager_query))
 
 @login_required
 def master_edit(request,kind,pk=None):

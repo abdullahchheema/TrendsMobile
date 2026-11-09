@@ -1,0 +1,60 @@
+/* Reusable components: toast, dialog, command palette, pagination, stat card, chart, filters. */
+
+/* toast */
+.toast-region{position:fixed;right:var(--s4);bottom:calc(var(--foot-h) + var(--s5));z-index:var(--z-toast);display:flex;flex-direction:column;gap:var(--s2);width:min(380px,calc(100vw - 32px));pointer-events:none}
+.toast{pointer-events:auto;display:flex;align-items:flex-start;gap:var(--s3);padding:var(--s3) var(--s4);background:var(--surface-2);border:1px solid var(--line-2);border-left:3px solid var(--ok);border-radius:var(--r-md);box-shadow:var(--shadow-3);animation:toast-in .25s var(--ease-out)}
+.toast.error{border-left-color:var(--bad)}.toast.warning{border-left-color:var(--warn)}.toast.info{border-left-color:var(--info)}
+.toast p{margin:0;flex:1;font-size:13px}.toast button{padding:2px 8px;background:transparent;border:0;color:var(--ink-3)}
+.toast.is-leaving{opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s}
+@keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* dialog (modal / confirm) */
+dialog{border:1px solid var(--line-2);border-radius:var(--r-lg);background:var(--surface);color:var(--ink);padding:0;box-shadow:var(--shadow-3);max-width:min(520px,calc(100vw - 32px));width:100%}
+dialog::backdrop{background:rgba(5,6,9,.66);backdrop-filter:blur(3px)}
+dialog[open]{animation:dialog-in .2s var(--ease-out)}
+@keyframes dialog-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.dialog-body{padding:var(--s5)}.dialog-body h2{margin:0 0 var(--s2);font-size:17px}.dialog-body p{color:var(--ink-2)}
+.dialog-actions{display:flex;justify-content:flex-end;gap:var(--s2);padding:var(--s3) var(--s5);border-top:1px solid var(--line);background:var(--bg-2);border-radius:0 0 var(--r-lg) var(--r-lg)}
+
+/* command palette (global search) */
+#palette{max-width:min(640px,calc(100vw - 24px));margin-top:12vh;overflow:hidden}
+.palette-input{width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;padding:var(--s4) var(--s5);font-size:16px}
+.palette-input:focus{box-shadow:none;border-color:var(--line-2)}
+.palette-list{list-style:none;margin:0;padding:var(--s2);max-height:50vh;overflow:auto}
+.palette-list li{display:flex;align-items:center;gap:var(--s3);padding:10px var(--s3);border-radius:var(--r-sm);cursor:pointer}
+.palette-list li[aria-selected=true]{background:var(--accent-soft)}
+.palette-list .kind{flex:none;width:76px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.palette-list .label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.palette-list .hint{color:var(--ink-3);font-size:12px}
+.palette-empty{padding:var(--s5);color:var(--ink-3);text-align:center}
+.palette-foot{display:flex;gap:var(--s4);padding:var(--s2) var(--s4);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-3)}
+
+/* pagination */
+.pager{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) 0;color:var(--ink-3);font-size:13px}
+.pager nav{display:flex;gap:var(--s1)}.pager a,.pager span.current{padding:6px 12px;border-radius:var(--r-sm);border:1px solid var(--line-2);color:var(--ink-2)}
+.pager a:hover{background:var(--glass-2);text-decoration:none}.pager span.current{background:var(--accent-soft);color:var(--ink);border-color:transparent}.pager .off{opacity:.4}
+
+/* glass card used by the dashboard */
+.cov-stat,.cov-hero,.cov-inventory,.cov-model-card,.cov-kpi,.easy-extra,.report-cards .panel{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.025));border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--glass-edge),var(--shadow-1);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur)}
+@supports not (backdrop-filter:blur(1px)){.cov-stat,.cov-hero,.cov-inventory,.cov-model-card,.cov-kpi,.app-footer,.sidebar,.app-header{background:var(--surface)}}
+.cov-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s4);margin:var(--s4) 0}
+.cov-stat{padding:var(--s4) var(--s5);min-height:112px}
+.cov-stat>div{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:var(--s2)}
+.cov-stat>strong{display:block;font-family:var(--font-display);font-weight:500;font-size:28px;letter-spacing:-.02em;margin:var(--s2) 0 var(--s1)}
+.cov-stat small{margin:0}
+.cov-stat a.stat-link{position:absolute;inset:0;border-radius:inherit}.cov-stat:has(a.stat-link):hover{border-color:var(--line-3)}
+.cov-stat-dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}.cov-dot-1{background:var(--info)}.cov-dot-2{background:var(--warn)}.cov-dot-3{background:var(--accent-text)}
+.cov-eyebrow{font-size:11px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+
+/* chart */
+.cov-wave{display:block;width:100%;height:200px;margin-top:var(--s3);overflow:visible}
+.cov-wave .wline{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.2s var(--ease) .3s both}
+.cov-wave .wclip{transform-box:fill-box;transform-origin:0 50%;animation:wipe 1.1s var(--ease) .45s both}
+@keyframes draw{to{stroke-dashoffset:0}}@keyframes wipe{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.cov-days{list-style:none;margin:var(--s2) 0 0;padding:0;display:grid;grid-template-columns:repeat(14,1fr);gap:2px;text-align:center}
+.cov-days li{font-size:11px;color:var(--ink-3)}.cov-days b{display:block;font-weight:500}.cov-days span{display:block;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.cov-days li.on,.cov-days li.on span{color:var(--ink);font-weight:600}
+.chart-table summary{cursor:pointer;color:var(--ink-3);font-size:12px;margin-top:var(--s2)}
+@media(prefers-reduced-motion:reduce){.cov-wave .wline{stroke-dashoffset:0!important}.cov-wave .wclip{transform:none!important}}
+
+@media(max-width:1100px){.cov-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.cov-stats{gap:var(--s2)}.cov-stat{padding:var(--s3)}.cov-stat>strong{font-size:22px}.cov-days{grid-template-columns:repeat(7,1fr)}.cov-days li:nth-child(-n+7){display:none}.toast-region{right:var(--s2);left:var(--s2);width:auto}}

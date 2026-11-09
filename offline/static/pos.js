@@ -60,7 +60,7 @@
  window.addEventListener('beforeunload',event=>{if(pending){event.preventDefault();event.returnValue='';}});
  form.addEventListener('submit',async event=>{
   event.preventDefault();if(sending)return;
-  if(window.covisonConnection?.reachable!==true){error.textContent='Reconnect to the local server before posting.';return;}
+  if(window.covisonConnection?.reachable!==true){error.textContent='Reconnect to the server before posting.';return;}
   if(!hasShift){error.textContent='Start your POS shift first.';return;}
   if(!pending){
    if(!cart.length){error.textContent='Select at least one item.';return;}

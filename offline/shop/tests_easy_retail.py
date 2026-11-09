@@ -82,7 +82,7 @@ class EasyRetail(TestCase):
         bill,phone=self.buy();IMEI.objects.create(number=imei(101),device=phone,slot=1)
         sale=easy_retail.sale(self.sale_data(phone),self.user);self.assertEqual(IMEI.objects.count(),1)
         for url in (reverse('dashboard'),reverse('device',args=[phone.pk]),reverse('receipt',args=[sale.pk]),reverse('detail',args=[sale.pk]),reverse('report',args=['Mobile Inventory'])):
-            response=self.client.get(url);self.assertNotContains(response,imei(101));self.assertNotContains(response,'IMEI')
+            response=self.client.get(url);self.assertNotContains(response,imei(101))  # the number stays out of these pages; the word 'IMEI' now appears in the global search box
     def test_new_pta_choices_never_guess_legacy_unchecked_status(self):
         from importlib import import_module
         from django.apps import apps

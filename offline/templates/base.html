@@ -3,17 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#070a14">
+<meta name="theme-color" content="#0b0c0f">
 <title>{{ title }} · Covison ERP</title>
 <link rel="icon" href="{% static 'covison-logo-mark.png' %}" type="image/png">
 <link rel="preload" href="{% static 'fonts/inter-var.woff2' %}" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="{% static 'covison.css' %}">
-<link rel="stylesheet" href="{% static 'offline.css' %}">
-<link rel="stylesheet" href="{% static 'glass.css' %}">
+<link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'css/base.css' %}">
+<link rel="stylesheet" href="{% static 'css/layout.css' %}">
+<link rel="stylesheet" href="{% static 'css/components.css' %}">
+<link rel="stylesheet" href="{% static 'css/pages.css' %}">
 <script>try{if(sessionStorage.getItem('cov-shell'))document.documentElement.classList.add('shell-seen');else sessionStorage.setItem('cov-shell','1')}catch(e){}</script>
 <script type="speculationrules">{"prefetch":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/logout/*"}},{"not":{"selector_matches":"[data-no-prefetch]"}}]},"eagerness":"moderate"}]}</script>
 </head>
 <body class="app">
+<a class="skip-link" href="#content">Skip to content</a>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
 <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
 <symbol id="i-phones" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
@@ -33,11 +36,12 @@
 </defs></svg>
 {% firstof branch.pk request.GET.branch as qs %}
 <header class="app-header">
-  <button class="sidebar-toggle" type="button" data-menu-toggle aria-controls="main-navigation" aria-expanded="false" aria-label="Open menu"><svg class="ico" width="20" height="20" style="stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round"><use href="#i-menu"/></svg></button>
+  <button class="sidebar-toggle" type="button" data-menu-toggle aria-controls="main-navigation" aria-expanded="false" aria-label="Open menu"><svg class="ico" width="20" height="20"><use href="#i-menu"/></svg></button>
   <div class="welcome"><span>Welcome</span><strong>{{ user.get_full_name|default:user.get_username }}</strong></div>
   <div class="header-end">
+    <button type="button" class="header-search" data-open-search aria-label="Search phones, customers and documents"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Search IMEI, customer, invoice…</span><kbd>Ctrl K</kbd></button>
     <span class="tag">Pakistan · PKR</span>
-    <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button aria-label="Sign out"><svg class="ico" width="17" height="17" style="stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><use href="#i-out"/></svg>Sign out</button></form>
+    <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button aria-label="Sign out"><svg class="ico" width="17" height="17"><use href="#i-out"/></svg>Sign out</button></form>
   </div>
 </header>
 <aside id="main-navigation" class="sidebar" aria-label="Main navigation">
@@ -65,11 +69,14 @@
     <a href="{% url 'device_check' %}">PC, scanner &amp; printer check</a><a href="{% url 'password' %}">Change password</a>
   </details>
 </aside>
-<main class="app-main" id="content">{% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
+<main class="app-main" id="content" tabindex="-1">{% block content %}{% endblock %}</main>
 <footer class="app-footer" role="contentinfo">
   <div class="foot-credit"><img src="{% static 'covison-logo-mark.png' %}" alt="" width="22" height="22"><span>Designed &amp; developed by <a href="https://covison.com" rel="noopener">covison.com</a></span></div>
   <span class="foot-rule" aria-hidden="true"></span>
   <div class="foot-owner">This ERP is the property of <strong>{{ owner_company|default:"the business that operates it" }}</strong> &middot; &copy; {% now "Y" %} All rights reserved</div>
 </footer>
-<script src="{% static 'offline.js' %}" defer></script><script src="{% static 'payments.js' %}" defer></script><script src="{% static 'shell.js' %}" defer></script>{% block scripts %}{% endblock %}
+<div class="toast-region" aria-live="polite" aria-atomic="false">{% for message in messages %}<div class="toast {{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}"><p>{{ message }}</p><button type="button" aria-label="Dismiss">&#10005;</button></div>{% endfor %}</div>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title"><div class="dialog-body"><h2 id="confirm-title">Please confirm</h2><p data-confirm-message></p></div><div class="dialog-actions"><button type="button" data-confirm-cancel>Go back</button><button type="button" class="primary" data-confirm-ok>Yes, continue</button></div></dialog>
+<dialog id="palette" data-url="{% url 'search' %}" aria-label="Search"><input class="palette-input" type="search" placeholder="Search IMEI, phone, customer, invoice or a page…" autocomplete="off" aria-label="Search"><ul class="palette-list" role="listbox"></ul><p class="palette-empty" hidden>No matches.</p><div class="palette-foot"><span>&#8593;&#8595; move</span><span>Enter open</span><span>Esc close</span></div></dialog>
+<script src="{% static 'offline.js' %}" defer></script><script src="{% static 'payments.js' %}" defer></script><script src="{% static 'shell.js' %}" defer></script><script src="{% static 'ui.js' %}" defer></script>{% block scripts %}{% endblock %}
 </body></html>

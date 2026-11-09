@@ -1,0 +1,33 @@
+/* Trends Mobile ERP - design tokens (dark charcoal, Covison violet used sparingly).
+   Contrast of every text/surface pair is checked by scripts/check_contrast.py. */
+@font-face{font-family:Inter;font-weight:100 900;font-style:normal;font-display:swap;src:url(../fonts/inter-var.woff2) format("woff2")}
+@font-face{font-family:"Inter Tight";font-weight:500;font-style:normal;font-display:swap;src:url(../fonts/inter-tight-500.woff2) format("woff2")}
+
+:root{
+  color-scheme:dark;
+  /* surfaces: near-black -> charcoal */
+  --bg:#0b0c0f;--bg-2:#101217;
+  --surface:#14171d;--surface-2:#1a1e26;--surface-3:#232835;
+  --line:rgba(255,255,255,.08);--line-2:rgba(255,255,255,.14);--line-3:rgba(255,255,255,.22);
+  /* text */
+  --ink:#f2f4f8;--ink-2:#b9c0cd;--ink-3:#8f97a8;
+  /* the one accent: Covison violet */
+  --accent:#6a5df0;--accent-hover:#5b4fe3;--accent-ink:#ffffff;--accent-text:#a99fff;--accent-soft:rgba(124,108,255,.14);--ring:#a99fff;
+  /* status (always paired with an icon or text) */
+  --ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--info:#7cb3ff;
+  --ok-soft:rgba(74,222,128,.12);--warn-soft:rgba(251,191,36,.12);--bad-soft:rgba(248,113,113,.12);--info-soft:rgba(124,179,255,.12);
+  /* glass: restrained, only on shell chrome, cards and overlays */
+  --glass:rgba(255,255,255,.04);--glass-2:rgba(255,255,255,.065);--glass-edge:inset 0 1px 0 rgba(255,255,255,.07);
+  --blur:blur(14px) saturate(120%);
+  /* shape, depth, motion */
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-pill:999px;
+  --shadow-1:0 1px 2px rgba(0,0,0,.4);--shadow-2:0 8px 24px rgba(0,0,0,.35);--shadow-3:0 24px 64px rgba(0,0,0,.55);
+  --t-fast:.15s;--t:.2s;--t-slow:.3s;--ease:cubic-bezier(.22,.61,.36,1);--ease-out:cubic-bezier(.16,1,.3,1);
+  /* type + spacing (4px scale) */
+  --font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--font-display:"Inter Tight",Inter,sans-serif;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
+  /* layout */
+  --side-w:248px;--head-h:60px;--foot-h:44px;--page-max:1600px;
+  --z-header:30;--z-footer:20;--z-sidebar:40;--z-overlay:80;--z-toast:90;
+}
+@media(max-width:860px){:root{--foot-h:58px;--head-h:56px}}
