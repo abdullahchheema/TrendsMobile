@@ -3,7 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.utils import timezone
 from .models import Branch,Warehouse,Product,Device,Staff,ShopSettings
-from . import access,easy_retail,services
+from . import access,catalog_entry,easy_retail,services
 from .customer_widgets import CustomerNameInput
 
 
@@ -32,16 +32,21 @@ class EasyEntryForm(forms.Form):
             self.fields['phone']=forms.ModelChoiceField(label='Phone to sell',queryset=phones,empty_label='Choose a phone from stock',initial=phone,error_messages={'invalid_choice':'This phone is no longer available. Choose another phone.'})
             self.fields['phone'].label_from_instance=lambda value:f'{value.product.name} · {value.pta_status} · PKR {value.asking_price:,.0f} · '+(('IMEI '+' / '.join(i.number for i in value.imeis.all())) if value.imeis.all() else value.code)
         else:
-            self.fields['product']=forms.ModelChoiceField(label='Phone model / storage / colour',queryset=Product.objects.filter(enabled=True,serialized=True).select_related('model').order_by('name'),empty_label='Choose phone variant')
+            self.fields['brand']=forms.CharField(label='Brand',max_length=80,required=False,widget=forms.TextInput(attrs={'list':'phone-brands','autocomplete':'off','placeholder':'Choose or type, e.g. Apple, Samsung'}))
+            self.fields['model']=forms.CharField(label='Model',max_length=150,required=False,widget=forms.TextInput(attrs={'list':'phone-models','autocomplete':'off','placeholder':'Choose or type, e.g. 14 Pro Max'}))
+            self.fields['storage']=forms.ChoiceField(label='Storage',required=False,choices=[('','Choose storage')]+[(x,x) for x in catalog_entry.STORAGE])
+            self.fields['colour']=forms.CharField(label='Colour',max_length=80,required=False,widget=forms.TextInput(attrs={'list':'phone-colours','autocomplete':'off','placeholder':'e.g. Grey'}))
+            self.fields['product']=forms.ModelChoiceField(queryset=Product.objects.filter(enabled=True,serialized=True),required=False,widget=forms.HiddenInput())
             self.fields['quantity']=forms.IntegerField(label='How many phones?',min_value=1,max_value=20,initial=1)
             self.fields['imeis']=forms.CharField(label='IMEI numbers (recommended)',required=False,widget=forms.Textarea(attrs={'rows':3,'placeholder':'One phone per line. Dual-SIM: put both IMEIs on the line, separated by a space.','autocomplete':'off'}),
                 help_text='Entering IMEIs lets you find each phone later and stops the same phone being bought twice. Leave blank only if you will add them later.')
-        self.fields['pta_status']=forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA')],initial=phone.pta_status if phone and phone.pta_status in ('PTA','Non-PTA') else '')
+        self.fields['pta_status']=forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA approved'),('Non-PTA','Non-PTA')],initial=phone.pta_status if phone and phone.pta_status in ('PTA','Non-PTA') else '')
         self.fields['price']=forms.DecimalField(label='Selling price (PKR)' if kind=='sale' else 'Buying price per phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2,initial=phone.asking_price if phone else None)
         if kind=='purchase':
             self.fields['asking_price']=forms.DecimalField(label='Expected selling price per phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2)
             self.fields['device_type']=forms.ChoiceField(label='Phone type',choices=[(x,x) for x in ('Used','New','Refurbished')],initial='Used')
             self.fields['condition']=forms.ChoiceField(label='Condition',choices=[(x,x) for x in ('Good','Excellent','Very Good','Fair','For Parts')],initial='Good')
+            self.fields['phone_notes']=forms.CharField(label='Notes about the phone (optional)',required=False,max_length=400,widget=forms.Textarea(attrs={'rows':2,'placeholder':'e.g. battery changed, display replaced, back glass cracked'}))
         person=access.staff(user);can_pay=person is None or person.manager or person.can_handle_payments
         choices=[('full','Paid in full'),('part','Part payment'),('unpaid','Pay later / on credit')] if can_pay else [('unpaid','Pay later / payment collected separately')]
         self.fields['payment_status']=forms.ChoiceField(label='Payment',choices=choices,initial='full' if can_pay else 'unpaid')
@@ -62,7 +67,7 @@ class EasyEntryForm(forms.Form):
             self.fields['override_approver']=forms.CharField(label='Manager override: manager code',required=False,max_length=40,widget=forms.TextInput(attrs={'autocomplete':'off'}),help_text='Only needed for a price below the minimum.')
             self.fields['override_pin']=forms.CharField(label='Manager PIN',required=False,max_length=8,widget=forms.PasswordInput(render_value=False,attrs={'autocomplete':'new-password','inputmode':'numeric'}))
         self.fields['notes']=forms.CharField(label='Note (optional)',required=False,widget=forms.Textarea(attrs={'rows':2}))
-        self.main_fields=[self[name] for name in ('party_name','find_imei','phone','product','quantity','imeis','pta_status','price','asking_price','device_type','condition') if name in self.fields]
+        self.main_fields=[self[name] for name in ('party_name','find_imei','phone','brand','model','storage','colour','quantity','imeis','pta_status','device_type','condition','phone_notes','price','asking_price') if name in self.fields]
         self.payment_fields=[self[name] for name in ('payment_status','amount_paid','method','payment_reference','due_date','instalments') if name in self.fields]
         self.extra_fields=[self[name] for name in ('staff','handler','posting_date','warehouse','override_approver','override_pin','notes') if name in self.fields]
 
@@ -80,6 +85,12 @@ class EasyEntryForm(forms.Form):
             if paid and not data.get('method'):self.add_error('method','Choose a payment method.')
             config=ShopSettings.objects.filter(branch=data.get('branch')).first()
             if paid and config and data.get('method') not in services.cash_modes(data['branch']) and not data.get('payment_reference'):self.add_error('payment_reference','Enter the bank or wallet transaction reference.')
+        if self.kind=='purchase' and not data.get('product'):
+            try:data['variant']=catalog_entry.check({k:data.get(k) for k in ('brand','model','storage','colour')})
+            except forms.ValidationError as error:
+                for key,label in (('brand','brand'),('model','model'),('storage','storage'),('colour','colour')):
+                    if not str(data.get(key) or '').strip():self.add_error(key,f'Enter the {label}.')
+                if not self.errors:self.add_error(None,error)
         if self.kind=='purchase' and 'imeis' not in self.errors and 'quantity' not in self.errors:
             try:data['imeis']=easy_retail.parse_imeis(data.get('imeis',''),data.get('quantity') or 1)
             except forms.ValidationError as error:self.add_error('imeis',error)

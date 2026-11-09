@@ -13,7 +13,7 @@ from django.db import IntegrityError,transaction
 from django.shortcuts import redirect,render
 from django.utils import timezone
 from .models import Branch,Device,IMEI,Product,Staff,ShopSettings,Warehouse
-from . import access,easy_retail,customer_names,services as s
+from . import access,catalog_entry,easy_retail,customer_names,services as s
 
 MAX_ROWS=40
 MAX_PHONES=200
@@ -36,8 +36,16 @@ def parse_rows(raw,require_imei=True):
     clean=[];seen={}
     for position,row in enumerate(rows,1):
         if not isinstance(row,dict):raise ValidationError(f'Line {position} is not valid.')
-        try:product=Product.objects.get(pk=row.get('product'),enabled=True,serialized=True,stock_item=True)
-        except (Product.DoesNotExist,ValueError,ValidationError):raise ValidationError(f'Line {position}: choose a phone model and variant.')
+        variant=None
+        if row.get('product'):
+            try:product=Product.objects.get(pk=row.get('product'),enabled=True,serialized=True,stock_item=True)
+            except (Product.DoesNotExist,ValueError,ValidationError):raise ValidationError(f'Line {position}: choose a phone model and variant.')
+            label=product.name
+        else:       # typed details: the catalogue records are found or created when the purchase is saved
+            product=None
+            try:variant=catalog_entry.check(row)
+            except ValidationError as error:raise ValidationError(f'Line {position}: {error.messages[0]}')
+            label=f"{variant['brand']} {variant['model']}"
         try:qty=int(row.get('quantity'))
         except (TypeError,ValueError):raise ValidationError(f'Line {position}: enter how many phones.')
         if not 1<=qty<=100:raise ValidationError(f'Line {position}: quantity must be between 1 and 100.')
@@ -57,13 +65,13 @@ def parse_rows(raw,require_imei=True):
         asking=s.payment_money(row.get('asking_price') or 0)
         if asking<=0:raise ValidationError(f'Line {position}: enter the expected selling price.')
         imeis=easy_retail.parse_imeis(row.get('imeis',''),qty) if (row.get('imeis') or '').strip() else []
-        if require_imei and not imeis:raise ValidationError(f'Line {position} ({product.name}): scan or type {qty} IMEI(s), or tick “I will add IMEIs later”.')
+        if require_imei and not imeis:raise ValidationError(f'Line {position} ({label}): scan or type {qty} IMEI(s), or tick “I will add IMEIs later”.')
         for index,pair in enumerate(imeis,1):
             for number in pair:
                 if number in seen:raise ValidationError(f'IMEI {number} is used twice (line {seen[number]} and line {position}).')
                 seen[number]=position
-        clean.append(dict(product=product,qty=qty,costs=costs,condition=condition,device_type=kind,grade=grade,pta_status=row['pta_status'],asking=asking,imeis=imeis))
-    return sorted(clean,key=lambda r:str(r['product'].pk))        # the receipt processes lines grouped by product; keep our per-phone lists in that order
+        clean.append(dict(product=product,variant=variant,notes=catalog_entry.tidy(row.get('notes')),qty=qty,costs=costs,condition=condition,device_type=kind,grade=grade,pta_status=row['pta_status'],asking=asking,imeis=imeis))
+    return sorted(clean,key=lambda r:str(r['product'].pk) if r['product'] else '')        # the receipt processes lines grouped by product; keep our per-phone lists in that order
 
 
 @transaction.atomic
@@ -72,6 +80,9 @@ def post(data,rows,user):
     if data['warehouse'].branch_id!=branch.pk or not data['warehouse'].enabled:raise ValidationError('Choose this shop’s active stock location.')
     if sum(r['qty'] for r in rows)>MAX_PHONES:raise ValidationError(f'A single purchase can hold up to {MAX_PHONES} phones.')
     supplier=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=branch.demo_batch)
+    for r in rows:
+        if not r['product']:r['product']=catalog_entry.resolve_variant(r['variant'])
+    rows=sorted(rows,key=lambda r:str(r['product'].pk))     # receipt lines are processed grouped by product
     line_attrs=[];line_imeis=[];has_imeis=all(r['imeis'] for r in rows)
     receipt=s.new_doc('Purchase Receipt',branch,supplier=supplier,warehouse=data['warehouse'],buyer=data['staff'],posting_date=data['posting_date'],demo_batch=branch.demo_batch,notes=data.get('notes',''))
     for r in rows:
@@ -79,7 +90,7 @@ def post(data,rows,user):
         for i in range(r['qty']):
             from .models import Line
             Line.objects.create(document=receipt,product=r['product'],warehouse=data['warehouse'],quantity=1,rate=r['costs'][i])
-            line_attrs.append(dict(condition=r['condition'],device_type=r['device_type'],grade=r['grade'],pta_status=r['pta_status'],asking_price=str(r['asking'])))
+            line_attrs.append(dict(condition=r['condition'],device_type=r['device_type'],grade=r['grade'],pta_status=r['pta_status'],asking_price=str(r['asking']),**({'details':dict(condition_notes=r['notes'])} if r['notes'] else {})))
             line_imeis.append(r['imeis'][i] if r['imeis'] else [])
     receipt.data={'device':dict(inspection_status='Passed',inspection_date=str(data['posting_date']),line_attrs=line_attrs,line_imeis=line_imeis if has_imeis else [])};receipt.save()
     receipt=s.submit(receipt,user);bill=s.supplier_bill(receipt,user);bill.posting_date=data['posting_date']
@@ -152,7 +163,7 @@ def bulk_purchase(request):
         except _Invalid:pass
         except (ValidationError,IntegrityError,ValueError) as error:form.add_error(None,error_text(error))
     products=[dict(id=str(p.pk),name=p.name,model=p.model.name if p.model_id else '',brand=p.model.brand if p.model_id else '') for p in Product.objects.filter(enabled=True,serialized=True,stock_item=True).select_related('model').order_by('name')]
-    return render(request,'bulk_purchase.html',dict(title='Bulk purchase',form=form,branch=branch,products=products,conditions=CONDITIONS,types=TYPES))
+    return render(request,'bulk_purchase.html',dict(title='Bulk purchase',form=form,branch=branch,products=products,catalog=catalog_entry.catalog(),conditions=CONDITIONS,types=TYPES))
 
 
 class _Invalid(Exception):pass

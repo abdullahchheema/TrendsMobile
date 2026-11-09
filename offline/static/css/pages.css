@@ -107,3 +107,7 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 .ov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:var(--s4)}
 .ov h3{font-size:13px;margin:0 0 var(--s2);color:var(--ink-2);font-weight:550}
 @media (max-width:640px){.ov-controls>*{flex:1 1 140px;min-width:0}}
+
+/* Typed phone details in the bulk purchase rows */
+.phone-cell{min-width:220px;display:flex;flex-direction:column;gap:var(--s1)}
+.phone-cell input,.phone-cell select{width:100%}

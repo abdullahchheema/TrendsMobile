@@ -1,4 +1,5 @@
 import uuid
+from . import catalog_entry
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -39,7 +40,7 @@ def entry(request,kind):
         except InvalidEntry:pass
         except (ValidationError,IntegrityError,ValueError) as error:form.add_error(None,error_text(error))
     phones=[dict(id=str(p.pk),price=str(p.asking_price),pta=p.pta_status) for p in form.fields['phone'].queryset] if kind=='sale' else []
-    return render(request,'easy_entry.html',dict(title='New Sale' if kind=='sale' else 'Buy Stock',kind=kind,form=form,branch=branch,phones=phones))
+    return render(request,'easy_entry.html',dict(title='New Sale' if kind=='sale' else 'Buy Stock',kind=kind,form=form,branch=branch,phones=phones,catalog=catalog_entry.catalog() if kind=='purchase' else None))
 
 
 @login_required
