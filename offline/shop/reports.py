@@ -10,6 +10,8 @@ from .pricing import line_net,net_amount
 
 def authorize(name,user):
     if name not in REPORTS:raise ValidationError('Unknown report.')
+    from .access import OWNER_ONLY_REPORTS
+    if name in OWNER_ONLY_REPORTS and not user.is_superuser:raise PermissionDenied('This report is for the owner.')
     if name in ('Device Profit','Mobile Device Economics','Purchase Register','Accounts Payable','General Ledger','Branch Comparison','Profit and Loss Statement','Balance Sheet','Trial Balance') and not costs(user):raise PermissionDenied('Purchase costs and financial reports require purchasing or management access.')
     if name in STATEMENTS and not statements(user):raise PermissionDenied('Financial statements require management access.')
     if (name.startswith('Staff ') or name=='Mobile Device Economics') and not manager(user):raise PermissionDenied('This report requires management access.')
@@ -42,7 +44,7 @@ def run(name,user,params):
         for d in devices:
             row={'Device':d.code,'Shop':f'{d.branch.name} ({d.branch.code})','Model':d.product.model.name if d.product.model_id else d.product.name,'Storage':d.product.storage,
                 'Colour':d.product.colour,'PTA status':d.pta_status,'Status':d.status,
-                'Warehouse':str(d.warehouse or ''),'Condition':d.condition,'Asking price':d.asking_price,'Days in stock':max(0,(end-d.received_on).days)}
+                'Condition':d.condition,'Asking price':d.asking_price,'Days in stock':max(0,(end-d.received_on).days)}
             if costs(user):row['Purchase cost']=d.purchase_cost
             if name=='Mobile Stock Ageing':
                 config=ShopSettings.objects.filter(branch=d.warehouse.branch).first() if d.warehouse_id else None
@@ -104,7 +106,7 @@ def run(name,user,params):
         if params.get('product'):stock=stock.filter(product_id=params['product'])
         for r in stock:
             if r['q'] or r['v']:
-                row={'Item':r['product__code'],'Name':r['product__name'],'Shop':f"{r['warehouse__branch__name']} ({r['warehouse__branch__code']})",'Warehouse':r['warehouse__name'],'Warehouse code':r['warehouse__code'],'Quantity':r['q']}
+                row={'Item':r['product__code'],'Name':r['product__name'],'Shop':f"{r['warehouse__branch__name']} ({r['warehouse__branch__code']})",'Quantity':r['q']}
                 if costs(user):row['Stock value']=r['v']
                 rows.append(row)
         if name=='Stock Ledger':
@@ -113,7 +115,7 @@ def run(name,user,params):
             if params.get('warehouse'):moves=moves.filter(warehouse_id=params['warehouse'])
             rows=[]
             for move in moves:
-                row={'Date':move.posting_date,'Document':move.document.code,'Item':move.product.code,'Shop':f'{move.warehouse.branch.name} ({move.warehouse.branch.code})','Warehouse':move.warehouse.name,'Warehouse code':move.warehouse.code,'Quantity change':move.quantity}
+                row={'Date':move.posting_date,'Document':move.document.code,'Item':move.product.code,'Shop':f'{move.warehouse.branch.name} ({move.warehouse.branch.code})','Quantity change':move.quantity}
                 if costs(user):row['Value change']=move.value
                 rows.append(row)
     elif name in ('Staff Activity','Staff Summary'):
@@ -152,7 +154,7 @@ def empty_columns(name,with_costs):
     if name in financial_reports.NAMES:return financial_reports.columns(name)
     from . import report_extra
     if name in report_extra.COLUMNS:return report_extra.COLUMNS[name]
-    inventory=['Device','Shop','Model','Storage','Colour','PTA status','Status','Warehouse','Condition','Asking price','Days in stock']+(['Purchase cost'] if with_costs else [])
+    inventory=['Device','Shop','Model','Storage','Colour','PTA status','Status','Condition','Asking price','Days in stock']+(['Purchase cost'] if with_costs else [])
     return {
         'Mobile Inventory':inventory,'Mobile Stock Ageing':inventory+['Received','Action'],
         'Mobile Device Economics':['Device','Shop','Phone','Status','Current / Last Valuation','Expensed Repairs (Net)','Valuation + Repairs','Lifetime Net Sales','Net Posted Stock Cost','Posted Margin After Repairs'],
@@ -160,8 +162,8 @@ def empty_columns(name,with_costs):
         'Purchase Register':['Date','Invoice','Party','Total','Outstanding','Staff'],'Sales Register':['Date','Invoice','Party','Item subtotal','Invoice discount','Net sales before tax','Sales tax','Total','Outstanding','Staff'],
         'Accounts Receivable':['Party','Document','Date','Outstanding','Age days'],'Accounts Payable':['Party','Document','Date','Outstanding','Age days'],
         'General Ledger':['Date','Shop','Document','Account','Party','Reference','Debit','Credit'],'Payment Ledger':['Date','Shop','Document','Account','Party','Reference','Debit','Credit'],
-        'Stock Balance':['Item','Name','Shop','Warehouse','Warehouse code','Quantity']+(['Stock value'] if with_costs else []),
-        'Stock Ledger':['Date','Document','Item','Shop','Warehouse','Warehouse code','Quantity change']+(['Value change'] if with_costs else []),
+        'Stock Balance':['Item','Name','Shop','Quantity']+(['Stock value'] if with_costs else []),
+        'Stock Ledger':['Date','Document','Item','Shop','Quantity change']+(['Value change'] if with_costs else []),
         'Staff Activity':['Date','Staff ID','Staff Name','Shop','Activity','Document Type','Document','Phones (Net Qty)','Amount','Payment Method','Posted / Recorded by Login'],
         'Staff Summary':['Staff ID','Staff Name','Shop','Phones Bought (Net)','Phones Sold (Net)','Net Device Purchases','Net Sales','Money Collected','Money Paid / Refunded','Internal Transfers Handled'],
     }.get(name,[])

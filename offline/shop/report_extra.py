@@ -17,7 +17,7 @@ COLUMNS={
  'Low Stock':['Item','Shop','Quantity','Reorder level','Short by'],
  'IMEI Report':['IMEI 1','IMEI 2','Device','Model','Shop','Status','Condition','Grade','Received','Sold','Customer'],
  'Exchange Report':['Date','Shop','Exchange','Customer','New phone price','Trade-in value','Cash difference','Old phones sold','Old phone margin'],
- 'Stock Transfer Report':['Date','Document','From shop','From warehouse','To shop','To warehouse','Value'],
+ 'Stock Transfer Report':['Date','Document','From shop','To shop','Value'],
  'Branch Comparison':['Shop','Net sales','Purchases','Gross profit','Gross margin %','Expenses','Net profit','Stock value','Cash and bank','Customers owe','You owe suppliers','Phones sold'],
 }
 MONEY={
@@ -32,7 +32,7 @@ DESCRIPTIONS={
  'Low Stock':'Accessories at or below their reorder level in each shop.',
  'IMEI Report':'Every phone with its IMEIs, status, condition and sale. Filter by status.',
  'Exchange Report':'Each exchange: new phone price, trade-in value, cash difference and the profit or loss when the old phones were resold.',
- 'Stock Transfer Report':'Stock moved between warehouses and shops, with the value moved.',
+ 'Stock Transfer Report':'Phones moved between shops, with the value moved.',
  'Branch Comparison':'Shops side by side for the period: sales, profit, stock, cash and what customers owe. Compare and rank branches.',
 }
 
@@ -106,7 +106,7 @@ def transfer_report(shops,start,end):
     rows=[]
     for d in Document.objects.filter(kind='Stock Entry',status='Submitted',data__has_key='transfer',posting_date__range=[start,end],branch__in=shops).select_related('branch').order_by('-posting_date'):
         t=d.data.get('transfer') or {}
-        rows.append({'Date':d.posting_date,'Document':d.code,'From shop':t.get('source_shop',d.branch.name),'From warehouse':t.get('source_warehouse',''),'To shop':t.get('target_shop',''),'To warehouse':t.get('target_warehouse',''),'Value':s.money(t.get('value'))})
+        rows.append({'Date':d.posting_date,'Document':d.code,'From shop':t.get('source_shop',d.branch.name),'To shop':t.get('target_shop',''),'Value':s.money(t.get('value'))})
     return rows
 
 

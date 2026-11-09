@@ -139,7 +139,7 @@ class ShopSetup(TestCase):
         branch=self.shop();Staff.objects.create(code='NO-LOGIN',name='Unlinked staff',branch=branch)
         status=setup.readiness(branch)
         self.assertFalse(status['ready']);self.assertIn('Create the shop login (Shop accounts)',status['issues'])
-    def test_same_warehouse_names_remain_separate_in_owner_stock_report(self):
+    def test_each_shops_stock_stays_separate_in_owner_stock_report(self):
         branches=[self.shop(1),self.shop(2)];product=Product.objects.create(code='QA-CHARGER',name='QA charger')
         supplier=Party.objects.create(code='QA-STOCK-SUPPLIER',name='QA stock supplier',kind='Supplier')
         for quantity,branch in enumerate(branches,1):
@@ -148,5 +148,5 @@ class ShopSetup(TestCase):
             Line.objects.create(document=receipt,product=product,warehouse=warehouse,quantity=quantity,rate=1000)
             services.submit(receipt,self.owner)
         _,rows=reports.run('Stock Balance',self.owner,{})
-        self.assertEqual(len(rows),2);self.assertEqual(len({row['Warehouse code'] for row in rows}),2)
+        self.assertEqual(len(rows),2);self.assertEqual(len({row['Shop'] for row in rows}),2)       # one row per shop; warehouses are not shown
         self.assertEqual(sum(row['Quantity'] for row in rows),Decimal('3'));self.assertEqual(sum(row['Stock value'] for row in rows),Decimal('3000'))

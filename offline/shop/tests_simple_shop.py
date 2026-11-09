@@ -73,42 +73,38 @@ class OwnShopAnalytics(Base):
         self.login(self.shop_a);own=self.client.get(reverse('dashboard')).context['overview'];self.assertEqual([r['shop'] for r in own['compare']],[self.branch.name])
     def test_a_shop_cannot_open_another_shops_numbers_by_changing_the_address(self):
         self.login(self.shop_a);page=self.client.get(reverse('dashboard'),{'branch':str(self.other.pk)});self.assertEqual(page.status_code,404)
-        _,rows=reports.run('Branch Comparison',self.shop_a,{});self.assertEqual([r['Shop'] for r in rows],[self.branch.name])
-        _,rows=reports.run('Branch Comparison',self.shop_a,{'branch':str(self.other.pk)});self.assertEqual(rows,[])
+        with self.assertRaises(PermissionDenied):reports.run('Branch Comparison',self.shop_a,{})          # comparing shops is for the owner
+        _,rows=reports.run('Daily Sales',self.shop_a,{'branch':str(self.other.pk)});self.assertEqual(rows,[])        # asking for another shop gives that shop's rows to nobody
     def test_menu_has_no_staff_roles_warehouses_or_tills_and_hides_owner_tools_from_a_shop(self):
         self.login(self.shop_a);side=self.client.get(reverse('dashboard')).content.decode().split('<aside',1)[1].split('</aside>',1)[0]
-        for text in ('Staff','Roles','Warehouses','Cash tills','Chart of accounts','Shop accounts','Four-shop','Posting accounts'):self.assertNotIn(text,side,text)
-        for text in ('Send phones to another shop','Expenses','Find by IMEI'):self.assertIn(text,side,text)
+        for text in ('Staff','Roles','Warehouses','Cash tills','Chart of Accounts','Shop Accounts','All Shops','Posting accounts'):self.assertNotIn(text,side,text)
+        for text in ('New Sale','IMEI Management','Expenses','Customer Dues'):self.assertIn(text,side,text)
+        self.assertNotIn('Stock Transfers',side);self.assertNotIn('Send phones',side)
         self.login(self.user);owner=self.client.get(reverse('dashboard')).content.decode().split('<aside',1)[1].split('</aside>',1)[0]
-        for text in ('Shop accounts','Chart of accounts','Fixed assets'):self.assertIn(text,owner,text)
+        for text in ('Shop Accounts','Chart of Accounts','Fixed Assets','Stock Transfers','All Shops Inventory'):self.assertIn(text,owner,text)
         for text in ('Warehouses','Cash tills','Roles & permissions','Staff'):self.assertNotIn(text,owner,text)
 
 
 class Transfer(Base):
-    def stock(self,n=1):
-        d=Workflows.intake(self,n)[2];return d
-    def test_a_shop_sends_phones_to_another_shop_and_the_slip_names_the_sender_at_the_top(self):
+    def stock(self,n=1):return Workflows.intake(self,n)[2]
+    def send(self,phone,key,user=None):
+        self.login(user or self.user);return self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),request_key=key,target=str(self.other.pk),phone=[str(phone.pk)]))
+    def test_only_the_owner_manages_transfers_and_a_shop_has_no_access_at_all(self):
         phone=self.stock();self.login(self.shop_a)
-        page=self.client.get(reverse('stock_transfer'));self.assertContains(page,phone.code);self.assertContains(page,self.other.name)
-        key='00000000-0000-4000-8000-0000000000b1'
-        post=self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),request_key=key,target=str(self.other.pk),phone=[str(phone.pk)]))
-        self.assertEqual(post.status_code,302,post.context and list(post.context['messages']));phone.refresh_from_db()
+        self.assertEqual(self.client.get(reverse('stock_transfer')).status_code,403)
+        self.assertEqual(self.send(phone,'00000000-0000-4000-8000-0000000000b1',self.shop_a).status_code,403);phone.refresh_from_db();self.assertEqual(phone.branch_id,self.branch.pk)
+        self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),0)
+    def test_the_owner_sends_phones_and_the_slip_names_the_sender_at_the_top(self):
+        phone=self.stock();page=self.client.get(reverse('stock_transfer'));self.login(self.user);page=self.client.get(reverse('stock_transfer'));self.assertContains(page,phone.code);self.assertContains(page,self.other.name)
+        post=self.send(phone,'00000000-0000-4000-8000-0000000000b2');self.assertEqual(post.status_code,302);phone.refresh_from_db()
         self.assertEqual((phone.branch_id,phone.status,phone.warehouse.branch_id),(self.other.pk,'Available',self.other.pk))
         doc=Document.objects.get(kind='Stock Entry');slip=self.client.get(reverse('transfer_slip',args=[doc.pk]));self.assertContains(slip,'<h1>'+self.branch.name+'</h1>');self.assertContains(slip,'to <strong>'+self.other.name)
-        self.login(self.shop_b);self.assertEqual(self.client.get(reverse('transfer_slip',args=[doc.pk])).status_code,200)         # the receiving shop can see it too
-        self.assertContains(self.client.get(reverse('stock_transfer')),'Recent transfers')
+        self.login(self.shop_b);self.assertEqual(self.client.get(reverse('transfer_slip',args=[doc.pk])).status_code,403)
+        self.login(self.shop_a);self.assertEqual(self.client.get(reverse('detail',args=[doc.pk])).status_code,403)       # the sending shop cannot open it either
     def test_sending_twice_with_the_same_form_moves_the_phone_once_and_unavailable_phones_are_refused(self):
-        phone=self.stock();self.login(self.shop_a);data=dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000b2',target=str(self.other.pk),phone=[str(phone.pk)])
-        self.client.post(reverse('stock_transfer'),data);self.client.post(reverse('stock_transfer'),data);self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),1)
-        again=dict(data,request_key='00000000-0000-4000-8000-0000000000b3');page=self.client.post(reverse('stock_transfer'),again,follow=True);self.assertContains(page,'no longer available');self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),1)
-    def test_a_third_shop_cannot_see_the_slip_and_both_shops_books_balance(self):
-        phone=self.stock();self.login(self.shop_a)
-        self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000b4',target=str(self.other.pk),phone=[str(phone.pk)]))
-        doc=Document.objects.get(kind='Stock Entry');third=Branch.objects.create(code='THIRD2',name='Third',company=self.branch.company)
-        stranger=get_user_model().objects.create_user('third-login',password='Strong-pass-for-C-77!');Staff.objects.create(code='THIRD2-SHOP',name='Third',branch=third,user=stranger,manager=True,can_buy=True,can_sell=True,can_handle_payments=True)
-        self.login(stranger);self.assertEqual(self.client.get(reverse('transfer_slip',args=[doc.pk])).status_code,404)
-        from django.db.models import Sum
-        t=doc.ledger.aggregate(x=Sum('debit'),y=Sum('credit'));self.assertEqual(t['x'],t['y'])
+        phone=self.stock();self.send(phone,'00000000-0000-4000-8000-0000000000b3');self.send(phone,'00000000-0000-4000-8000-0000000000b3');self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),1)
+        self.login(self.user);page=self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000b4',target=str(self.other.pk),phone=[str(phone.pk)]),follow=True)
+        self.assertContains(page,'no longer available');self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),1)
 
 
 class Receipt(Base):

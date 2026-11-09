@@ -21,7 +21,8 @@ class StockAdjustForm(forms.Form):
         self.fields['request_key']=forms.UUIDField(widget=forms.HiddenInput(),initial=uuid.uuid4)
         self.fields['branch']=forms.ModelChoiceField(queryset=access.branches(user),initial=branch,widget=forms.HiddenInput())
         places=Warehouse.objects.filter(branch=branch,enabled=True)
-        self.fields['warehouse']=forms.ModelChoiceField(label='Stock location',queryset=places,initial=places.first())
+        from . import shopdefaults
+        self.default_warehouse=shopdefaults.warehouse(branch);self.fields['warehouse']=forms.ModelChoiceField(queryset=places,initial=self.default_warehouse.pk,required=False,widget=forms.HiddenInput())
         self.fields['reason']=forms.ChoiceField(label='Reason',choices=[('','Choose a reason')]+[(r,r) for r in s.ADJUST_REASONS])
         phones=Device.objects.filter(branch=branch,status='Available',warehouse__isnull=False).select_related('product').prefetch_related('imeis').order_by('product__name')
         self.fields['phone']=forms.ModelChoiceField(label='Write off a phone',queryset=phones,required=False,empty_label='— not a phone —')
@@ -37,7 +38,7 @@ class StockAdjustForm(forms.Form):
         if self.errors:return data
         if bool(data.get('phone'))==bool(data.get('product')):raise ValidationError('Choose either one phone to write off or one accessory product to adjust.')
         if data.get('product') and not data.get('change'):raise ValidationError('Enter the change in quantity.')
-        if data.get('phone') and data['phone'].warehouse_id!=data['warehouse'].pk:raise ValidationError('That phone is not in the chosen stock location.')
+        data['warehouse']=data['phone'].warehouse if data.get('phone') and data['phone'].warehouse_id else self.default_warehouse
         return data
 
 

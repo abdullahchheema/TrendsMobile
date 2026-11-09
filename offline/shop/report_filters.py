@@ -9,10 +9,10 @@ FIELDS={
  'Profit and Loss Statement':['branch','from_date','to_date'],
  'Balance Sheet':['branch','to_date'],
  'Trial Balance':['branch','from_date','to_date'],'Unadjusted Trial Balance':['branch','from_date','to_date'],'Adjusted Trial Balance':['branch','from_date','to_date'],'Cash Flow Statement':['branch','from_date','to_date'],
- 'Mobile Inventory':['branch','status','model','warehouse','pta_status'],
- 'Mobile Stock Ageing':['branch','warehouse','review_only'],
- 'Mobile Device Economics':['branch','warehouse'],
- 'Device Profit':['branch','from_date','to_date','model','product','warehouse'],
+ 'Mobile Inventory':['branch','status','model','pta_status'],
+ 'Mobile Stock Ageing':['branch','review_only'],
+ 'Mobile Device Economics':['branch'],
+ 'Device Profit':['branch','from_date','to_date','model','product'],
  'Staff Activity':['branch','from_date','to_date','staff'],
  'Staff Summary':['branch','from_date','to_date','staff'],
  'Purchase Register':['branch','from_date','to_date','party'],
@@ -21,8 +21,8 @@ FIELDS={
  'General Ledger':['branch','from_date','to_date','party','account'],
  'Accounts Receivable':['branch','to_date','party'],
  'Accounts Payable':['branch','to_date','party'],
- 'Stock Balance':['branch','to_date','warehouse','product'],
- 'Stock Ledger':['branch','from_date','to_date','warehouse','product'],
+ 'Stock Balance':['branch','to_date','product'],
+ 'Stock Ledger':['branch','from_date','to_date','product'],
  'Daily Sales':['branch','from_date','to_date'],'Monthly Sales':['branch','from_date','to_date'],'Annual Sales':['branch','from_date','to_date'],
  'Expense Report':['branch','from_date','to_date'],'Low Stock':['branch'],'IMEI Report':['branch','status'],'Exchange Report':['branch','from_date','to_date'],
  'Stock Transfer Report':['branch','from_date','to_date'],'Branch Comparison':['from_date','to_date'],
@@ -61,7 +61,7 @@ class ReportFilters(forms.Form):
     def clean(self):
         data=super().clean()
         if data.get('from_date') and data.get('to_date') and data['from_date']>data['to_date']:raise forms.ValidationError('From date must not be after To date.')
-        for key in ('warehouse','staff'):
+        for key in ('staff'):
             if data.get('branch') and data.get(key) and data[key].branch_id!=data['branch'].pk:self.add_error(key,'Select a record from the selected shop.')
         return data
     def params(self):

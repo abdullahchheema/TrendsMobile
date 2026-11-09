@@ -14,7 +14,7 @@ from . import access,shopdefaults,services as s
 
 def send(user,source,target,devices,when=None):
     """Move the chosen phones from `source` to `target` as one posted transfer. Returns the transfer document."""
-    if not (user.is_superuser or access.manager(user)):raise PermissionDenied('Only the shop account or the super admin can send stock.')
+    if not user.is_superuser:raise PermissionDenied('Only the owner can send stock between shops.')
     if source.pk==target.pk:raise ValidationError('Choose a different shop to send the phones to.')
     if not devices:raise ValidationError('Tick at least one phone to send.')
     if len(devices)>100:raise ValidationError('Send at most 100 phones at a time.')
@@ -24,16 +24,10 @@ def send(user,source,target,devices,when=None):
     return s.submit(doc,user)
 
 
-def _visible(user,doc):
-    places=access.branches(user)
-    target=doc.data.get('target_branch')
-    return places.filter(Q(pk=doc.branch_id)|Q(pk=target or doc.branch_id)).exists()
-
-
 @login_required
 def transfer(request):
     from .views import selected_branch,error_text
-    if not (request.user.is_superuser or access.manager(request.user)):raise PermissionDenied('You do not have access to this page.')
+    if not request.user.is_superuser:raise PermissionDenied('Only the owner can manage stock transfers.')
     source=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not source:return redirect('setup')
     targets=Branch.objects.filter(enabled=True).exclude(pk=source.pk).order_by('name')
@@ -60,7 +54,8 @@ def transfer(request):
 
 @login_required
 def slip(request,pk):
+    if not request.user.is_superuser:raise PermissionDenied('Only the owner can see transfer slips.')
     doc=Document.objects.select_related('branch').filter(pk=pk,kind='Stock Entry',status='Submitted').first()
-    if not doc or not doc.data.get('transfer') or not _visible(request.user,doc):raise Http404
+    if not doc or not doc.data.get('transfer'):raise Http404
     t=doc.data['transfer'];lines=list(doc.lines.select_related('product','device').prefetch_related('device__imeis'))
     return render(request,'transfer_slip.html',dict(doc=doc,t=t,lines=lines,show_costs=access.costs(request.user)))

@@ -40,7 +40,7 @@ class ScreenParity(TestCase):
         other=Branch.objects.create(code='FOREIGN',name='Other shop',company='Other')
         warehouse=Warehouse.objects.create(code='FOREIGN-WH',name='Other warehouse',branch=other)
         user=get_user_model().objects.create_user('local-sales');self.seller.user=user;self.seller.save();self.client.force_login(user)
-        for data in ({'warehouse':str(warehouse.pk)},{'branch':'not-a-uuid'},{'status':'invented'}):
+        for data in ({'branch':'not-a-uuid'},{'status':'invented'}):
             for export in ('','csv'):
                 response=self.client.get(reverse('report',args=['Mobile Inventory']),{**data,'format':export});self.assertEqual(response.status_code,400)
         response=self.client.get(reverse('report',args=['Sales Register']),{'from_date':'2026-12-01','to_date':'2026-01-01'});self.assertEqual(response.status_code,400)

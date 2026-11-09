@@ -60,10 +60,6 @@ def authorize(user,doc):
     require(user,doc.branch,'can_buy' if doc.kind in BUY else 'can_sell' if doc.kind in SELL else 'can_handle_payments' if doc.kind in ('Payment Entry','POS Opening Entry','POS Closing Entry') else None)
     if doc.kind in MANAGER and not manager(user):raise PermissionDenied('A shop manager must perform this action.')
 
-def require_own_shop(user,branch):
-    person=staff(user)
-    return person is not None and person.branch_id==branch.pk
-
 def transfer_target(doc):
     try:target=Warehouse.objects.select_related('branch').get(pk=doc.data.get('target_warehouse'))
     except (Warehouse.DoesNotExist,ValueError,ValidationError):raise ValidationError('Select an active destination warehouse.')
@@ -78,7 +74,7 @@ def _transfer(doc,user,target):
     if not target.enabled or not target.branch.enabled or target.pk==source.pk:raise ValidationError('Select a different active destination warehouse.')
     cross=target.branch_id!=doc.branch_id
     if cross:
-        if not (user.is_superuser or (manager(user) and require_own_shop(user,doc.branch))):raise PermissionDenied('Only the super admin or the sending shop can transfer its stock to another shop.')
+        if not user.is_superuser:raise PermissionDenied('Only the owner can move stock between shops.')
         if not doc.branch.company.strip() or doc.branch.company.strip().casefold()!=target.branch.company.strip().casefold():raise ValidationError('Transfers are limited to shops in the same business / company.')
         if not doc.notes.strip():raise ValidationError('Record the reason for this inter-shop transfer.')
         open_date(Document(branch=target.branch,posting_date=doc.posting_date))
@@ -507,7 +503,7 @@ def submit(doc,user):
     places=[initial.branch_id]
     if initial.kind=='Stock Entry':
         target=transfer_target(initial)
-        if target.branch_id!=initial.branch_id and not (user.is_superuser or (manager(user) and require_own_shop(user,initial.branch))):raise PermissionDenied('Only the super admin or the sending shop can transfer its stock to another shop.')
+        if target.branch_id!=initial.branch_id and not user.is_superuser:raise PermissionDenied('Only the owner can move stock between shops.')
         places.append(target.branch_id)
     # All writers lock shops before documents. Non-key locks preserve FK reads.
     locked_branches={branch.pk:branch for branch in Branch.objects.select_for_update(no_key=True).filter(pk__in=places).order_by('pk')}

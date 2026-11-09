@@ -43,7 +43,7 @@ def paginate(request,rows,per_page=50):
 def scoped(user):
     places=access.branches(user)
     query=Q(branch__in=places)
-    if access.manager(user):query|=Q(kind='Stock Entry',status='Submitted',data__target_branch__in=[str(pk) for pk in places.values_list('pk',flat=True)])
+    if user.is_superuser:query|=Q(kind='Stock Entry',status='Submitted',data__target_branch__in=[str(pk) for pk in places.values_list('pk',flat=True)])
     return Document.objects.filter(query)
 def scoped_devices(user):
     if user.is_superuser:return Device.objects.all()
@@ -51,7 +51,7 @@ def scoped_devices(user):
     return Device.objects.filter(branch__in=places)
 def document(user,pk):
     doc=get_object_or_404(scoped(user),pk=pk)
-    if doc.kind=='Stock Entry' and not access.manager(user):raise PermissionDenied('Stock transfer records require management access.')
+    if doc.kind=='Stock Entry' and not user.is_superuser:raise PermissionDenied('Stock transfer records are for the owner.')
     if funds.is_transfer(doc) and not funds.allowed(user):raise PermissionDenied('Internal transfer records require payment or management access.')
     if journals.is_manual(doc):shop_setup.owner(user)
     return doc
@@ -126,7 +126,7 @@ def collection(request,kind):
     if kind=='Mobile Shop Settings':return redirect('settings')
     if kind=='Mobile Device':
         objects=scoped_devices(request.user).select_related('product','warehouse').prefetch_related('imeis').order_by('code')
-        rows=[dict(id=d.pk,code=d.code,name=d.product.name,state=d.status,amount=d.asking_price,party=str(d.warehouse or '')) for d in objects]
+        rows=[dict(id=d.pk,code=d.code,name=d.product.name,state=d.status,amount=d.asking_price,party=d.branch.name) for d in objects]
     elif kind in MASTER_MODELS:
         model=MASTER_MODELS[kind][0];objects=model.objects.all()
         if kind in ('Customer','Supplier'):objects=access.scoped_parties(request.user).filter(kind=kind)
@@ -136,7 +136,7 @@ def collection(request,kind):
     elif kind in KINDS:
         objects=scoped(request.user).filter(kind__in=services.SELL if kind=='Sales Invoice' else [kind]).select_related('customer','supplier').order_by('-posting_date','-created')
         if kind in services.BUY and not access.costs(request.user):raise PermissionDenied
-        if kind=='Stock Entry' and not access.manager(request.user):raise PermissionDenied
+        if kind=='Stock Entry' and not request.user.is_superuser:raise PermissionDenied
         if kind=='Payment Entry' and not funds.allowed(request.user):objects=objects.filter(Q(data__direction__isnull=True)|~Q(data__direction='Internal Transfer'))
         if kind=='Journal Entry' and not request.user.is_superuser:objects=objects.filter(Q(data__manual_journal__isnull=True)|~Q(data__manual_journal__version=1))
         rows=[dict(id=o.pk,code=o.code,name=str(o.customer or o.supplier or ''),state=o.status+(' · '+o.state if o.state else ''),amount=o.total,currency=o.currency,party=o.posting_date) for o in objects]
@@ -330,7 +330,7 @@ def detail(request,pk):
         related=related,methods=config.payment_methods,cash_modes=services.cash_modes(doc.branch),cash_summary=services.cash_summary(doc),staff=Staff.objects.filter(branch=doc.branch,enabled=True,can_handle_payments=True),
         request_key=uuid.uuid4(),can_checkout=doc.kind in services.SELL and not doc.is_return,kind=doc.kind,
         return_rows=return_rows,return_warning=return_warning,is_sale_return=doc.is_return and doc.kind in services.SELL,has_returnable=any(line.returnable for line in return_rows),
-        return_warehouses=Warehouse.objects.filter(branch=doc.branch,enabled=True).order_by('code'),credit_to_apply=credit_to_apply,credit_available=credit_available,can_purchase_return=access.manager(request.user) or permissions.can(request.user,'accounting'),can_refund=can_refund,
+        return_warehouse=shopdefaults.warehouse(doc.branch),credit_to_apply=credit_to_apply,credit_available=credit_available,can_purchase_return=access.manager(request.user) or permissions.can(request.user,'accounting'),can_refund=can_refund,
         internal_transfer=funds.is_transfer(doc),frozen_fund_transfer=funds.is_transfer(doc) and bool(doc.source),
         owner_journal=journals.is_manual(doc),journal_rows=doc.data.get('manual_journal',{}).get('lines',[]) if journals.is_manual(doc) else [],
         can_correct_journal=journals.is_manual(doc) and doc.status=='Submitted' and not doc.source and not doc.data['manual_journal'].get('reversal_of'),

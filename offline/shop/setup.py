@@ -85,8 +85,8 @@ def create_shop(values,user):
 
 def readiness(branch):
     config=ShopSettings.objects.filter(branch=branch).first();issues=[]
-    if not Warehouse.objects.filter(branch=branch,enabled=True).exists():issues.append('Add a warehouse')
-    if not Till.objects.filter(branch=branch,enabled=True).exists():issues.append('Add a till')
+    from . import shopdefaults
+    shopdefaults.ensure(branch)           # every shop always has its one stock record and till; nothing to set up
     if not config:issues.append('Configure posting accounts and payment methods')
     else:
         try:validate_mapping(config.accounts,config.payment_methods)

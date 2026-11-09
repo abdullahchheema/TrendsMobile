@@ -71,11 +71,11 @@ class Transfers(TestCase):
         last=s.submit(self.transfer(product=item,quantity=2),self.user)
         self.assertEqual(first.total,Decimal('33.33'));self.assertEqual(last.total,Decimal('66.67'))
         self.assertEqual(s.on_hand(item,self.warehouse),(0,0));self.assertEqual(s.on_hand(item,self.destination),(3,100))
-    def test_a_shop_account_can_send_its_own_stock_to_another_shop_but_not_other_shops_stock(self):
+    def test_a_shop_login_can_never_send_stock_to_another_shop_only_the_owner_can(self):
         phone=self.phone();doc=self.transfer(phone)
-        done=s.submit(doc,self.manager(self.branch));phone.refresh_from_db();self.assertEqual((phone.branch_id,phone.warehouse_id,done.status),(self.destination.branch_id,self.destination.pk,'Submitted'))
-        stranger=Branch.objects.create(code='STRANGER',name='Stranger shop',company=self.branch.company)
-        with self.assertRaises(PermissionDenied):s.submit(self.transfer(self.phone(2)),self.manager(stranger,'stranger-manager'))
+        with self.assertRaises(PermissionDenied):s.submit(doc,self.manager(self.branch))
+        self.assert_unmoved(phone,doc)
+        done=s.submit(doc,self.user);phone.refresh_from_db();self.assertEqual((phone.branch_id,done.status),(self.destination.branch_id,'Submitted'))
     def test_same_shop_manager_transfer_still_has_no_ledger(self):
         phone=self.phone();target=Warehouse.objects.create(code='COUNTER',name='Counter',branch=self.branch)
         doc=s.submit(self.transfer(phone,target=target),self.manager(self.branch))

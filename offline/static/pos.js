@@ -29,7 +29,7 @@
   products.filter(p=>{const hay=`${p.code} ${p.name} ${p.barcode} ${p.brand||''} ${p.storage||''} ${p.colour||''} ${p.condition||''}`.toLowerCase();
    return terms.every(t=>hay.includes(t))&&(!brand||p.brand===brand)&&(!condition||p.condition===condition)&&(!maxPrice||Number(p.rate)<=maxPrice);}).slice(0,80).forEach(product=>{
    const button=make('button');button.type='button';button.disabled=Boolean(pending);
-   button.append(make('span',product.name),make('strong',Number(product.rate)>0?format(product.rate):'Price at sale'),make('small',product.imeis&&product.imeis.length?'IMEI '+product.imeis.join(' / '):product.code),make('small',product.warehouse_name||''));
+   button.append(make('span',product.name),make('strong',Number(product.rate)>0?format(product.rate):'Price at sale'),make('small',product.imeis&&product.imeis.length?'IMEI '+product.imeis.join(' / '):product.code));
    if(product.serialized)button.append(make('small',[product.condition,product.grade?product.grade+'/10':'','PTA: '+product.pta_status].filter(Boolean).join(' · ')));else if(product.stock_item)button.append(make('small','In stock: '+product.stock));
    button.addEventListener('click',()=>add(product));list.append(button);
   });
