@@ -30,7 +30,7 @@ def sections(form):
         ('Cash count and settlement',['opening_float','counted_cash','difference_notes','mode','transaction_reference','direction','amount','sales_invoice','purchase_invoice','target_warehouse']),
         ('Invoice discount and sales tax',['invoice_discount_type','invoice_discount_value','sales_tax_rule']),
         ('Phone details',['device_type','pta_status','manufacturer_serial','regional_version','market_description','imei_1','pta_status_1','verified_on_1','evidence_1','imei_2','pta_status_2','verified_on_2','evidence_2','pta_notes']),
-        ('Condition and inspection',['condition','inspection_status','inspection_date','battery_checked','battery',*DETAIL_CHOICES,'repair_history','included_accessories','inspection_notes','faults']),
+        ('Condition and inspection',['condition','grade','inspection_status','inspection_date','battery_checked','battery',*DETAIL_CHOICES,'repair_history','included_accessories','inspection_notes','faults']),
         ('Prices and checking warranty',['asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms']),
         ('Claim and notes',['device','claim_status','resolution','notes'])]
     if getattr(form,'kind',None)=='Stock Entry':groups=[('Source, destination and date',['branch','posting_date','warehouse','target_warehouse']),('Transfer reason',['notes'])]
@@ -45,7 +45,7 @@ def sections(form):
 class DeviceForm(forms.ModelForm):
     class Meta:
         model=Device
-        fields=['device_type','pta_status','condition','inspection_status','inspection_date','battery_checked','battery','asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
+        fields=['device_type','pta_status','condition','grade','inspection_status','inspection_date','battery_checked','battery','asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
         widgets={'inspection_date':DATE}
     def __init__(self,*args,user,**kwargs):
         super().__init__(*args,**kwargs)
@@ -126,7 +126,7 @@ class DocumentForm(forms.ModelForm):
         if kind=='Mobile Intake':
             add('purchase_source',forms.ChoiceField(choices=[(x,x) for x in ('Distributor','Walk-in Seller','Customer Trade-In','Other')]))
             add('trade_in_customer',forms.ModelChoiceField(queryset=Party.objects.filter(kind='Customer'),required=False))
-            for name,options in [('device_type',['New','Used','Refurbished']),('condition',['Excellent','Very Good','Good','Fair','Not Inspected','For Parts']),('inspection_status',['Pending','Passed','Repair Needed','Failed'])]:
+            for name,options in [('device_type',['New','Used','Refurbished','Repaired']),('condition',['Excellent','Very Good','Good','Fair','Not Inspected','For Parts']),('inspection_status',['Pending','Passed','Repair Needed','Failed'])]:
                 add(name,forms.ChoiceField(choices=[(x,x) for x in options],initial={'device_type':'Used','condition':'Not Inspected','inspection_status':'Pending'}[name]))
             add('inspection_date',forms.DateField(required=False,widget=DATE));add('battery_checked',forms.BooleanField(required=False))
             add('battery',forms.IntegerField(min_value=0,max_value=100,required=False))
@@ -270,7 +270,7 @@ LineSet=inlineformset_factory(Document,Line,form=LineForm,extra=1,can_delete=Tru
 ReturnLineSet=inlineformset_factory(Document,Line,form=LineForm,extra=0,can_delete=True)
 
 MASTER_MODELS={'Mobile Model':(PhoneModel,['code','name','brand','description']),
-    'Item':(Product,['code','name','group','model','brand','storage','ram','colour','serialized','stock_item','selling_price','enabled']),
+    'Item':(Product,['code','name','group','model','brand','storage','ram','colour','serialized','stock_item','reorder_level','selling_price','enabled']),
     'Customer':(Party,['name','city','phone','email','address','enabled']),
     'Supplier':(Party,['name','city','phone','email','address','enabled']),
     'Mobile Staff':(Staff,['code','name','branch','user','designation','enabled','manager','can_buy','can_sell','can_handle_payments']),

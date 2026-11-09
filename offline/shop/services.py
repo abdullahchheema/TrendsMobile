@@ -220,10 +220,12 @@ def _receive(doc):
             if line.quantity!=1:raise ValidationError('Receive one physical phone per line.')
             if line.device_id:raise ValidationError('This phone has already been received.')
             attrs=doc.data.get('device',{})
-            device=Device(code=code('PHONE'),branch=doc.branch,product=line.product,warehouse=line.warehouse or doc.warehouse,
+            per_line=attrs.get('line_attrs') or []
+            if phone_index<len(per_line):attrs=dict(attrs,**per_line[phone_index])      # bulk purchases give each phone its own condition, grade, price
+            device=Device(code=code('PHONE'),branch=doc.branch,product=line.product,warehouse=line.warehouse or doc.warehouse,status='Holding' if attrs.get('holding') else 'Available',
                 purchase_cost=line.rate,received_on=doc.posting_date,demo_batch=doc.demo_batch,
                 device_type=attrs.get('device_type','Used'),condition=attrs.get('condition','Not Inspected'),
-                pta_status=attrs.get('pta_status','Not recorded'),
+                pta_status=attrs.get('pta_status','Not recorded'),grade=attrs.get('grade') or None,
                 inspection_status=attrs.get('inspection_status','Pending'),inspection_date=attrs.get('inspection_date') or None,
                 battery_checked=bool(attrs.get('battery_checked')),battery=int(attrs.get('battery') or 0),
                 asking_price=money(attrs.get('asking_price')),minimum_price=money(attrs.get('minimum_price')),

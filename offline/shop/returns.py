@@ -105,7 +105,7 @@ def post(doc):
             device=Device.objects.select_for_update().get(pk=line.device_id)
             if device.branch_id!=doc.branch_id or device.sale_id!=original.pk or device.status!='Sold':
                 raise ValidationError('The phone is not an unreturned device from this sale and shop.')
-            device.warehouse=line.warehouse or doc.warehouse;device.status='Available';device.sale=None;device.customer=None
+            device.warehouse=line.warehouse or doc.warehouse;device.status='Holding';device.sale=None;device.customer=None
             device.sold_on=None;device.sold_price=0;device.inspection_status='Pending'
             device.details['inspection_notes']='Returned: '+doc.notes;device.save()
         movement=s.stock(doc,line,line.quantity,line.cost)

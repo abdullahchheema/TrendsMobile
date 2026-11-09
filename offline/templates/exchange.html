@@ -1,0 +1,18 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Phone exchange</h1><p>{{ branch.name }} · sell a phone and take the customer's old phone(s) in part payment. All prices in PKR.</p></div><a href="{% url 'dashboard' %}">Back to dashboard</a></div>
+<form method="post" class="panel easy-entry">{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.non_field_errors }}
+<h2 style="margin-top:0">1. The phone the customer is buying</h2>
+<div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_new %}</div>
+<h2>2. The old phone(s) they hand in</h2>
+{% if incoming_error %}<div class="notice error" role="alert">{{ incoming_error }}</div>{% endif %}
+{% for s in slots %}<fieldset class="form-section"><legend>Old phone {{ s.n }}{% if s.n > 1 %} (optional){% endif %}</legend><div class="form-grid">
+<div class="field"><label for="ip{{ s.n }}">Model / variant</label><select id="ip{{ s.n }}" name="in_product_{{ s.n }}"><option value="">Choose…</option>{% for p in products %}<option value="{{ p.pk }}" {% if s.product == p.pk|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div>
+<div class="field"><label for="iv{{ s.n }}">Agreed value (PKR)</label><input id="iv{{ s.n }}" name="in_value_{{ s.n }}" type="number" min="0" step="0.01" value="{{ s.value }}"></div>
+<div class="field"><label for="ii{{ s.n }}">IMEI (dual-SIM: both on one line)</label><input id="ii{{ s.n }}" name="in_imeis_{{ s.n }}" value="{{ s.imeis }}" autocomplete="off" inputmode="numeric"></div>
+<div class="field"><label for="ic{{ s.n }}">Condition · grade · PTA</label><div style="display:flex;gap:8px"><select id="ic{{ s.n }}" name="in_condition_{{ s.n }}">{% for c in conditions %}<option {% if s.condition == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select><input name="in_grade_{{ s.n }}" type="number" min="1" max="10" placeholder="1-10" value="{{ s.grade }}" style="width:90px" aria-label="Grade out of 10"><select name="in_pta_{{ s.n }}" aria-label="PTA"><option {% if s.pta == 'PTA' %}selected{% endif %}>PTA</option><option {% if s.pta == 'Non-PTA' %}selected{% endif %}>Non-PTA</option></select></div></div>
+<div class="field" style="grid-column:1/-1"><label for="in{{ s.n }}">Inspection notes (screen, battery, faults)</label><input id="in{{ s.n }}" name="in_notes_{{ s.n }}" maxlength="240" value="{{ s.notes }}"></div></div></fieldset>{% endfor %}
+<h2>3. Settle the difference</h2>
+<div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_settle %}</div>
+<p class="muted">The difference is the selling price minus the agreed value of the old phones. If it is positive the customer pays it; if negative you pay the customer. Old phones go into <strong>Holding</strong>: they are in your stock value but cannot be sold until a manager inspects and accepts them.</p>
+<div class="form-actions"><button class="primary easy-save" type="submit">Complete exchange</button></div></form>
+{% endblock %}

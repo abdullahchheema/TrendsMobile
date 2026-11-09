@@ -65,6 +65,16 @@ def recent(branch,limit=6):
     return docs
 
 
+def low_stock(branch):
+    """Accessories whose stock in this shop is at or below their reorder level (products with a level of 0 are never listed)."""
+    from .models import Product,StockMovement
+    rows=[]
+    for p in Product.objects.filter(enabled=True,stock_item=True,serialized=False,reorder_level__gt=0).order_by('name'):
+        qty=StockMovement.objects.filter(product=p,warehouse__branch=branch).aggregate(q=Sum('quantity'))['q'] or ZERO
+        if qty<=p.reorder_level:rows.append(dict(product=p,quantity=qty,level=p.reorder_level))
+    return rows
+
+
 def finance(user,branch):
     """Month-to-date P&L plus receivables/payables. Returns None if the figures cannot be produced (never raises into the page)."""
     if not branch:return None

@@ -107,7 +107,7 @@ def dashboard(request):
         trend=dm.sales_trend(insight['shop'])
         manager_view=access.statements(request.user)
         insight.update(money=dm.finance(request.user,insight['shop']) if manager_view else None,balances=dm.balances(insight['shop']) if manager_view else [],trend=trend,
-                       chart=dm.chart_geometry(trend),recent=dm.recent(insight['shop']),week=sum((p['net'] for p in trend[-7:]),Decimal(0)))
+                       low_stock=dm.low_stock(insight['shop']),chart=dm.chart_geometry(trend),recent=dm.recent(insight['shop']),week=sum((p['net'] for p in trend[-7:]),Decimal(0)))
     device_page,pager_query=paginate(request,rows,25)
     return render(request,'dashboard.html',dict(insight=insight,title='Mobile Shop',devices=device_page.object_list,page_obj=device_page,pager_query=pager_query,device_total=device_page.paginator.count,summary=summary,groups=groups.values(),view_query=query.urlencode(),selected_shop=branch,branch=branch,
         models=PhoneModel.objects.order_by('name')))
@@ -163,6 +163,10 @@ def master_edit(request,kind,pk=None):
     Form=StaffSetupForm if kind=='Mobile Staff' else AccountSetupForm if kind=='Account' else forms.modelform_factory(model,fields=fields)
     form=Form(request.POST or None,instance=instance,**({'user':request.user} if kind=='Mobile Staff' else {}))
     if 'code' in form.fields and not pk:form.fields['code'].required=False
+    brands=[]
+    if 'brand' in form.fields:
+        from .models import Brand
+        brands=list(Brand.objects.filter(enabled=True).values_list('name',flat=True));form.fields['brand'].widget.attrs.update({'list':'brand-list','autocomplete':'off'})
     if 'branch' in form.fields and not pk and request.GET.get('branch'):
         branch=selected_branch(request.user,request.GET['branch']);form.initial['branch']=branch.pk
         if kind=='Mobile Staff':form.fields['default_warehouse'].queryset=Warehouse.objects.filter(branch=branch,enabled=True)
@@ -186,11 +190,14 @@ def master_edit(request,kind,pk=None):
                 if not obj.code:obj.code=services.code(kind.upper())
                 obj.full_clean()
                 obj.save()
+                if kind in ('Mobile Model','Item') and getattr(obj,'brand','').strip():
+                    from .models import Brand
+                    Brand.objects.get_or_create(name=obj.brand.strip()[:80])      # new brands typed here join the suggestion list
                 Audit.objects.create(user=request.user,action='Save setup record',details={'kind':kind,'id':str(obj.pk),'code':obj.code})
         except (ValidationError,IntegrityError) as error:form.add_error(None,error_text(error))
         else:
             messages.success(request,'Record saved.');return redirect('collection',kind=kind)
-    return render(request,'form.html',dict(title=kind,form=form,master=True))
+    return render(request,'form.html',dict(title=kind,form=form,master=True,brands=brands))
 
 @login_required
 def device_edit(request,pk):

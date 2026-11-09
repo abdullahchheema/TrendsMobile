@@ -95,7 +95,7 @@ class Workflows(TestCase):
         _,_,device=self.intake();doc=s.checkout(self.sale(device),self.user,[],None)
         device.refresh_from_db();device.warranty_days=90;device.warranty_terms='Changed after sale';device.save(update_fields=['warranty_days','warranty_terms'])
         returned=s.return_sale(doc,self.user,[str(device.pk)],'Cable received','Customer return');returned=s.submit(returned,self.user)
-        device.refresh_from_db();self.assertEqual(device.status,'Available');self.assertEqual(device.inspection_status,'Pending')
+        device.refresh_from_db();self.assertEqual(device.status,'Holding');self.assertEqual(device.inspection_status,'Pending')   # returned phones wait for inspection before resale
         self.assertEqual(returned.lines.get().snapshot['warranty_days'],7);self.assertEqual(returned.outstanding,-65000);self.assert_balanced()
     def test_duplicate_return_rejected(self):
         _,_,device=self.intake();doc=s.checkout(self.sale(device),self.user,[],None)

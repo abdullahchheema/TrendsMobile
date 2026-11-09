@@ -4,9 +4,9 @@ from . import permissions
 
 REPORTS=['Mobile Inventory','Mobile Stock Ageing','Device Profit','Mobile Device Economics','Staff Activity','Staff Summary',
          'Purchase Register','Sales Register','Payment Ledger','Accounts Receivable','Accounts Payable','General Ledger','Stock Balance','Stock Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance','Cash Flow Statement']
-NAV=[('Phones',[('Phone Inventory','Mobile Device'),('Models','Mobile Model'),('Variants & Accessories','Item')]),
-    ('Buy',[('Buy a Phone','Mobile Intake'),('Purchase Receipts','Purchase Receipt'),('Supplier Bills / Expenses','Purchase Invoice'),('Purchase Orders','Purchase Order')]),
-    ('Sell / POS',[('Sales & Returns','Sales Invoice')]),('Exchanges',[('Phone Exchanges','Mobile Exchange')]),
+NAV=[('Phones',[('Find by IMEI','IMEI Lookup'),('Phone Inventory','Mobile Device'),('Models','Mobile Model'),('Variants & Accessories','Item')]),
+    ('Buy',[('Bulk purchase','Bulk Purchase'),('Buy a Phone','Mobile Intake'),('Purchase Receipts','Purchase Receipt'),('Supplier Bills / Expenses','Purchase Invoice'),('Purchase Orders','Purchase Order')]),
+    ('Sell / POS',[('Sales & Returns','Sales Invoice')]),('Exchanges',[('New exchange','New Exchange'),('Phone Exchanges','Mobile Exchange')]),
     ('Stock',[('Stock transfers','Stock Entry'),('Stock adjustments','Stock Adjustment')]),
     ('Customers & Suppliers',[('Customers','Customer'),('Suppliers','Supplier')]),
     ('Payments & Expenses',[('Expenses & owner entries','Voucher'),('Payments / Advances','Payment Entry'),('Daily Closing','Mobile Daily Closing'),('Open / Past Shifts','POS Opening Entry'),('Till Closings','POS Closing Entry')]),

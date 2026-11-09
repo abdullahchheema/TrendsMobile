@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% load static %}{% block content %}
+<div class="page-head"><div><h1>Bulk purchase</h1><p>{{ branch.name }} · many phones from one supplier in a single saved purchase. All prices in PKR.</p></div><a href="{% url 'easy_entry' 'purchase' %}">Single-variant Buy Stock</a></div>
+<form method="post" class="panel" data-bulk>{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.rows_json }}{{ form.non_field_errors }}
+<h2 style="margin-top:0">1. Supplier and delivery</h2>
+<div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_head %}</div>
+<h2>2. Phones</h2>
+<div class="easy-extra" style="margin:0 0 16px"><label for="scan">Scan IMEIs continuously</label><input id="scan" data-scan autocomplete="off" inputmode="numeric" placeholder="Click here, then scan each phone’s IMEI barcode…" style="width:100%;font-size:18px"><small data-scan-status class="muted">Each scan goes to the highlighted line; when it is full the next incomplete line is filled.</small></div>
+<div class="table-scroll"><table><thead><tr><th>Model / variant</th><th>Qty</th><th>Condition</th><th>Grade · PTA</th><th>Buying price</th><th>Selling price (each)</th><th>IMEIs</th><th></th></tr></thead><tbody data-rows></tbody></table></div>
+<div class="actions"><button type="button" data-add>+ Add another line</button></div>
+<section class="easy-total" aria-live="polite"><strong>Total: <span data-total>PKR 0.00</span></strong><span data-count></span></section>
+<h2>3. Payment</h2>
+<div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_tail %}</div>
+<p class="muted">Posting creates the stock receipt, the supplier bill and the payment together. Phones are added at their own buying price, so profit per phone is exact.</p>
+<div class="form-actions"><button class="primary easy-save" type="submit">Save purchase &amp; add stock</button></div>
+</form>
+{{ products|json_script:"bulk-products" }}{{ conditions|json_script:"bulk-conditions" }}{{ types|json_script:"bulk-types" }}
+{% endblock %}{% block scripts %}<script src="{% static 'bulk.js' %}" defer></script>{% endblock %}

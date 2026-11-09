@@ -102,6 +102,12 @@ class Party(Record):
     class Meta:constraints=[models.UniqueConstraint(fields=['kind','name'],name='party_kind_name')]
     def __str__(self):return self.name
 
+class Brand(models.Model):
+    name=models.CharField(max_length=80,unique=True)
+    enabled=models.BooleanField(default=True)
+    class Meta:ordering=['name']
+    def __str__(self):return self.name
+
 class PhoneModel(Record):
     name=models.CharField(max_length=180)
     brand=models.CharField(max_length=100)
@@ -118,6 +124,7 @@ class Product(Record):
     colour=models.CharField(max_length=80,blank=True)
     serialized=models.BooleanField(default=False)
     stock_item=models.BooleanField(default=True)
+    reorder_level=models.DecimalField(max_digits=12,decimal_places=3,default=0,help_text='Warn when accessory stock in a shop falls to this quantity or below. 0 = no alert.')
     selling_price=models.DecimalField(max_digits=18,decimal_places=2,default=0)
     barcodes=models.JSONField(default=list,blank=True)
     enabled=models.BooleanField(default=True)
@@ -137,6 +144,7 @@ class Device(Record):
     device_type=models.CharField(max_length=30,default='Used')
     pta_status=models.CharField(max_length=20,default='Not recorded',db_default='Not recorded',choices=[('PTA','PTA'),('Non-PTA','Non-PTA'),('Not recorded','Not recorded')])
     condition=models.CharField(max_length=40,default='Not Inspected')
+    grade=models.PositiveSmallIntegerField(null=True,blank=True,help_text='Condition grade out of 10 (10 = like new).')
     inspection_status=models.CharField(max_length=30,default='Pending')
     inspection_date=models.DateField(null=True,blank=True)
     battery_checked=models.BooleanField(default=False)
@@ -156,6 +164,7 @@ class Device(Record):
     sale=models.ForeignKey('Document',on_delete=models.PROTECT,null=True,blank=True,related_name='sold_devices')
     def clean(self):
         if self.battery>100:raise ValidationError('Battery health must be between 0 and 100.')
+        if self.grade is not None and not 1<=self.grade<=10:raise ValidationError('Condition grade must be between 1 and 10.')
         if min(self.asking_price,self.minimum_price,self.wholesale_price,self.purchase_cost)<0:raise ValidationError('Prices cannot be negative.')
         if self.asking_price and self.asking_price<self.minimum_price:raise ValidationError('Asking price cannot be below minimum price.')
         if self.inspection_status=='Passed' and not self.inspection_date:self.inspection_date=timezone.localdate()
