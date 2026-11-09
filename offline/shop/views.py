@@ -26,6 +26,7 @@ from . import fund_transfers as funds
 from . import journals,customer_names
 from .fund_transfer_forms import FundTransferForm
 from .journal_forms import JournalForm,JournalRows
+from . import permissions
 from .setup_forms import CreateShopForm,PostingAccountsForm,PaymentMethods,payment_mapping,StaffSetupForm,AccountSetupForm
 
 def error_text(error):return '; '.join(error.messages) if isinstance(error,ValidationError) else str(error)
@@ -113,7 +114,7 @@ def dashboard(request):
 
 @login_required
 def collection(request,kind):
-    if kind=='Account':shop_setup.owner(request.user)
+    if kind=='Account' and not permissions.can(request.user,'accounting'):raise PermissionDenied('You do not have access to the accounts.')
     if kind=='Mobile Shop Settings':return redirect('settings')
     if kind=='Mobile Device':
         objects=scoped_devices(request.user).select_related('product','warehouse').prefetch_related('imeis').order_by('code')
@@ -147,10 +148,12 @@ def collection(request,kind):
 def master_edit(request,kind,pk=None):
     if kind not in MASTER_MODELS:raise Http404
     model,fields=MASTER_MODELS[kind]
-    if kind in ('Shop','Account'):
+    if kind=='Shop':
         shop_setup.owner(request.user)
-        if kind=='Shop' and not pk:return redirect('setup_new')
-    if kind not in ('Customer','Supplier') and not access.manager(request.user):raise PermissionDenied('A manager must edit setup records.')
+        if not pk:return redirect('setup_new')
+    if kind=='Account':
+        if not permissions.can(request.user,'accounting'):raise PermissionDenied('You do not have access to the accounts.')
+    elif kind not in ('Customer','Supplier') and not access.manager(request.user):raise PermissionDenied('A manager must edit setup records.')
     instance=get_object_or_404(model,pk=pk) if pk else model()
     if kind in ('Customer','Supplier'):
         if pk and instance.kind!=kind:raise Http404
@@ -209,7 +212,7 @@ def device_edit(request,pk):
                 for name in form._meta.fields:
                     if name in values:setattr(locked,name,values[name])
                 locked.details.update({name:values[name] for name in DETAIL_FIELDS});locked.full_clean();locked.save()
-                Audit.objects.create(user=request.user,action='Update device',details={'device':str(obj.pk)})
+                Audit.objects.create(user=request.user,action='Update device',branch=obj.branch,details={'device':str(obj.pk)})
             messages.success(request,'Device details saved.');return redirect('collection',kind='Mobile Device')
         except (ValidationError,IntegrityError) as e:form.add_error(None,error_text(e))
     return render(request,'form.html',dict(title=f'{obj.code} · {obj.product.name}',form=form,device=obj,read_only=not editable))
@@ -592,6 +595,10 @@ def pos_checkout(request):
             if not isinstance(adjustments,dict):raise ValidationError('Invalid invoice adjustment values.')
             pricing.inputs(doc,adjustments.get('discount_type','amount'),adjustments.get('discount_value','0'),adjustments.get('tax_rule',''),adjustments.get('tax_version',''))
             doc.save()
+            override=data.get('override') or {}
+            if override.get('approver') or override.get('pin'):
+                from . import overrides
+                overrides.apply(doc,request.user,override.get('approver'),override.get('pin'),'POS sale')
             for row in data['items']:
                 device=get_object_or_404(scoped_devices(request.user),pk=row['device']) if row.get('device') else None
                 place=Warehouse.objects.get(pk=row['warehouse'],branch=branch)

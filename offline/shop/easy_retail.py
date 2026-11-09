@@ -77,5 +77,8 @@ def sale(data,user,demo_batch=''):
     doc=s.new_doc('Sales Invoice',branch,customer=customer,seller=data['staff'],warehouse=phone.warehouse,posting_date=data['posting_date'],demo_batch=demo_batch,
         notes=data.get('notes',''),data={'easy_entry':{'kind':'sale'}})
     Line.objects.create(document=doc,product=phone.product,device=phone,warehouse=phone.warehouse,quantity=1,rate=price)
+    if data.get('override_approver') or data.get('override_pin'):
+        from . import overrides
+        overrides.apply(doc,user,data.get('override_approver'),data.get('override_pin'),'Counter sale')
     payments,paid=payment(data,price)
     return s.checkout(doc,user,payments,data['handler'])

@@ -119,7 +119,10 @@ def _transfer(doc,user,target):
         inter_shop=cross,value=str(total),completed_at=timezone.now().isoformat(),completed_by=user.get_username()))
     person=staff(user);doc.staff_names['transferred_by']=person.name if person else user.get_username()
 
-def audit(user,action,doc,**details):Audit.objects.create(user=user,action=action,document=doc,details=details)
+def audit(user,action,doc,**details):
+    from .requestctx import client_ip
+    branch=details.pop('branch',None) or (doc.branch if doc else None)
+    Audit.objects.create(user=user,action=action,document=doc,branch=branch if isinstance(branch,Branch) else None,ip=client_ip(),details=details)
 
 def assigned(doc,field,capability,required=True):
     person=getattr(doc,field)
@@ -147,6 +150,8 @@ def balanced(doc):
 
 def open_date(doc):
     if doc.posting_date>timezone.localdate():raise ValidationError('Cannot post a future transaction.')
+    locked=Branch.objects.filter(pk=doc.branch_id).values_list('lock_through',flat=True).first()
+    if locked and doc.posting_date<=locked:raise ValidationError(f'The accounting period up to {locked:%d %b %Y} is locked. Ask the owner or accountant to review it.')
     if Document.objects.filter(branch=doc.branch,kind='Mobile Daily Closing',status='Submitted',posting_date__gte=doc.posting_date).exists():
         raise ValidationError('This accounting date has already been closed. Ask a manager to review it.')
 
@@ -292,6 +297,8 @@ def _sale(doc):
     seen=set();total=ZERO;total_cost=ZERO
     from . import pricing
     invoice_totals,allocations=pricing.calculate(doc)
+    from . import overrides
+    approved=overrides.check_sale(doc,invoice_totals)
     shop=settings(doc)
     doc.data['receipt']=dict(shop_phone=shop.shop_phone,shop_address=shop.shop_address,receipt_terms=shop.receipt_terms,urdu_receipt_note=shop.urdu_receipt_note)
     for line in doc.lines.select_related('product','warehouse').order_by('product_id','device_id'):
@@ -303,7 +310,7 @@ def _sale(doc):
             device=Device.objects.select_for_update().get(pk=line.device_id);seen.add(device.pk)
             if device.product_id!=line.product_id:raise ValidationError('Phone does not match the selected variant.')
             if device.status!='Available' or device.warehouse_id!=(line.warehouse_id or doc.warehouse_id):raise ValidationError('This exact phone is no longer available in that warehouse.')
-            if money(allocations[line.pk]['net'])<device.minimum_price and not manager(doc.posted_by):raise PermissionDenied('A manager must approve a price below the minimum, including invoice discounts.')
+            if money(allocations[line.pk]['net'])<device.minimum_price and not manager(doc.posted_by) and not approved:raise PermissionDenied('A manager must approve a price below the minimum, including invoice discounts. Enter their manager code and PIN under Manager override.')
             cost=device.purchase_cost;line.snapshot=snapshot(device)
             device.status='Sold';device.warehouse=None;device.customer=doc.customer;device.sale=doc
             device.sold_price=money(allocations[line.pk]['net']);device.sold_on=doc.posting_date;device.save()

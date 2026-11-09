@@ -48,11 +48,11 @@
   <a href="{% url 'dashboard' %}" class="brand"><img src="{% static 'covison-logo-mark.png' %}" alt=""><span>Covison ERP<small>Mobile shop suite</small></span></a>
   <div class="quick">
     {% if can_sell %}<a href="{% url 'easy_entry' 'sale' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">New Sale</a>{% endif %}
-    {% if can_costs %}<a href="{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">Buy Stock</a>{% endif %}
+    {% if can_buy %}<a href="{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}" class="primary-nav">Buy Stock</a>{% endif %}
   </div>
   <a href="{% url 'dashboard' %}"><svg class="ico"><use href="#i-home"/></svg>Dashboard</a>
   {% if can_sell %}<a href="{% url 'pos' %}"><svg class="ico"><use href="#i-sell-pos"/></svg>POS / Multiple items</a>{% endif %}
-  {% if is_manager %}<a href="{% url 'sales_accounts' %}{% if qs %}?branch={{ qs }}{% endif %}"><svg class="ico"><use href="#i-money"/></svg>Sales &amp; Accounts</a>{% endif %}
+  {% if can_statements %}<a href="{% url 'sales_accounts' %}{% if qs %}?branch={{ qs }}{% endif %}"><svg class="ico"><use href="#i-money"/></svg>Sales &amp; Accounts</a>{% endif %}
   <a href="{% url 'report_center' %}" class="report-center-link"><svg class="ico"><use href="#i-reports"/></svg>All reports</a>
   {% for section,links in navigation %}
   <details open><summary><svg class="ico"><use href="#i-{{ section|slugify }}"/></svg>{{ section }}</summary>{% for label,target in links %}<a href="{% if target == 'Stock Adjustment' %}{% url 'stock_adjust' %}{% if qs %}?branch={{ qs }}{% endif %}{% elif target == 'Mobile Intake' %}{% url 'easy_entry' 'purchase' %}{% if qs %}?branch={{ qs }}{% endif %}{% else %}{% url 'collection' target %}{% endif %}">{{ label }}</a>{% endfor %}{% if section == 'Staff' %}{% for item in staff_report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}{% endif %}</details>
@@ -65,6 +65,7 @@
   <details open><summary><svg class="ico"><use href="#i-reports"/></svg>Reports</summary>{% for item in report_navigation %}<a href="{% url 'report' item.name %}">{{ item.label }}</a>{% endfor %}</details>
   <details open><summary><svg class="ico"><use href="#i-settings"/></svg>Settings</summary>
     {% if user.is_superuser %}<a href="{% url 'setup' %}">Four-shop setup</a><a href="{% url 'collection' 'Shop' %}">Shops</a><a href="{% url 'collection' 'Account' %}">Posting accounts</a>{% endif %}
+    {% if can_roles %}<a href="{% url 'roles' %}">Roles &amp; permissions</a>{% endif %}{% if can_audit %}<a href="{% url 'audit_log' %}">Audit log</a>{% endif %}{% if can_accounting %}<a href="{% url 'chart' %}">Chart of accounts</a><a href="{% url 'periods' %}">Accounting periods</a>{% endif %}
     {% if is_manager %}<a href="{% url 'settings' %}">Shop Settings</a><a href="{% url 'collection' 'Warehouse' %}">Warehouses</a><a href="{% url 'collection' 'Till' %}">Cash tills</a><a href="{% url 'users' %}">Staff login accounts</a>{% endif %}
     <a href="{% url 'device_check' %}">PC, scanner &amp; printer check</a><a href="{% url 'password' %}">Change password</a>
   </details>

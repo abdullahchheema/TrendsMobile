@@ -47,7 +47,7 @@ def edit(request,pk=None):
                 saved.account=Account.objects.select_for_update().get(pk=saved.account_id)
                 if not saved.code:saved.code=services.code('TAX')
                 saved.full_clean();saved.save()
-                Audit.objects.create(user=request.user,action='Save sales tax rule',details={'rule':str(saved.pk),'branch':str(branch.pk),'name':saved.name,'rate':str(saved.rate),'account':str(saved.account_id),'reference':saved.reference,'enabled':saved.enabled})
+                Audit.objects.create(user=request.user,action='Save sales tax rule',branch=branch,details={'rule':str(saved.pk),'branch':str(branch.pk),'name':saved.name,'rate':str(saved.rate),'account':str(saved.account_id),'reference':saved.reference,'enabled':saved.enabled})
             messages.success(request,'Sales-tax rule saved. Existing submitted invoices keep their original tax.');return redirect('tax_rules')
         except ValidationError as error:form.add_error(None,error)
     return render(request,'form.html',dict(title=f'Sales tax · {branch.name}',form=form,master=True))

@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Chart of accounts</h1><p>Every account the books use, grouped by section. Balances roll up into their group and are shown on each account's normal side.</p></div>
+<div class="actions" style="margin:0"><form method="post">{% csrf_token %}<input type="hidden" name="action" value="install"><button type="submit" {% if not empty %}class="button"{% endif %} data-confirm="Add any missing accounts of the standard mobile-retail chart? Existing accounts are not changed.">Install standard chart</button></form><a class="button primary" href="{% url 'master_new' 'Account' %}">New account</a></div></div>
+<div class="panel table-scroll"><table><thead><tr><th>Code</th><th>Account</th><th>Type</th><th class="num">Balance (PKR)</th><th>Status</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.account.code }}</td><td style="padding-left:{{ r.depth|add:1 }}rem">{% if r.account.is_group %}<strong>{{ r.account.name }}</strong>{% else %}<a href="{% url 'master_edit' 'Account' r.account.pk %}">{{ r.account.name }}</a>{% endif %}</td><td>{{ r.account.account_type|default:r.account.root_type }}</td><td class="num">{{ r.balance|floatformat:"2g" }}</td><td>{% if not r.account.enabled %}<span class="badge warn">Disabled</span>{% elif r.account.is_group %}<span class="badge">Group</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="5" class="empty-state">No accounts yet. Install the standard chart to start.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

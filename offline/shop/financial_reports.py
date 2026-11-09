@@ -31,7 +31,7 @@ def classifications():
     for account_id in SalesTaxRule.objects.values_list('account_id',flat=True):mapped[str(account_id)].add('Liability')
     result={}
     for account in Account.objects.all():
-        root=account.source.get('root_type')
+        root=account.root_type or account.source.get('root_type')
         if root not in ROOTS:root=TYPES.get(account.account_type)
         candidates=mapped[str(account.pk)]
         if not root and len(candidates)==1:root=next(iter(candidates))

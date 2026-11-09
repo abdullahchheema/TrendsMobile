@@ -11,6 +11,7 @@ POSTING={
  'sales':('Sales income','Income Account'), 'cogs':('Cost of goods sold','Cost of Goods Sold'), 'expense':('Shop / repair expenses','Expense Account'),
 }
 METHODS=['Cash','Bank Transfer','Card','JazzCash','Easypaisa']
+SECTION={'Receivable':'Asset','Payable':'Liability','Stock':'Asset','Stock Received But Not Billed':'Liability','Income Account':'Income','Cost of Goods Sold':'Expense','Expense Account':'Expense'}
 
 def owner(user):
     if not user.is_superuser:raise PermissionDenied('Only the owner can configure shops and posting accounts.')
@@ -44,7 +45,7 @@ def configure(branch,accounts,methods,user):
     if (changed or settings.payment_methods!=methods) and Document.objects.filter(branch=branch,kind='POS Opening Entry',state='Open',status='Submitted').exists():raise ValidationError('Close this shop’s POS shifts before changing payment or posting accounts.')
     settings.accounts.pop('inter_shop',None)
     settings.accounts={**settings.accounts,**accounts};settings.payment_methods=methods;settings.save()
-    Audit.objects.create(user=user,action='Configure shop accounts',details={'branch':str(branch.pk),'accounts':accounts,'payment_methods':methods})
+    Audit.objects.create(user=user,action='Configure shop accounts',branch=branch,details={'branch':str(branch.pk),'accounts':accounts,'payment_methods':methods})
     return settings
 
 def transfer_accounts(branch):
@@ -67,13 +68,13 @@ def create_shop(values,user):
     Till.objects.create(code=branch.code+'-TILL',name=values['till_name'],branch=branch)
     accounts={}
     for key,(label,kind) in POSTING.items():
-        account=Account.objects.create(code=branch.code+'-'+key.upper(),name=(branch.name+' · '+label)[:180],account_type=kind);accounts[key]=str(account.pk)
+        account=Account.objects.create(code=branch.code+'-'+key.upper(),name=(branch.name+' · '+label)[:180],account_type=kind,root_type=SECTION.get(kind,''));accounts[key]=str(account.pk)
     methods={}
     for index,name in enumerate(values['payment_methods'],1):
-        account=Account.objects.create(code=f'{branch.code}-PAY-{index}',name=(branch.name+' · '+name)[:180],account_type='Cash' if name=='Cash' else 'Bank');methods[name]=str(account.pk)
+        account=Account.objects.create(code=f'{branch.code}-PAY-{index}',name=(branch.name+' · '+name)[:180],account_type='Cash' if name=='Cash' else 'Bank',root_type='Asset');methods[name]=str(account.pk)
     validate_mapping(accounts,methods)
     ShopSettings.objects.create(branch=branch,shop_phone=values.get('shop_phone',''),shop_address=values.get('shop_address',''),accounts=accounts,payment_methods=methods)
-    Audit.objects.create(user=user,action='Create shop setup',details={'branch':str(branch.pk),'code':branch.code,'no_opening_entries':True})
+    Audit.objects.create(user=user,action='Create shop setup',branch=branch,details={'branch':str(branch.pk),'code':branch.code,'no_opening_entries':True})
     return branch
 
 def readiness(branch):

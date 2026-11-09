@@ -1,7 +1,7 @@
 from django import forms
 from django.forms import formset_factory
 from django.core.exceptions import ValidationError
-from .models import Branch,Staff,Warehouse,Account,LedgerEntry
+from .models import Branch,Staff,Warehouse,Account,LedgerEntry,Role
 from .access import branches
 from .setup import POSTING,METHODS
 
@@ -61,12 +61,20 @@ ROLES={
  'technician':('Technician',(False,False,False,False)),
 }
 class StaffSetupForm(forms.ModelForm):
-    role=forms.ChoiceField(label='Role preset',choices=[('custom','Keep / set responsibilities below')]+[(key,label) for key,(label,flags) in ROLES.items()],initial='custom')
+    role=forms.ModelChoiceField(label='Role',queryset=Role.objects.none(),to_field_name='code',required=False,empty_label='No role - set responsibilities below',help_text='A role sets what this person may do. Editing roles: Settings > Roles & permissions.')
+    approval_pin=forms.RegexField(label='Manager override PIN (optional)',regex=r'^\d{4,8}$',required=False,widget=forms.PasswordInput(render_value=False,attrs={'autocomplete':'new-password','inputmode':'numeric'}),help_text='4-8 digits. Lets a manager approve a discount, a price below minimum or a refund at the counter. Leave blank to keep the current PIN.')
     class Meta:
         model=Staff
         fields=['code','name','branch','default_warehouse','designation','role','user','enabled','manager','can_buy','can_sell','can_handle_payments']
+    def save(self,commit=True):
+        pin=self.cleaned_data.get('approval_pin')
+        if pin:
+            from django.contrib.auth.hashers import make_password
+            self.instance.approval_pin=make_password(pin)
+        return super().save(commit)
     def __init__(self,*args,user,**kwargs):
         super().__init__(*args,**kwargs);self.actor=user
+        self.fields['role'].queryset=Role.objects.filter(enabled=True).exclude(code='owner')
         self.fields['code'].required=False
         self.fields['branch'].queryset=branches(user)
         raw=self.data.get('branch') if self.is_bound else self.instance.branch_id
@@ -77,10 +85,10 @@ class StaffSetupForm(forms.ModelForm):
         if branch and not self.is_bound:self.initial['branch']=branch.pk
     def clean(self):
         data=super().clean();role=data.get('role')
-        if role in ROLES:
-            label,flags=ROLES[role]
-            data.update(dict(zip(['manager','can_buy','can_sell','can_handle_payments'],flags)))
-            if not data.get('designation'):data['designation']=label
+        if role:
+            perms=set(role.permissions)
+            data.update(manager='manage_branch' in perms,can_buy='buy' in perms,can_sell='sell' in perms,can_handle_payments='payments' in perms)
+            if not data.get('designation'):data['designation']=role.name
         if self.instance.user_id==self.actor.pk and not self.actor.is_superuser:
             if not data.get('manager') or not data.get('enabled') or data.get('user')!=self.actor:raise ValidationError('The owner must review changes to your own manager/login access.')
         return data
@@ -88,10 +96,19 @@ class StaffSetupForm(forms.ModelForm):
 class AccountSetupForm(forms.ModelForm):
     class Meta:
         model=Account
-        fields=['code','name','account_type','enabled']
+        fields=['code','name','account_type','root_type','parent','is_group','enabled']
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
-        kinds=sorted({kind for label,kind in POSTING.values()}|{'Cash','Bank','Current Asset','Tax','Current Liability','Equity'}|({self.instance.account_type} if self.instance.account_type else set()))
-        self.fields['account_type']=forms.ChoiceField(choices=[('','Select account type')]+[(v,v) for v in kinds],required=self.instance._state.adding,initial=self.instance.account_type)
+        self.fields['parent'].queryset=Account.objects.filter(is_group=True,enabled=True).exclude(pk=self.instance.pk).order_by('code')
+        self.fields['parent'].label='Sits under (group)';self.fields['root_type'].label='Section';self.fields['is_group'].label='This is a group (holds other accounts, cannot be posted to)'
+        kinds=sorted({kind for label,kind in POSTING.values()}|{'Cash','Bank','Current Asset','Fixed Asset','Accumulated Depreciation','Depreciation','Tax','Current Liability','Equity'}|({self.instance.account_type} if self.instance.account_type else set()))
+        self.fields['account_type']=forms.ChoiceField(choices=[('','Select account type')]+[(v,v) for v in kinds],required=False,initial=self.instance.account_type)
         if not self.instance._state.adding and LedgerEntry.objects.filter(account=self.instance).exists():
-            self.fields['code'].disabled=True;self.fields['account_type'].disabled=True;self.fields['enabled'].disabled=True
+            self.fields['code'].disabled=True;self.fields['account_type'].disabled=True;self.fields['enabled'].disabled=True;self.fields['root_type'].disabled=True;self.fields['is_group'].disabled=True
+    def clean(self):
+        data=super().clean()
+        if not data.get('is_group') and not data.get('account_type'):self.add_error('account_type','Select an account type.')
+        if not data.get('root_type') and not data.get('parent'):
+            from .financial_reports import TYPES
+            data['root_type']=TYPES.get(data.get('account_type'),'')
+        return data

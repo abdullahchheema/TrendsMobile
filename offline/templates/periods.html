@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Accounting periods</h1><p>Locking a date protects everything on or before it: nothing can be posted, changed or cancelled there. Use it after month-end figures are final.</p></div></div>
+{% for shop in rows %}<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="branch" value="{{ shop.pk }}">
+<h2>{{ shop.name }}</h2><p>{% if shop.lock_through %}<span class="badge warn">Locked through {{ shop.lock_through|date:"j M Y" }}</span>{% else %}<span class="badge ok">All periods open</span>{% endif %}</p>
+<div class="form-grid"><div class="field"><label for="lock-{{ shop.pk }}">Lock everything through</label><input id="lock-{{ shop.pk }}" type="date" name="lock_through" max="{{ today|date:'Y-m-d' }}" value="{{ shop.lock_through|date:'Y-m-d' }}"></div>
+<div class="field"><label for="why-{{ shop.pk }}">Reason {% if shop.lock_through %}(required to reopen){% endif %}</label><input id="why-{{ shop.pk }}" name="reason" maxlength="200" placeholder="e.g. October books finalised"></div></div>
+<div class="form-actions"><button class="primary" type="submit" data-confirm="Change the lock date for {{ shop.name }}? This is recorded in the audit log.">Save lock date</button></div>
+{% if shop.lock_through and not is_owner %}<p class="muted">Only the owner can move the lock date back to reopen a period.</p>{% endif %}</form>{% empty %}<p class="empty-state">No shops yet.</p>{% endfor %}
+{% endblock %}

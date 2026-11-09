@@ -56,10 +56,13 @@ class EasyEntryForm(forms.Form):
         if kind=='purchase':
             places=Warehouse.objects.filter(branch=branch,enabled=True);default=person.default_warehouse if person and person.default_warehouse_id else places.first()
             self.fields['warehouse']=forms.ModelChoiceField(label='Keep stock at',queryset=places,initial=default)
+        if kind=='sale':
+            self.fields['override_approver']=forms.CharField(label='Manager override: manager code',required=False,max_length=40,widget=forms.TextInput(attrs={'autocomplete':'off'}),help_text='Only needed for a price below the minimum.')
+            self.fields['override_pin']=forms.CharField(label='Manager PIN',required=False,max_length=8,widget=forms.PasswordInput(render_value=False,attrs={'autocomplete':'new-password','inputmode':'numeric'}))
         self.fields['notes']=forms.CharField(label='Note (optional)',required=False,widget=forms.Textarea(attrs={'rows':2}))
         self.main_fields=[self[name] for name in ('party_name','find_imei','phone','product','quantity','imeis','pta_status','price','asking_price','device_type','condition') if name in self.fields]
         self.payment_fields=[self[name] for name in ('payment_status','amount_paid','method','payment_reference')]
-        self.extra_fields=[self[name] for name in ('staff','handler','posting_date','warehouse','notes') if name in self.fields]
+        self.extra_fields=[self[name] for name in ('staff','handler','posting_date','warehouse','override_approver','override_pin','notes') if name in self.fields]
 
     def clean(self):
         data=super().clean()

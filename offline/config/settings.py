@@ -9,7 +9,7 @@ INSTALLED_APPS=['django.contrib.auth','django.contrib.contenttypes','django.cont
 MIDDLEWARE=['django.middleware.security.SecurityMiddleware','whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware',
-    'shop.supabase_auth.SupabaseSessionMiddleware',
+    'shop.requestctx.RequestContextMiddleware','shop.supabase_auth.SupabaseSessionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware']
 ROOT_URLCONF='config.urls'
 TEMPLATES=[dict(BACKEND='django.template.backends.django.DjangoTemplates',DIRS=[BASE_DIR/'templates'],APP_DIRS=True,

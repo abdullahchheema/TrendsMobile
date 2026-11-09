@@ -20,6 +20,7 @@ class Branch(Record):
     name=models.CharField(max_length=180)
     company=models.CharField(max_length=180)
     enabled=models.BooleanField(default=True)
+    lock_through=models.DateField(null=True,blank=True,editable=False,help_text='Nothing can be posted, changed or cancelled on or before this date.')
     def __str__(self):return self.name
     def clean(self):
         if not self._state.adding and not self.enabled and Document.objects.filter(branch=self,kind='POS Opening Entry',state='Open',status='Submitted').exists():raise ValidationError('Close this shop’s POS shifts before disabling the shop.')
@@ -50,6 +51,20 @@ class Till(Record):
             if previous.branch_id!=self.branch_id and Document.objects.filter(till=self).exists():raise ValidationError('A till with transaction history cannot move to another shop.')
             if not self.enabled and Document.objects.filter(till=self,kind='POS Opening Entry',status='Submitted',state='Open').exists():raise ValidationError('Close this till shift before disabling the till.')
 
+class Role(models.Model):
+    """A named set of permissions (see permissions.CATALOG). The old Staff yes/no flags are kept in step with the role
+    on save, so every existing check keeps working while new checks read the permission list directly."""
+    code=models.SlugField(max_length=40,unique=True)
+    name=models.CharField(max_length=80)
+    description=models.CharField(max_length=240,blank=True)
+    permissions=models.JSONField(default=list,blank=True)
+    discount_max_pct=models.DecimalField(max_digits=5,decimal_places=2,default=0,help_text='Largest invoice discount (%) this role may give without a manager override.')
+    refund_max=models.DecimalField(max_digits=18,decimal_places=2,default=0,help_text='Largest refund (PKR) without a manager override. 0 = none.')
+    system=models.BooleanField(default=False,editable=False)
+    enabled=models.BooleanField(default=True)
+    class Meta:ordering=['name']
+    def __str__(self):return self.name
+
 class Staff(Record):
     name=models.CharField(max_length=180)
     branch=models.ForeignKey(Branch,on_delete=models.PROTECT)
@@ -61,7 +76,14 @@ class Staff(Record):
     can_buy=models.BooleanField(default=False)
     can_sell=models.BooleanField(default=False)
     can_handle_payments=models.BooleanField(default=False)
+    role=models.ForeignKey(Role,on_delete=models.PROTECT,null=True,blank=True,related_name='staff')
+    approval_pin=models.CharField(max_length=128,blank=True,editable=False)
     def __str__(self):return self.name
+    def save(self,*args,**kwargs):
+        if self.role_id:
+            perms=set(self.role.permissions)
+            self.manager='manage_branch' in perms;self.can_buy='buy' in perms;self.can_sell='sell' in perms;self.can_handle_payments='payments' in perms
+        return super().save(*args,**kwargs)
     def clean(self):
         if self.default_warehouse_id and (self.default_warehouse.branch_id!=self.branch_id or not self.default_warehouse.enabled):raise ValidationError('Select an active default warehouse in this staff member’s shop.')
         if not self._state.adding:
@@ -210,13 +232,26 @@ class Line(models.Model):
         values=[entry.get('status') for entry in self.snapshot.get('pta',[])]
         return 'Non-PTA' if any(value in ('Non-compliant','Blocked') for value in values) else 'PTA' if values and all(value=='Compliant' for value in values) else 'Not recorded'
 
+ROOT_TYPES=('Asset','Liability','Equity','Income','Expense')
 class Account(Record):
     name=models.CharField(max_length=180)
     account_type=models.CharField(max_length=50,blank=True)
+    root_type=models.CharField(max_length=10,blank=True,choices=[(r,r) for r in ROOT_TYPES])
+    parent=models.ForeignKey('self',null=True,blank=True,on_delete=models.PROTECT,related_name='children')
     enabled=models.BooleanField(default=True)
     is_group=models.BooleanField(default=False)
     def __str__(self):return f'{self.name} ({self.code})'
     def clean(self):
+        if self.parent_id:
+            if self.parent_id==self.pk:raise ValidationError('An account cannot be its own parent.')
+            if not self.parent.is_group:raise ValidationError('Choose a group account as the parent.')
+            ancestor=self.parent
+            while ancestor is not None:
+                if ancestor.pk==self.pk:raise ValidationError('That parent would create a loop in the chart.')
+                ancestor=ancestor.parent
+            if self.root_type and self.parent.root_type and self.root_type!=self.parent.root_type:raise ValidationError('An account must be in the same section (Asset, Liability, Equity, Income or Expense) as its parent.')
+            if not self.root_type:self.root_type=self.parent.root_type
+        if not self.is_group and self.pk and Account.objects.filter(parent_id=self.pk).exists():raise ValidationError('This account has sub-accounts, so it must stay a group.')
         if self._state.adding:return
         previous=Account.objects.get(pk=self.pk)
         used=LedgerEntry.objects.filter(account=self).exists() or SalesTaxRule.objects.filter(account=self).exists() or any(str(self.pk) in list(s.accounts.values())+list(s.payment_methods.values()) for s in ShopSettings.objects.all())
@@ -275,6 +310,8 @@ class Audit(models.Model):
     user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,null=True)
     action=models.CharField(max_length=80)
     document=models.ForeignKey(Document,on_delete=models.PROTECT,null=True)
+    branch=models.ForeignKey(Branch,on_delete=models.PROTECT,null=True,blank=True)
+    ip=models.GenericIPAddressField(null=True,blank=True)
     details=models.JSONField(default=dict)
 
 class RequestKey(models.Model):

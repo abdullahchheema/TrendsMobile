@@ -4,14 +4,14 @@ from django.db.models import Sum
 from django.utils import timezone
 from django.core.exceptions import PermissionDenied,ValidationError
 from .models import *
-from .access import branches,costs,manager,REPORTS,STATEMENTS
+from .access import branches,costs,manager,statements,REPORTS,STATEMENTS
 from .services import money,ZERO
 from .pricing import line_net,net_amount
 
 def authorize(name,user):
     if name not in REPORTS:raise ValidationError('Unknown report.')
     if name in ('Device Profit','Mobile Device Economics','Purchase Register','Accounts Payable','General Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance') and not costs(user):raise PermissionDenied('Purchase costs and financial reports require purchasing or management access.')
-    if name in STATEMENTS and not manager(user):raise PermissionDenied('Financial statements require management access.')
+    if name in STATEMENTS and not statements(user):raise PermissionDenied('Financial statements require management access.')
     if (name.startswith('Staff ') or name=='Mobile Device Economics') and not manager(user):raise PermissionDenied('This report requires management access.')
 
 def run(name,user,params):

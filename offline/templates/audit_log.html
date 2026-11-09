@@ -1,0 +1,7 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Audit log</h1><p>Who did what, and when. Entries cannot be edited or deleted.</p></div></div>
+<form method="get" class="search-bar"><label>Action<input name="action" value="{{ request.GET.action }}" list="audit-actions" placeholder="e.g. Cancel"></label><datalist id="audit-actions">{% for a in actions %}<option value="{{ a }}">{% endfor %}</datalist><label>User<input name="user" value="{{ request.GET.user }}"></label><label>From<input type="date" name="from" value="{{ request.GET.from }}"></label><label>To<input type="date" name="to" value="{{ request.GET.to }}"></label><button>Filter</button></form>
+<div class="panel table-scroll"><table><thead><tr><th>When</th><th>User</th><th>Action</th><th>Record</th><th>Details</th></tr></thead><tbody>
+{% for a in rows %}<tr><td>{{ a.created|date:"j M Y H:i" }}</td><td>{{ a.user.username|default:"system" }}</td><td>{{ a.action }}</td><td>{% if a.document %}<a href="{% url 'detail' a.document.pk %}">{{ a.document.code }}</a>{% else %}{{ a.branch.name|default:"—" }}{% endif %}</td><td><details><summary>View</summary><pre class="muted" style="white-space:pre-wrap;margin:4px 0">{{ a.details }}</pre></details></td></tr>{% empty %}<tr><td colspan="5">No audit entries match.</td></tr>{% endfor %}
+</tbody></table></div>{% include 'pager.html' %}
+{% endblock %}

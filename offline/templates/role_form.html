@@ -1,0 +1,16 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>{{ title }}{% if role %}: {{ role.name }}{% endif %}</h1>{% if locked %}<p>The Owner role always has every permission.</p>{% endif %}</div><a href="{% url 'roles' %}">Back to roles</a></div>
+<form method="post" class="panel">{% csrf_token %}{{ form.non_field_errors }}
+<div class="form-grid">
+  <div class="field">{{ form.name.label_tag }}{{ form.name }}{{ form.name.errors }}</div>
+  <div class="field">{{ form.description.label_tag }}{{ form.description }}</div>
+  <div class="field">{{ form.discount_max_pct.label_tag }}{{ form.discount_max_pct }}<small>{{ form.discount_max_pct.help_text }}</small>{{ form.discount_max_pct.errors }}</div>
+  <div class="field">{{ form.refund_max.label_tag }}{{ form.refund_max }}<small>{{ form.refund_max.help_text }}</small>{{ form.refund_max.errors }}</div>
+</div>
+<fieldset class="form-section"><legend>What this role can do</legend>
+{% for group,items in groups.items %}<h3>{{ group }}</h3><div class="form-grid">{% for code,label in items %}<label><input type="checkbox" name="perms" value="{{ code }}" {% if code in selected %}checked{% endif %} {% if locked %}disabled{% endif %}>{{ label }}</label>{% endfor %}</div>{% endfor %}
+</fieldset>
+<label><input type="checkbox" name="enabled" {% if form.enabled.value %}checked{% endif %}>Role is active</label>
+{% if not locked %}<div class="form-actions"><button class="primary" type="submit">Save role</button><a class="button" href="{% url 'roles' %}">Cancel</a></div>{% endif %}
+</form>
+{% endblock %}

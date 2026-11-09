@@ -123,8 +123,9 @@ variables disappear. Re-running any of these commands is safe.
 
 ## Updating later
 
-Push to `main` and Vercel redeploys. When a release adds database migrations, run `python manage.py migrate` from your computer
-(Part 2 environment) **before** or right after the deploy.
+Push to `main` and Vercel redeploys. When a release adds database changes, run
+`powershell -ExecutionPolicy Bypass -File supabase\hosted\update-database.ps1` from the project folder (it asks only for the
+Project URL, pooler host and database password) **before** or right after the deploy. The release notes say when it is needed.
 
 ## Local development without Supabase
 
