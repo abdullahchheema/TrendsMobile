@@ -97,8 +97,8 @@ variables disappear. Re-running any of these commands is safe.
 
 1. Open `https://<your-project>.vercel.app/health/` — it should answer `{"status": "ok", ...}`.
 2. Open the site, sign in with the owner email and password from Part 2, then **change the password** (Settings → Change password).
-3. Go to **Settings → Four-shop setup** and create the shops, warehouses, tills and staff logins. Create products and stock through
-   **Buy Stock**. The system contains no sample data.
+3. Open **Shops** (owner menu) and create each shop, then **Shop Accounts** and create one login per shop. A shop has no warehouse,
+   till or staff to set up. Buy stock through **Purchases → New Purchase** or **Bulk Purchase**. The system contains no sample data.
 4. Upload one PTA evidence file on a device and open it again to confirm Supabase Storage works.
 
 ## Part 5 — Before real trading
@@ -106,7 +106,7 @@ variables disappear. Re-running any of these commands is safe.
 - Turn on **Pro** plans (see the note at the top) and confirm Supabase backups are running; test a restore once.
 - Add your custom domain in Vercel, then add it to `DJANGO_ALLOWED_HOSTS` and `COVISON_TRUSTED_ORIGINS` and redeploy.
 - Approve the tax treatment with the accountant and configure it under the tax settings before posting invoices.
-- Create one login per staff member with the narrowest role (cashier, salesperson, purchaser, manager).
+- There are only two kinds of user: you (the owner) and one Shop Accountant login per shop. Give each shop its own password and change it if the person using it changes.
 
 ## Troubleshooting
 

@@ -19,13 +19,13 @@ python3 supabase/control.py ps
 
 ## Features
 
-Simple one-save sales and purchases with optional IMEI capture, PTA / Non-PTA phone inventory, PKR purchasing and supplier bills, POS and split payments/change, staff responsibility, customer credit/advances, returns, exchanges, warranty/repairs, stock transfers and adjustments, tills/closing, reports, configurable sales discounts/tax and owner journal corrections.
+Two kinds of user: the **Owner** (sees and controls every shop) and one **Shop Accountant** login per shop (runs that shop only and can never see another shop). One two-panel **POS** (New Sale) with IMEI scanning, split payments, credit, receipts and WhatsApp sharing; returns, refunds and exchanges from the sale page; IMEI-tracked stock per shop (no warehouses); bulk purchasing with typed brand/model/storage/colour; **Owner-only stock transfers** with Pending, Dispatched, Received, Discrepancy and Cancelled statuses; simple **Accounts & Finance** (Money In, Money Out, Expenses, Customer Dues, Supplier Dues, Cash and Bank, one Transaction History); separate Owner and Shop dashboards; reports; and the Owner's advanced accounting (chart of accounts, adjustments, month lock, year-end, fixed assets, prepaids/accruals, loans).
 
 ## Guides
 
 - **[Fresh deployment on Supabase + Vercel](DEPLOYMENT.md)**
 - [Server setup and deployment](supabase/README.md)
-- [Shop/staff setup](offline/SHOP_SETUP_GUIDE.md)
+- [Shop setup](offline/SHOP_SETUP_GUIDE.md)
 - [Daily counter entry](offline/EASY_RETAIL_GUIDE.md)
 - [Sales discounts and tax](offline/INVOICE_PRICING_GUIDE.md)
 - [Owner journals and corrections](offline/JOURNAL_GUIDE.md)
@@ -33,4 +33,4 @@ Simple one-save sales and purchases with optional IMEI capture, PTA / Non-PTA ph
 - [Backup and recovery](supabase/OPERATIONS.md)
 - [Client handover and onsite acceptance](supabase/CLIENT_HANDOVER.md)
 
-The repository contains no sample data: create the shops, staff, products and opening balances through the setup screens. Actual four-shop/staff setup, approved tax treatment, shop equipment/LAN, HTTPS, independent backups and client acceptance remain required before production handover. The current application image is Linux ARM64.
+The repository contains no sample data: create the shops, their logins, products and opening balances through the screens. Actual four-shop/staff setup, approved tax treatment, shop equipment/LAN, HTTPS, independent backups and client acceptance remain required before production handover. The current application image is Linux ARM64.

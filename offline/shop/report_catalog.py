@@ -3,10 +3,14 @@ from . import access
 
 LABELS={'Mobile Inventory':'Phone Stock','Mobile Stock Ageing':'Stock Age & Prices','Mobile Device Economics':'Device Costs & Margin',
     'Accounts Receivable':'Customer Balances','Accounts Payable':'Supplier Balances'}
-GROUPS=[('Stock & devices',['Mobile Inventory','Mobile Stock Ageing','Device Profit','Mobile Device Economics','Stock Balance','Stock Ledger','IMEI Report','Low Stock']),
-    ('Sales & purchases',['Daily Sales','Monthly Sales','Annual Sales','Sales Register','Purchase Register','Expense Report','Exchange Report']),('Branches',['Branch Comparison','Stock Transfer Report']),
-    ('Financial statements',['Profit and Loss Statement','Balance Sheet','Cash Flow Statement','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance']),
-    ('Accounts & payments',['Accounts Receivable','Accounts Payable','Payment Ledger','General Ledger'])]
+GROUPS=[('Sales Reports',['Daily Sales','Monthly Sales','Annual Sales','Sales Register','Exchange Report']),
+    ('Purchase Reports',['Purchase Register']),
+    ('Inventory Reports',['Mobile Inventory','Mobile Stock Ageing','Stock Balance','Stock Ledger','IMEI Report','Low Stock','Stock Transfer Report']),
+    ('Expense Reports',['Expense Report']),
+    ('Profit Reports',['Profit and Loss Statement','Device Profit','Mobile Device Economics']),
+    ('Customers and Suppliers',['Accounts Receivable','Accounts Payable']),
+    ('Financial Summaries (owner)',['Balance Sheet','Cash Flow Statement','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance','General Ledger','Payment Ledger']),
+    ('Branch Performance (owner)',['Branch Comparison'])]
 DESCRIPTIONS={
     'Cash Flow Statement':'Where cash came from and went: operating, investing and financing activities, proved against the actual change in cash and bank balances.',
     'Unadjusted Trial Balance':'Trial balance before the owner or accountant adjusting journals and before year-end closing entries.',

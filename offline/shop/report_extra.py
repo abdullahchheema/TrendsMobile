@@ -17,7 +17,7 @@ COLUMNS={
  'Low Stock':['Item','Shop','Quantity','Reorder level','Short by'],
  'IMEI Report':['IMEI 1','IMEI 2','Device','Model','Shop','Status','Condition','Grade','Received','Sold','Customer'],
  'Exchange Report':['Date','Shop','Exchange','Customer','New phone price','Trade-in value','Cash difference','Old phones sold','Old phone margin'],
- 'Stock Transfer Report':['Date','Document','From shop','To shop','Value'],
+ 'Stock Transfer Report':['Date','Document','From shop','To shop','Status','Value'],
  'Branch Comparison':['Shop','Net sales','Purchases','Gross profit','Gross margin %','Expenses','Net profit','Stock value','Cash and bank','Customers owe','You owe suppliers','Phones sold'],
 }
 MONEY={
@@ -103,10 +103,11 @@ def exchange_report(shops,start,end):
 
 
 def transfer_report(shops,start,end):
+    from .transfers import status_of
     rows=[]
-    for d in Document.objects.filter(kind='Stock Entry',status='Submitted',data__has_key='transfer',posting_date__range=[start,end],branch__in=shops).select_related('branch').order_by('-posting_date'):
+    for d in Document.objects.filter(kind='Stock Entry',data__has_key='transfer',posting_date__range=[start,end],branch__in=shops).select_related('branch').order_by('-posting_date'):
         t=d.data.get('transfer') or {}
-        rows.append({'Date':d.posting_date,'Document':d.code,'From shop':t.get('source_shop',d.branch.name),'To shop':t.get('target_shop',''),'Value':s.money(t.get('value'))})
+        rows.append({'Date':d.posting_date,'Document':d.code,'From shop':t.get('source_shop',d.branch.name),'To shop':t.get('target_shop',''),'Status':status_of(d),'Value':s.money(t.get('value') or d.total)})
     return rows
 
 

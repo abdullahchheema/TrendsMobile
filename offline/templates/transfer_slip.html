@@ -1,7 +1,7 @@
 {% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Transfer slip · {{ t.source_shop }}</title><link rel="stylesheet" href="{% static 'offline.css' %}"><link rel="stylesheet" href="{% static 'receipt.css' %}"></head>
-<body class="receipt receipt-a4"><nav class="receipt-toolbar"><a href="{% url 'stock_transfer' %}">Back</a> · <button data-print>Print slip</button></nav>
-<main><h1>{{ t.source_shop }}</h1><p>Stock transfer slip · {{ doc.posting_date|date:"j M Y" }}<br>Sent from <strong>{{ t.source_shop }}</strong> to <strong>{{ t.target_shop }}</strong></p>
+<body class="receipt receipt-a4"><nav class="receipt-toolbar"><a href="{% url 'transfer_detail' doc.pk %}">Back</a> · <button data-print>Print slip</button></nav>
+<main><h1>{{ t.source_shop }}</h1><p>Stock transfer slip · {{ doc.posting_date|date:"j M Y" }} · {{ doc.code }} · <strong>{{ status }}</strong><br>Sent from <strong>{{ t.source_shop }}</strong> to <strong>{{ t.target_shop }}</strong></p>
 <table><thead><tr><th>Phone</th><th>IMEI</th><th>Condition</th>{% if show_costs %}<th>Cost PKR</th>{% endif %}</tr></thead><tbody>
 {% for line in lines %}<tr><td>{{ line.product.name }}<small>{{ line.device.code }}</small></td><td>{% for i in line.device.imeis.all %}{{ i.number }}<br>{% endfor %}</td><td>{{ line.device.condition }}</td>{% if show_costs %}<td>{{ line.cost }}</td>{% endif %}</tr>{% endfor %}</tbody></table>
-<p>{{ lines|length }} phone(s){% if show_costs %} · value PKR {{ doc.total }}{% endif %}</p>
+<p>{{ lines|length }} phone(s){% if show_costs and doc.total %} · value PKR {{ doc.total }}{% endif %}</p>
 <p>Sent by: ____________________ &nbsp;&nbsp; Received by: ____________________</p><button data-print>Print slip</button></main><script src="{% static 'offline.js' %}" defer></script></body></html>

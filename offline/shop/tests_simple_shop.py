@@ -85,28 +85,6 @@ class OwnShopAnalytics(Base):
         for text in ('Warehouses','Cash tills','Roles & permissions','Staff'):self.assertNotIn(text,owner,text)
 
 
-class Transfer(Base):
-    def stock(self,n=1):return Workflows.intake(self,n)[2]
-    def send(self,phone,key,user=None):
-        self.login(user or self.user);return self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),request_key=key,target=str(self.other.pk),phone=[str(phone.pk)]))
-    def test_only_the_owner_manages_transfers_and_a_shop_has_no_access_at_all(self):
-        phone=self.stock();self.login(self.shop_a)
-        self.assertEqual(self.client.get(reverse('stock_transfer')).status_code,403)
-        self.assertEqual(self.send(phone,'00000000-0000-4000-8000-0000000000b1',self.shop_a).status_code,403);phone.refresh_from_db();self.assertEqual(phone.branch_id,self.branch.pk)
-        self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),0)
-    def test_the_owner_sends_phones_and_the_slip_names_the_sender_at_the_top(self):
-        phone=self.stock();self.login(self.user);page=self.client.get(reverse('stock_transfer'),{'branch':str(self.branch.pk)});self.assertContains(page,phone.code);self.assertContains(page,self.other.name)
-        post=self.send(phone,'00000000-0000-4000-8000-0000000000b2');self.assertEqual(post.status_code,302);phone.refresh_from_db()
-        self.assertEqual((phone.branch_id,phone.status,phone.warehouse.branch_id),(self.other.pk,'Available',self.other.pk))
-        doc=Document.objects.get(kind='Stock Entry');slip=self.client.get(reverse('transfer_slip',args=[doc.pk]));self.assertContains(slip,'<h1>'+self.branch.name+'</h1>');self.assertContains(slip,'to <strong>'+self.other.name)
-        self.login(self.shop_b);self.assertEqual(self.client.get(reverse('transfer_slip',args=[doc.pk])).status_code,403)
-        self.login(self.shop_a);self.assertEqual(self.client.get(reverse('detail',args=[doc.pk])).status_code,403)       # the sending shop cannot open it either
-    def test_sending_twice_with_the_same_form_moves_the_phone_once_and_unavailable_phones_are_refused(self):
-        phone=self.stock();self.send(phone,'00000000-0000-4000-8000-0000000000b3');self.send(phone,'00000000-0000-4000-8000-0000000000b3');self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),1)
-        self.login(self.user);page=self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000b4',target=str(self.other.pk),phone=[str(phone.pk)]),follow=True)
-        self.assertContains(page,'no longer available');self.assertEqual(Document.objects.filter(kind='Stock Entry').count(),1)
-
-
 class Receipt(Base):
     def test_receipt_headline_is_the_shop_that_sold_the_phone(self):
         device=Workflows.intake(self,5)[2]

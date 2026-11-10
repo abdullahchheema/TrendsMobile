@@ -1,0 +1,34 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><small>Stock transfer</small><h1>{{ doc.code }}</h1><p>{{ t.source_shop }} → {{ t.target_shop }} · created {{ t.created_at|slice:":10" }} by {{ t.created_by }}</p></div>
+<div class="actions" style="margin:0"><span class="badge {% if status == 'Received' %}ok{% elif status == 'Discrepancy' %}bad{% elif status == 'Cancelled' %}{% else %}warn{% endif %}">{{ status }}</span><a class="button" href="{% url 'transfer_slip' doc.pk %}">Slip</a><a href="{% url 'stock_transfer' %}">All transfers</a></div></div>
+<div class="statement-cards">
+  <div class="panel"><h2>Sender</h2><strong style="font-size:16px">{{ t.source_shop }}</strong><small>{% if t.dispatched_by %}Dispatched by {{ t.dispatched_by }} · {{ t.dispatched_at|slice:":16" }}{% else %}Not dispatched yet{% endif %}</small></div>
+  <div class="panel"><h2>Receiver</h2><strong style="font-size:16px">{{ t.target_shop }}</strong><small>{% if t.received_by %}Confirmed by {{ t.received_by }} · {{ t.received_at|slice:":16" }}{% else %}Not received yet{% endif %}</small></div>
+  {% if show_costs and doc.total %}<div class="panel"><h2>Value</h2><strong>PKR {{ doc.total|floatformat:"2g" }}</strong><small>At purchase cost</small></div>{% endif %}
+  {% if t.discrepancy %}<div class="panel"><h2>Discrepancy</h2><strong style="font-size:16px">{{ t.discrepancy }}</strong></div>{% endif %}
+  {% if t.resolution %}<div class="panel"><h2>Resolved</h2><strong style="font-size:16px">{% if t.resolution == 'return' %}Returned to sender{% else %}Written off{% endif %}</strong><small>{{ t.resolved_by }}{% if t.resolution_note %} · {{ t.resolution_note }}{% endif %}</small></div>{% endif %}
+</div>
+
+{% if status == 'Dispatched' or status == 'Discrepancy' %}<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="action" value="receive"><h2 style="margin-top:0">Confirm what arrived at {{ t.target_shop }}</h2><p class="muted">Tick every phone you physically received. Anything left unticked is recorded as a discrepancy for you to resolve.</p>
+<div class="table-scroll"><table><thead><tr><th>Arrived</th><th>Phone</th><th>IMEI</th><th>Now</th></tr></thead><tbody>{% for l in lines %}{% if l.device.status == 'In transit' %}<tr><td><input type="checkbox" name="arrived" value="{{ l.device.pk }}" {% if status == 'Dispatched' %}checked{% endif %}></td><td>{{ l.device.product.name }}<small>{{ l.device.code }}</small></td><td>{% for i in l.device.imeis.all %}{{ i.number }} {% endfor %}</td><td>In transit</td></tr>{% endif %}{% endfor %}</tbody></table></div>
+<div class="form-actions"><button class="primary" type="submit">Confirm received</button></div></form>{% endif %}
+
+{% if status == 'Discrepancy' %}<section class="panel"><h2 style="margin-top:0">Resolve the missing phones</h2><p class="muted">Decide what happened to the phones that did not arrive.</p>
+<form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="action" value="return"><label>Note <input name="note" maxlength="240"></label><button type="submit" data-confirm="Return the missing phones to {{ t.source_shop }}?">Return to sender</button></form>
+<form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="action" value="write_off"><label>Note <input name="note" maxlength="240"></label><button type="submit" data-confirm="Write off the missing phones as a stock loss? This cannot be undone.">Write off as lost</button></form></section>{% endif %}
+
+<section class="panel table-scroll"><h2 style="margin-top:0">Phones</h2><table><thead><tr><th>Phone</th><th>IMEI</th>{% if show_costs %}<th class="num">Cost</th>{% endif %}<th>Status</th></tr></thead><tbody>
+{% for l in lines %}<tr><td><a href="{% url 'device_history' l.device.pk %}">{{ l.device.product.name }}</a><small>{{ l.device.code }}</small></td><td>{% for i in l.device.imeis.all %}{{ i.number }} {% endfor %}</td>{% if show_costs %}<td class="num">{{ l.device.purchase_cost|floatformat:"2g" }}</td>{% endif %}<td>{{ l.state }}</td></tr>{% endfor %}</tbody></table></section>
+
+{% if status == 'Pending' %}
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="action" value="dispatch"><h2 style="margin-top:0">Dispatch</h2><p class="muted">The phones leave {{ t.source_shop }}'s stock and are in transit until you confirm they arrived.</p><div class="form-actions"><button class="primary" type="submit" data-confirm="Dispatch this transfer now?">Dispatch</button></div></form>
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="action" value="update"><h2 style="margin-top:0">Change this transfer</h2>
+<div class="form-grid"><div class="field"><label for="target">Send to</label><select id="target" name="target">{% for x in targets %}<option value="{{ x.pk }}" {% if x.pk == target.pk %}selected{% endif %}>{{ x.name }}</option>{% endfor %}</select></div><div class="field"><label for="imeis">Add by IMEI (optional)</label><textarea id="imeis" name="imeis" rows="2"></textarea></div></div>
+<div class="table-scroll"><table><thead><tr><th>Include</th><th>Phone</th><th>IMEI</th></tr></thead><tbody>
+{% for l in lines %}<tr><td><input type="checkbox" name="phone" value="{{ l.device.pk }}" checked></td><td>{{ l.device.product.name }}<small>{{ l.device.code }}</small></td><td>{% for i in l.device.imeis.all %}{{ i.number }} {% endfor %}</td></tr>{% endfor %}
+{% for d in editable %}<tr><td><input type="checkbox" name="phone" value="{{ d.pk }}"></td><td>{{ d.product.name }}<small>{{ d.code }}</small></td><td>{% for i in d.imeis.all %}{{ i.number }} {% endfor %}</td></tr>{% endfor %}</tbody></table></div>
+<div class="form-actions"><button type="submit">Save changes</button></div></form>
+{% endif %}
+
+{% if status == 'Pending' or status == 'Dispatched' %}{% if not t.received_by %}<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="action" value="cancel"><h2 style="margin-top:0">Cancel this transfer</h2><p class="muted">The phones go back to {{ t.source_shop }} as available stock.</p><div class="form-grid"><div class="field"><label for="reason">Reason (optional)</label><input id="reason" name="reason" maxlength="240"></div></div><div class="form-actions"><button type="submit" data-confirm="Cancel this transfer? The phones return to the sending shop.">Cancel transfer</button></div></form>{% endif %}{% endif %}
+{% endblock %}

@@ -92,7 +92,7 @@ class AccountsAndHistory(Base):
         message=' '.join(caught.exception.messages);self.assertIn('already registered',message);self.assertNotIn(device.code,message);self.assertNotIn(device.status,message)
     def test_history_of_a_phone_moved_into_a_shop_hides_the_old_shops_purchase_and_parties(self):
         device=Workflows.intake(self,2)[2]
-        transfers.send(self.user,self.branch,self.other,[device])
+        transfers.move_now(self.user,self.branch,self.other,[device])
         device.refresh_from_db();self.login(self.b);page=self.client.get(reverse('device_history',args=[device.pk]))
         self.assertEqual(page.status_code,200);labels=[e['label'] for e in page.context['events']];self.assertNotIn('Received into stock',labels)
         self.login(self.user);self.assertIn('Received into stock',[e['label'] for e in self.client.get(reverse('device_history',args=[device.pk])).context['events']])

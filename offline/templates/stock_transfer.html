@@ -1,14 +1,23 @@
 {% extends 'base.html' %}{% block content %}
-<div class="page-head"><div><h1>Send phones to another shop</h1><p>From <strong>{{ branch.name }}</strong>. Tick the phones, choose the shop, and send. Stock moves immediately and a slip is printed with the phones.</p></div></div>
-{% if shops|length > 1 %}<form method="get" class="search-bar"><label>From shop<select name="branch">{% for place in shops %}<option value="{{ place.pk }}" {% if place.pk == branch.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select></label><button>Load shop</button></form>{% endif %}
-<form method="get" class="search-bar"><input type="hidden" name="branch" value="{{ branch.pk }}"><label>Find a phone<input type="search" name="q" value="{{ q }}" placeholder="Model, IMEI or stock reference"></label><button>Search</button></form>
+<div class="page-head"><div><h1>Stock Transfers</h1><p>Move phones between shops. Only you, the owner, can create, dispatch, receive or cancel a transfer. A phone is never available in two shops at once.</p></div></div>
+<div class="statement-cards">
+  <div class="panel"><h2>Pending</h2><strong>{{ counts.Pending }}</strong><small>Reserved, not yet sent</small></div>
+  <div class="panel"><h2>In transit</h2><strong>{{ counts.Dispatched }}</strong><small>{{ in_transit }} phone{{ in_transit|pluralize }} on the way</small></div>
+  <div class="panel"><h2>Discrepancies</h2><strong>{{ counts.Discrepancy }}</strong><small>Phones that did not arrive</small></div>
+</div>
+<nav class="easy-steps" aria-label="Filter transfers"><a href="{% url 'stock_transfer' %}" {% if not state %}aria-current="page"{% endif %}>All</a><a href="?state=Open" {% if state == 'Open' %}aria-current="page"{% endif %}>Pending</a>{% for name in states %}<a href="?state={{ name }}" {% if state == name %}aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</nav>
+<section class="panel table-scroll"><table><thead><tr><th>Date</th><th>Reference</th><th>From</th><th>To</th><th class="num">Phones</th><th>Status</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.doc.posting_date|date:"j M Y" }}</td><td><a href="{% url 'transfer_detail' r.doc.pk %}">{{ r.doc.code }}</a></td><td>{{ r.t.source_shop }}</td><td>{{ r.t.target_shop }}</td><td class="num">{{ r.count }}</td><td><span class="badge {% if r.status == 'Received' %}ok{% elif r.status == 'Cancelled' %}{% elif r.status == 'Discrepancy' %}bad{% else %}warn{% endif %}">{{ r.status }}</span></td><td><a href="{% url 'transfer_detail' r.doc.pk %}">Open</a> · <a href="{% url 'transfer_slip' r.doc.pk %}">Slip</a></td></tr>
+{% empty %}<tr><td colspan="7" class="empty-state">No transfers {% if state %}with this status{% else %}yet{% endif %}.</td></tr>{% endfor %}</tbody></table></section>
+
+<form method="get" class="search-bar"><label>Sending shop<select name="branch" onchange="this.form.submit()">{% for place in shops %}<option value="{{ place.pk }}" {% if place.pk == branch.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select></label><label>Find a phone<input type="search" name="q" value="{{ q }}" placeholder="Model, IMEI or stock reference"></label><button>Search</button></form>
 <form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><input type="hidden" name="branch" value="{{ branch.pk }}">
-<div class="form-grid"><div class="field"><label for="target">Send to</label><select id="target" name="target" required><option value="">Choose a shop</option>{% for t in targets %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}</select></div></div>
+<h2 style="margin-top:0">New transfer from {{ branch.name }}</h2>
+<div class="form-grid"><div class="field"><label for="target">Send to</label><select id="target" name="target" required><option value="">Choose a shop</option>{% for t in targets %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}</select></div>
+<div class="field"><label for="imeis">Scan or type IMEIs (optional)</label><textarea id="imeis" name="imeis" rows="2" placeholder="One IMEI per line"></textarea></div>
+<div class="field"><label for="notes">Note (optional)</label><input id="notes" name="notes" maxlength="240"></div></div>
 <div class="table-scroll"><table><thead><tr><th></th><th>Phone</th><th>IMEI</th><th>Condition</th>{% if show_costs %}<th class="num">Cost</th>{% endif %}</tr></thead><tbody>
 {% for p in phones %}<tr><td><input type="checkbox" name="phone" value="{{ p.pk }}" aria-label="Send {{ p.product.name }}"></td><td>{{ p.product.name }}<small>{{ p.code }}</small></td><td>{% for i in p.imeis.all %}{{ i.number }} {% endfor %}</td><td>{{ p.condition }}</td>{% if show_costs %}<td class="num">{{ p.purchase_cost|floatformat:"2g" }}</td>{% endif %}</tr>
 {% empty %}<tr><td colspan="5" class="empty-state">No phones available in this shop{% if q %} matching your search{% endif %}.</td></tr>{% endfor %}</tbody></table></div>
-<div class="form-actions"><button class="primary" type="submit" data-confirm="Send the ticked phones to the other shop? They will leave this shop's stock now.">Send phones</button></div></form>
-<section class="panel table-scroll"><h2 style="margin-top:0">Recent transfers</h2><table><thead><tr><th>Date</th><th>From</th><th>To</th><th></th></tr></thead><tbody>
-{% for d in recent %}<tr><td>{{ d.posting_date|date:"j M Y" }}</td><td>{{ d.data.transfer.source_shop }}</td><td>{{ d.data.transfer.target_shop }}</td><td><a href="{% url 'transfer_slip' d.pk %}">Slip</a></td></tr>
-{% empty %}<tr><td colspan="4" class="empty-state">No transfers yet.</td></tr>{% endfor %}</tbody></table></section>
+<div class="form-actions"><button class="primary" type="submit" name="mode" value="dispatch" data-confirm="Dispatch now? The ticked phones leave this shop's stock and are in transit until you confirm they arrived.">Create and dispatch</button><button type="submit" name="mode" value="pending">Save as pending</button></div></form>
 {% endblock %}

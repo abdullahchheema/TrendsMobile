@@ -3,13 +3,24 @@
 You do not need accounting knowledge to run daily sales. This guide covers the parts the owner or accountant uses.
 
 ## Who can do what
-Staff have a **role** (Settings > Roles & permissions). Built-in roles: **Owner**, **Branch Manager**, **Sales Employee**, **Accountant**
-(plus Cashier, Purchases and others). You can change what each role may do, and give a role a **discount limit**. The owner login always
-has every permission.
+There are only two kinds of user.
 
-**Manager override.** A sales employee who needs to give a bigger discount, or sell below a phone's minimum price, asks a manager to type
-their *manager code* and *PIN* under "Manager override" on the POS or New Sale screen. Set a manager's PIN on their Staff record. Every
-override is written to the audit log.
+- **Owner**: sees every shop, can create shops and their logins, and is the only one who can move stock between shops and use the
+  advanced accounting items under Settings (chart of accounts, accounting adjustments, lock a month, year-end close, fixed assets,
+  prepaids and accruals, loans, activity log).
+- **Shop Accountant**: the one login of a shop. Sells, buys, takes and pays money, records expenses, handles returns and exchanges,
+  and sees that shop's reports. A shop can never see another shop's customers, suppliers, stock, money or reports.
+
+## Everyday money (Accounts & Finance menu)
+- **Money In**: customer payments, refunds from suppliers, other income, money the owner puts in.
+- **Money Out**: supplier payments, expenses, customer refunds, money the owner takes.
+- **Expenses**: rent, electricity, salaries, repairs and so on, by category. Buying phones is a purchase, not an expense.
+- **Customer Dues / Supplier Dues**: who owes what. Open a name and record a payment; it is applied to the oldest bills first and the
+  remaining balance updates by itself. A payment is never counted as new sales.
+- **Cash and Bank**: a separate balance for Cash, Bank, Easypaisa and JazzCash. Moving money between your own accounts (for example
+  a deposit) is not income or expense.
+- **Transaction History**: every movement in one list with filters. A cancelled entry stays visible next to its reversal so the totals
+  always match the balances.
 
 ## Setting up the books
 1. **Chart of accounts** (Settings > Chart of accounts): press **Install standard chart** once. It adds the usual mobile-shop accounts
