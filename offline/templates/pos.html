@@ -15,7 +15,7 @@
         <select id="pos-condition" aria-label="Condition"><option value="">Any condition</option><option>Excellent</option><option>Very Good</option><option>Good</option><option>Fair</option><option>For Parts</option></select>
         <input id="pos-max" type="number" min="0" step="1000" placeholder="Max price" aria-label="Maximum price">
       </div>
-      <p class="muted" id="pos-count" aria-live="polite"></p>
+      <p class="muted" id="pos-count" aria-live="polite"></p>{% if not all_shops and not user.is_superuser %}<p class="muted" style="margin:0"><a href="{% url 'stock_everywhere' %}">Not in this shop? See which shop has it →</a></p>{% endif %}
     </div>
     <div id="pos-products" class="pos-products pos-cards"></div>
   </section>
@@ -31,14 +31,7 @@
       <input type="hidden" name="seller" value="{{ me.pk }}"><input type="hidden" name="handler" value="{{ me.pk }}">
       <p class="muted" id="pos-from" hidden></p><div id="cart-items" class="pos-cart"></div>
       <p class="muted pos-empty" id="pos-empty">Tap a phone on the left, or scan its IMEI, to add it.</p>
-      <details class="easy-extra"><summary>Discount, tax and credit terms</summary>
-        <label>Discount type<select name="discount_type"><option value="amount">PKR amount</option><option value="percent">Percentage</option></select></label>
-        <label>Discount<input name="discount_value" type="number" min="0" step="0.01" value="0" required></label>
-        <label>Sales tax<select name="tax_rule"><option value="">No tax added</option>{% for rule in tax_rules %}<option value="{{ rule.id }}">{{ rule.name }} · {{ rule.rate }}%</option>{% endfor %}</select></label>
-        <label>Pays the balance by<input name="credit_due" type="date"></label>
-        <label>Monthly instalments (0 = one payment)<input name="credit_instalments" type="number" min="0" max="24" value="0"></label>
-        <label>Manager code<input name="override_approver" autocomplete="off"></label><label>Manager PIN<input name="override_pin" type="password" inputmode="numeric" autocomplete="new-password"></label>
-      </details>
+      <input type="hidden" name="discount_type" value="amount"><input type="hidden" name="discount_value" value="0"><input type="hidden" name="tax_rule" value=""><input type="hidden" name="credit_due" value=""><input type="hidden" name="credit_instalments" value="0"><input type="hidden" name="override_approver" value=""><input type="hidden" name="override_pin" value="">
       <div class="pos-totals">
         <p id="cart-breakdown" aria-live="polite" class="muted"></p>
         <div class="pos-total-row"><span>Total payable</span><strong id="cart-total">PKR 0.00</strong></div>

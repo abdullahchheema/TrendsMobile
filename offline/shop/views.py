@@ -1,3 +1,4 @@
+from datetime import timedelta
 from urllib.parse import urlencode
 import csv
 import json
@@ -542,6 +543,15 @@ def setup_finance(request,pk):
     return render(request,'setup_finance.html',dict(title='Posting accounts & payments',branch=branch,form=form,methods=methods,
         locked=LedgerEntry.objects.filter(branch=branch).exists(),has_shift=Document.objects.filter(branch=branch,kind='POS Opening Entry',state='Open',status='Submitted').exists()))
 
+WARRANTY_LABELS={7:'7 days',15:'15 days',30:'1 month',90:'3 months',180:'6 months',365:'1 year'}
+
+def warranty_text(days,sold_on):
+    """'Warranty: 3 months (until 10 Feb 2027)' or 'No warranty' for a receipt line."""
+    days=int(days or 0)
+    if days<=0:return 'No warranty'
+    until=sold_on+timedelta(days=days)
+    return f'Warranty: {WARRANTY_LABELS.get(days,str(days)+" days")} (until {until:%d %b %Y})'
+
 @login_required
 def receipt(request,pk):
     doc=document(request.user,pk)
@@ -555,10 +565,13 @@ def receipt(request,pk):
     change=(abs(services.money(doc.source.get('base_change_amount'))) if imported else services.ZERO)+services.cash_summary(doc)['change_returned']
     lines=[]
     for line in doc.lines.select_related('product','device'):
-        raw=line.snapshot.get('battery')
-        line.receipt_battery=f'{raw}%' if type(raw) in (int,float,Decimal) else str(raw or 'not checked')
+        line.receipt_warranty=warranty_text(line.snapshot.get('warranty_days') if line.snapshot.get('warranty_days') is not None else (line.device.warranty_days if line.device_id else 0),doc.posting_date)
         line.receipt_amount=(-services.money(line.snapshot.get('return_base',line.snapshot.get('return_amount'))) if doc.is_return and 'return_amount' in line.snapshot else services.money(line.quantity*line.rate)*(-1 if doc.is_return else 1));lines.append(line)
-    return render(request,'receipt.html',dict(doc=doc,lines=lines,shop=doc.data.get('receipt',{}),payments=payments,change=change,
+    pricing=doc.data.get('pricing') or {}
+    def _positive(key):
+        try:return abs(Decimal(str(pricing.get(key,0))))>0
+        except Exception:return False
+    return render(request,'receipt.html',dict(doc=doc,lines=lines,paid=doc.total-doc.outstanding,show_pricing=pricing.get('version')==1 and (_positive('discount') or _positive('tax_total')),shop=doc.data.get('receipt',{}),payments=payments,change=change,
         credit_applications=doc.data.get('credit_applications' if doc.is_return else 'return_credit_applications',[]),
         receipt_format='a4' if request.GET.get('paper')=='a4' else '58' if request.GET.get('paper')=='58' else 'thermal'))
 
@@ -634,11 +647,18 @@ def pos_checkout(request):
                 if device and device.branch_id!=branch.pk:raise ValidationError('One sale can include phones from one shop only.')
                 place=Warehouse.objects.get(pk=row['warehouse'],branch=branch)
                 product=Product.objects.select_for_update().get(pk=row['product'],enabled=True)
+                if device and row.get('warranty_days') not in (None,''):
+                    try:days=int(row['warranty_days'])
+                    except (TypeError,ValueError):raise ValidationError('Choose a valid warranty period.')
+                    if not 0<=days<=730:raise ValidationError('Choose a valid warranty period.')
+                    device=Device.objects.select_for_update().get(pk=device.pk);device.warranty_days=days;device.save(update_fields=['warranty_days','modified'])
+                    doc.data.setdefault('warranty',[]).append(dict(phone=product.name,device=device.code,days=days))
                 if device and 'pta_status' in row:
                     if row['pta_status'] not in ('PTA','Non-PTA'):raise ValidationError('Choose PTA or Non-PTA for each phone.')
                     device=Device.objects.select_for_update().get(pk=device.pk);device.pta_status=row['pta_status'];device.save(update_fields=['pta_status','modified'])
                 Line.objects.create(document=doc,product=product,device=device,warehouse=place,
                     quantity=services.quantity(row['quantity']),rate=services.money(row['rate']))
+            doc.save()
             sale=services.checkout(doc,request.user,data.get('payments',[]),handler)
             terms=data.get('credit') or {}
             if sale.outstanding>0 and terms.get('due_date'):

@@ -235,7 +235,7 @@ class Workflows(TestCase):
     def test_receipt_is_frozen_and_demo_labelled(self):
         _,_,device=self.intake();doc=s.checkout(self.sale(device),self.user,[],None)
         self.client.force_login(self.user);response=self.client.get(reverse('receipt',args=[doc.pk]))
-        self.assertNotContains(response,'DEMONSTRATION DATA');self.assertContains(response,'IMEI '+imei(1));self.assertContains(response,'Stock ref');self.assertContains(response,'Original warranty')
+        self.assertNotContains(response,'DEMONSTRATION DATA');self.assertContains(response,'IMEI '+imei(1));self.assertContains(response,'Warranty: 7 days (until');self.assertNotContains(response,'Stock ref')
 
 class Concurrency(TransactionTestCase):
     def test_two_database_sessions_cannot_sell_same_phone(self):

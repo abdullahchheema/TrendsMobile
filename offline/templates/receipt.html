@@ -1,1 +1,27 @@
-{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ doc.code }} · Receipt</title><link rel="stylesheet" href="{% static 'offline.css' %}"><link rel="stylesheet" href="{% static 'receipt.css' %}"></head><body class="receipt receipt-{{ receipt_format }}"><nav class="receipt-toolbar"><a href="?paper=58">58 mm layout</a> · <a href="?paper=thermal">80 mm layout</a> · <a href="?paper=a4">A4 layout</a> · <button data-print>Print receipt</button></nav><main><h1>{{ doc.branch.name }}</h1><p>{{ shop.shop_address|linebreaksbr }}<br>{{ shop.shop_phone }}</p><h2>{% if doc.is_return %}Return credit note{% else %}Sales receipt{% endif %}</h2><p>{{ doc.code }} · {{ doc.posting_date }}<br>Customer {{ doc.customer.name }}</p><table><thead><tr><th>Item</th><th>Qty</th><th>Rate {{ doc.currency }}</th><th>Amount {{ doc.currency }}</th></tr></thead><tbody>{% for line in lines %}<tr><td>{{ line.product.name }}<small class="unit-rate">Unit: {{ doc.currency }} {{ line.rate }}</small>{% if line.product.serialized %}<small>{% if line.device_id %}{% for i in line.device.imeis.all %}IMEI {{ i.number }}<br>{% endfor %}{% endif %}{% if line.snapshot.device %}Stock ref {{ line.snapshot.device }} · {% elif line.device_id %}Stock ref {{ line.device.code }} · {% endif %}{{ line.pta_label }}<br>{{ line.snapshot.condition }} · Battery {{ line.receipt_battery }}<br>Disclosed faults {{ line.snapshot.faults|default:'None recorded' }}<br>Warranty {{ line.snapshot.warranty_days }} days · {{ line.snapshot.warranty_terms }}</small>{% endif %}</td><td>{{ line.quantity|floatformat:"-3" }}</td><td>{{ line.rate }}</td><td>{{ line.receipt_amount }}</td></tr>{% endfor %}</tbody></table>{% include 'pricing_totals.html' %}<h2>Total {{ doc.currency }} {{ doc.total }}</h2>{% for p in payments %}<p>{% if p.direction == 'Pay' %}Refund{% else %}Received{% endif %} {{ p.mode }} · {{ doc.currency }} {{ p.amount }}{% if p.reference %} · {{ p.reference }}{% endif %}{% if p.cash_tendered %}<br>Cash handed {{ doc.currency }} {{ p.cash_tendered }}{% endif %}</p>{% endfor %}{% if change %}<p>Change returned {{ doc.currency }} {{ change }}</p>{% endif %}{% for application in credit_applications %}<p>Credit applied {{ doc.currency }} {{ application.amount }} · {{ application.reference_code }}</p>{% endfor %}<p>Outstanding {{ doc.currency }} {{ doc.outstanding }}</p><p>{{ shop.receipt_terms|linebreaksbr }}</p><p dir="auto">{{ shop.urdu_receipt_note }}</p><button data-print>Print receipt</button></main><script src="{% static 'offline.js' %}" defer></script>{% if request.GET.print %}<script>window.addEventListener('load',function(){window.print()})</script>{% endif %}</body></html>
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ doc.code }} · Receipt</title><link rel="stylesheet" href="{% static 'offline.css' %}"><link rel="stylesheet" href="{% static 'receipt.css' %}"></head>
+<body class="receipt receipt-{{ receipt_format }}"><nav class="receipt-toolbar"><a href="?paper=58">58 mm layout</a> · <a href="?paper=thermal">80 mm layout</a> · <a href="?paper=a4">A4 layout</a> · <button data-print>Print receipt</button></nav>
+<main class="easy-receipt">
+  <h1>{{ doc.branch.name }}</h1>
+  <p class="shop-line">{{ shop.shop_address|linebreaksbr }}{% if shop.shop_phone %}<br>{{ shop.shop_phone }}{% endif %}</p>
+  <h2>{% if doc.is_return %}Return credit note{% else %}Receipt{% endif %}</h2>
+  <p class="meta">No. {{ doc.code }}<br>{{ doc.posting_date|date:"j M Y" }}<br>Customer: <strong>{{ doc.customer.name }}</strong>{% if doc.customer.phone %} · {{ doc.customer.phone }}{% endif %}</p>
+  <div class="items">
+    {% for line in lines %}<div class="item">
+      <div class="item-main"><strong>{{ line.product.name }}{% if line.quantity != 1 %} × {{ line.quantity|floatformat:"-3" }}{% endif %}</strong><span class="price">{{ line.receipt_amount }}</span></div>
+      {% if line.device_id %}{% for i in line.device.imeis.all %}<div class="item-sub">IMEI {{ i.number }}</div>{% endfor %}{% endif %}
+      {% if line.product.serialized and not doc.is_return %}<div class="item-sub warranty">{{ line.receipt_warranty }}</div>{% endif %}
+    </div>{% endfor %}
+  </div>
+  {% if show_pricing %}{% include 'pricing_totals.html' %}{% endif %}
+  <div class="sum">
+    <div><span>Total</span><strong>{{ doc.currency }} {{ doc.total }}</strong></div>
+    {% if not doc.is_return %}<div><span>Paid</span><strong>{{ doc.currency }} {{ paid }}</strong></div>{% if doc.outstanding > 0 %}<div class="due"><span>Balance due</span><strong>{{ doc.currency }} {{ doc.outstanding }}</strong></div>{% endif %}{% endif %}
+  </div>
+  {% for p in payments %}<p class="paid-line">{% if p.direction == 'Pay' %}Refunded{% else %}Received{% endif %} by {{ p.mode }}: {{ doc.currency }} {{ p.amount }}</p>{% endfor %}
+  {% if change %}<p class="paid-line">Change returned: {{ doc.currency }} {{ change }}</p>{% endif %}
+  {% for application in credit_applications %}<p class="paid-line">Credit applied {{ doc.currency }} {{ application.amount }} · {{ application.reference_code }}</p>{% endfor %}
+  {% if shop.receipt_terms %}<p class="terms">{{ shop.receipt_terms|linebreaksbr }}</p>{% endif %}{% if shop.urdu_receipt_note %}<p class="terms" dir="auto">{{ shop.urdu_receipt_note }}</p>{% endif %}
+  <p class="thanks">Thank you for shopping with us.</p>
+  <button data-print>Print receipt</button>
+</main>
+<script src="{% static 'offline.js' %}" defer></script>{% if request.GET.print %}<script>window.addEventListener('load',function(){window.print()})</script>{% endif %}</body></html>

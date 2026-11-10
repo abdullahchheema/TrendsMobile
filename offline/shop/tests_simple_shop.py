@@ -77,7 +77,7 @@ class OwnShopAnalytics(Base):
         _,rows=reports.run('Daily Sales',self.shop_a,{'branch':str(self.other.pk)});self.assertEqual(rows,[])        # asking for another shop gives that shop's rows to nobody
     def test_menu_has_no_staff_roles_warehouses_or_tills_and_hides_owner_tools_from_a_shop(self):
         self.login(self.shop_a);side=self.client.get(reverse('dashboard')).content.decode().split('<aside',1)[1].split('</aside>',1)[0]
-        for text in ('Staff','Roles','Warehouses','Cash tills','Chart of Accounts','Shop Accounts','All Shops','Posting accounts'):self.assertNotIn(text,side,text)
+        for text in ('Staff','Roles','Warehouses','Cash tills','Chart of Accounts','Shop Accounts','All Shops Inventory','Posting accounts'):self.assertNotIn(text,side,text)
         for text in ('New Sale','IMEI Management','Expenses','Customer Dues'):self.assertIn(text,side,text)
         self.assertNotIn('Stock Transfers',side);self.assertNotIn('Send phones',side)
         self.login(self.user);owner=self.client.get(reverse('dashboard')).content.decode().split('<aside',1)[1].split('</aside>',1)[0]

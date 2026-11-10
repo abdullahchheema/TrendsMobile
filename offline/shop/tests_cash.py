@@ -91,7 +91,7 @@ class CashSettlement(TestCase):
         doc=self.post([self.cash()]);self.client.force_login(self.user)
         for paper in ('58','thermal','a4'):
             response=self.client.get(reverse('receipt',args=[doc.pk]),{'paper':paper})
-            self.assertContains(response,'Cash handed PKR 5000.00');self.assertContains(response,'Change returned PKR 500.00')
+            self.assertContains(response,'Change returned: PKR 500.00');self.assertContains(response,'Received by Cash')
         self.assertContains(self.client.get(reverse('detail',args=[doc.pk])),'Recorded cash settlement')
         payment=doc.linked.get();self.assertContains(self.client.get(reverse('detail',args=[payment.pk])),'Cash handed PKR 5000.00')
     def test_cancelled_payment_removed_from_receipt_and_till(self):

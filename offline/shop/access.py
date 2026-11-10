@@ -88,7 +88,7 @@ def menu_for(user,visible,path=''):
     sections.append(('POS','sell-pos',r('pos'),[('New Sale',r('pos')),('Sales History',coll('Sales Invoice'))]))
     inventory=[('All Shops Inventory' if owner else 'My Shop Inventory',coll('Mobile Device'))]
     inventory.append(('Product and Model Management',coll('Item')) if owner else ('Add Stock',r('easy_entry',args=['purchase'])))
-    inventory+=[('IMEI Management',r('imei_lookup')),('Stock Adjustments',r('stock_adjust'))]
+    inventory+=[('Stock in All Shops',r('stock_everywhere')),('IMEI Management',r('imei_lookup')),('Stock Adjustments',r('stock_adjust'))]
     sections.append(('Inventory','stock',coll('Mobile Device'),inventory))
     sections.append(('Purchases','buy',r('easy_entry',args=['purchase']),[('New Purchase',r('easy_entry',args=['purchase'])),('Bulk Purchase',r('bulk_purchase')),('Purchase History',coll('Purchase Invoice')),('Supplier Records' if owner else 'Suppliers',coll('Supplier'))]))
     if owner:sections.append(('Stock Transfers','exchanges',r('stock_transfer'),[('All Transfers',r('stock_transfer')),('Pending Transfers',r('stock_transfer')+'?state=Open'),('Transfer History',r('stock_transfer')+'?state=Received')]))

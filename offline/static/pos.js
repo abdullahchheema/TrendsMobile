@@ -54,7 +54,7 @@
    const rate=make('input');rate.type='number';rate.min='0';rate.step='.01';rate.value=priced(product)?product.rate:'';rate.placeholder='Selling price';rate.disabled=Boolean(pending);rate.setAttribute('aria-label','Selling price PKR');
    rate.addEventListener('change',()=>{if(pending)return;product.rate=rate.value;render();});
    controls.append(make('label','Qty'),qty,make('label','Price'),rate);row.append(controls);
-   if(product.serialized){const label=make('label','PTA status'),pta=make('select');pta.required=true;pta.disabled=Boolean(pending);for(const [value,text] of [['','Choose PTA status'],['PTA','PTA approved'],['Non-PTA','Non-PTA']]){const option=make('option',text);option.value=value;pta.append(option);}pta.value=['PTA','Non-PTA'].includes(product.pta_status)?product.pta_status:'';pta.addEventListener('change',()=>{if(!pending)product.pta_status=pta.value;});label.append(pta);row.append(label);}
+   if(product.serialized){const label=make('label','Warranty','cart-warranty'),sel=make('select');sel.required=true;sel.disabled=Boolean(pending);for(const [value,text] of [['','Choose warranty'],['0','No warranty'],['7','7 days'],['15','15 days'],['30','1 month'],['90','3 months'],['180','6 months'],['365','1 year']]){const o=make('option',text);o.value=value;sel.append(o);}sel.value=product.warranty||'';sel.addEventListener('change',()=>{if(!pending)product.warranty=sel.value;});label.append(sel);row.append(label);}
    cartEl.append(row);
   });
   try{const values=totals();document.getElementById('cart-total').textContent=format(values.total);document.getElementById('cart-breakdown').textContent=cart.length?`Subtotal ${format(values.subtotal)} − discount ${format(values.discount)} + tax ${format(values.tax)}`:'';}
@@ -124,10 +124,11 @@
    if(!cart.length){error.textContent='Select at least one item.';return;}
    if(!form.reportValidity())return;
    const unpriced=cart.find(item=>!(Number(item.rate)>0));if(unpriced){error.textContent='Enter the selling price for '+unpriced.name+'.';return;}
+   const noWarranty=cart.find(item=>item.serialized&&(item.warranty===undefined||item.warranty===''));if(noWarranty){error.textContent='Choose the warranty for '+noWarranty.name+' (or No warranty).';return;}
    try{totals();}catch(problem){error.textContent=problem.message;return;}
    const values=new FormData(form);
    let payments;try{payments=window.covisonPayments.read(form);}catch(problem){error.textContent=problem.message;return;}
-   pending={request_key:root.dataset.requestKey,branch:(cart[0]&&cart[0].branch)||root.dataset.branch,customer_name:values.get('customer_name'),customer_phone:values.get('customer_phone')||'',seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate,pta_status})=>({product,device,warehouse,quantity,rate,pta_status})),adjustments:adjustments(),override:{approver:values.get('override_approver')||'',pin:values.get('override_pin')||''},credit:{due_date:values.get('credit_due')||'',instalments:values.get('credit_instalments')||'0'},payments};
+   pending={request_key:root.dataset.requestKey,branch:(cart[0]&&cart[0].branch)||root.dataset.branch,customer_name:values.get('customer_name'),customer_phone:values.get('customer_phone')||'',seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate,warranty})=>({product,device,warehouse,quantity,rate,warranty_days:warranty===undefined?'':warranty})),adjustments:adjustments(),override:{approver:values.get('override_approver')||'',pin:values.get('override_pin')||''},credit:{due_date:values.get('credit_due')||'',instalments:values.get('credit_instalments')||'0'},payments};
   }
   sending=true;error.textContent='';lockEditor();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);

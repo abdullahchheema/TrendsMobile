@@ -1,4 +1,21 @@
 {{ cash_modes|json_script:'cash-payment-modes' }}
-<div class="table-scroll"><table><thead><tr><th>Method</th><th>Settlement PKR</th><th></th></tr></thead><tbody data-payment-rows><tr><td><select name="payment_mode" aria-label="Payment method">{% for mode in methods %}<option>{{ mode }}</option>{% endfor %}</select></td><td><label>Applied to invoice<input name="payment_amount" type="number" min="0" step="0.01"></label><input type="hidden" name="payment_cash_value" value=""><div data-cash-input><label>Cash handed<input name="payment_tendered" type="number" min="0" step="0.01" placeholder="Blank = exact applied amount"></label><p>Change: <output data-cash-change aria-live="polite">PKR 0.00</output></p></div></td><td><button type="button" data-remove-payment>Remove</button></td></tr></tbody></table></div>
-<button type="button" data-add-payment>Add split payment</button><p data-payment-summary role="status" aria-live="polite"></p>
-<p class="muted">Applied amounts reduce the invoice balance. Enter cash handed only for cash; change is calculated separately. Leave all payment fields blank for a credit sale.</p>
+<div class="pay-section">
+  <h3 class="pay-title">Payment received</h3>
+  <div class="pay-rows" data-payment-rows>
+    <div class="pay-row" data-payment-row>
+      <div class="pay-line">
+        <label>Paid by<select name="payment_mode" aria-label="Payment method">{% for mode in methods %}<option>{{ mode }}</option>{% endfor %}</select></label>
+        <label>Amount received<input name="payment_amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+      </div>
+      <input type="hidden" name="payment_cash_value" value="">
+      <div class="pay-cash" data-cash-input>
+        <label>Cash handed over<input name="payment_tendered" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Same as amount"></label>
+        <p class="pay-change">Change to give back: <output data-cash-change aria-live="polite">PKR 0.00</output></p>
+      </div>
+      <button type="button" class="pay-remove" data-remove-payment>Remove</button>
+    </div>
+  </div>
+  <button type="button" class="pay-add" data-add-payment>+ Add another payment method</button>
+  <p class="pay-summary" data-payment-summary role="status" aria-live="polite"></p>
+  <p class="muted pay-note">Leave the amount empty for a sale on credit. Whatever is not received stays as the customer's balance.</p>
+</div>

@@ -7,7 +7,7 @@
   const [whole,fraction='']=text.split('.');const amount=Number(whole)*100+Number(fraction.padEnd(2,'0'));
   return Number.isSafeInteger(amount)?amount:null;
  }
- const rows=form=>[...form.querySelectorAll('[data-payment-rows] tr')];
+ const rows=form=>[...form.querySelectorAll('[data-payment-row]')];
  function refresh(form){
   let applied=0,handed=0,change=0,valid=true;
   for(const row of rows(form)){
@@ -48,7 +48,7 @@
  document.addEventListener('click',event=>{
   const remove=event.target.closest('[data-remove-payment]');if(!remove)return;
   const form=remove.form;if(form.dataset.paymentLocked==='true')return;
-  const all=rows(form);if(all.length>1)remove.closest('tr').remove();else all[0].querySelectorAll('input').forEach(input=>{input.value='';});refresh(form);
+  const all=rows(form);if(all.length>1)remove.closest('[data-payment-row]').remove();else all[0].querySelectorAll('input').forEach(input=>{input.value='';});refresh(form);
  });
  window.covisonPayments={cents,format,read,refresh};
  document.querySelectorAll('form').forEach(form=>{if(form.querySelector('[data-payment-rows]'))refresh(form);});

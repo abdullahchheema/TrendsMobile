@@ -122,3 +122,54 @@ class OwnerChoosesTheShop(PosBase):
                   items=[dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),quantity=1,rate='5000',pta_status='PTA') for d in (b,a)])
         bad=self.client.post(reverse('pos_checkout'),json.dumps(data),content_type='application/json');self.assertEqual(bad.status_code,400);self.assertIn('one shop only',bad.json()['error'])
         a.refresh_from_db();b.refresh_from_db();self.assertEqual((a.status,b.status),('Available','Available'))
+
+
+class SimpleSaleAndReceipt(PosBase):
+    def sale(self,days='90',**extra):
+        self.fund();device=self.stock();self.login(self.a);data=self.payload(device,payments=[dict(mode='Cash',amount='25000')])
+        data['items'][0].pop('pta_status',None);data['items'][0]['warranty_days']=days;data.update(extra)
+        return device,self.checkout(data)
+    def test_pos_asks_only_for_warranty_and_the_money_received(self):
+        self.stock();self.login(self.a);html=self.client.get(reverse('pos')).content.decode()
+        for text in ('Payment received','Amount received','Add another payment method','Leave the amount empty for a sale on credit'):self.assertIn(text,html,text)
+        for text in ('Discount, tax and credit terms','payment_reference','Manager PIN','Settlement PKR','PTA status'):self.assertNotIn(text,html,text)
+        js=self.client.get('/static/pos.js').content.decode() if False else open('static/pos.js',encoding='utf8').read()
+        self.assertIn('Choose warranty',js);self.assertNotIn('PTA status',js);self.assertNotIn('pta_status',js)
+    def test_the_chosen_warranty_is_saved_on_the_phone_and_noted_on_the_sale(self):
+        device,result=self.sale('90');self.assertEqual(result.status_code,200,result.content);sale=Document.objects.get(pk=result.json()['id'])
+        device.refresh_from_db();self.assertEqual(device.warranty_days,90);self.assertEqual(sale.data['warranty'],[dict(phone=device.product.name,device=device.code,days=90)])
+        self.assertEqual(sale.lines.get().snapshot['warranty_days'],90)
+    def test_a_bad_warranty_is_refused(self):
+        for bad in ('abc','-1','9999'):
+            device,result=self.sale(bad);self.assertEqual(result.status_code,400,bad);self.assertIn('warranty',result.json()['error'].lower())
+    def test_receipt_is_simple_with_phone_imei_warranty_total_paid_and_balance(self):
+        device,result=self.sale('90');page=self.client.get(result.json()['receipt']);html=page.content.decode();number=device.imeis.get().number
+        for text in ('<h1>'+self.branch.name+'</h1>','Pos Customer','0300 1234567','IMEI '+number,'Warranty: 3 months (until','Total','Paid','Balance due','35000.00','25000.00','Received by Cash','Thank you'):self.assertIn(text,html,text)
+        for text in ('Stock ref','Battery','Disclosed faults','Settlement','Rate PKR','Net sales before tax','No tax added','Sold by'):self.assertNotIn(text,html,text)
+    def test_receipt_says_no_warranty_when_none_was_given_and_paid_in_full_has_no_balance_line(self):
+        self.fund();device=self.stock();self.login(self.a);data=self.payload(device);data['items'][0].pop('pta_status',None);data['items'][0]['warranty_days']='0'
+        html=self.client.get(self.checkout(data).json()['receipt']).content.decode();self.assertIn('No warranty',html);self.assertNotIn('Balance due',html);self.assertIn('Paid',html)
+
+
+class OtherShopsStock(PosBase):
+    def put(self,branch,n,name='Samsung A54'):
+        from .models import PhoneModel,Product
+        model,_=PhoneModel.objects.get_or_create(code='SM-A54',defaults=dict(name='A54',brand='Samsung'))
+        product,_=Product.objects.get_or_create(code='SM-A54-128',defaults=dict(name=name,model=model,storage='128GB',colour='Black',serialized=True,stock_item=True))
+        device=Device.objects.create(code=f'ST-{n}',product=product,warehouse=shopdefaults.warehouse(branch),branch=branch,status='Available',purchase_cost=77777,condition='Good')
+        IMEI.objects.create(number=imei(7600+n),device=device,slot=1);return device
+    def test_a_shop_can_see_every_shops_available_phones_but_nothing_sensitive(self):
+        ShopSettings.objects.filter(branch=self.other).update(shop_phone='0311 5550000',shop_address='City Road');mine=self.put(self.branch,1);theirs=self.put(self.other,2);self.put(self.other,3)
+        self.login(self.a);page=self.client.get(reverse('stock_everywhere'));html=page.content.decode();self.assertEqual(page.status_code,200)
+        self.assertIn(self.other.name,html);self.assertIn(self.branch.name,html);self.assertIn('0311 5550000',html);self.assertIn('City Road',html);self.assertIn('Your shop',html)
+        counts={r['shop']:r['count'] for r in page.context['rows']};self.assertEqual(counts,{self.branch.name:1,self.other.name:2})
+        for text in (imei(7602),'77777','77,777',theirs.code,'Cost'):self.assertNotIn(text,html,text)
+        self.assertEqual(self.client.get(reverse('stock_everywhere'),{'shop':str(self.other.pk)}).context['total'],2);self.assertEqual(self.client.get(reverse('stock_everywhere'),{'q':'Nokia'}).context['rows'],[])
+    def test_other_shops_stock_is_view_only_it_is_not_in_the_pos_and_cannot_be_sold(self):
+        theirs=self.put(self.other,4);self.login(self.a)
+        self.assertNotIn(str(theirs.pk),[i['device'] for i in self.client.get(reverse('pos')).context['items'] if i.get('serialized')])
+        bad=self.checkout(self.payload(theirs,branch=self.branch));self.assertIn(bad.status_code,(400,404));theirs.refresh_from_db();self.assertEqual((theirs.status,theirs.branch_id),('Available',self.other.pk))
+        self.assertEqual(self.client.get(reverse('device_history',args=[theirs.pk])).status_code,404)       # still no way into the other shop's records
+    def test_menu_and_pos_link_to_the_all_shops_stock(self):
+        self.login(self.a);page=self.client.get(reverse('pos'));self.assertContains(page,'See which shop has it');side=page.content.decode().split('<aside',1)[1].split('</aside>',1)[0];self.assertIn('Stock in All Shops',side)
+        self.login(self.user);self.assertEqual(self.client.get(reverse('stock_everywhere')).status_code,200)

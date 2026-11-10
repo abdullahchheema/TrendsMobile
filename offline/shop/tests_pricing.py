@@ -115,7 +115,7 @@ class InvoicePricing(TestCase):
         sale=self.post(value='20')
         for paper in ('58','thermal','a4'):
             response=self.client.get(reverse('receipt',args=[sale.pk]),{'paper':paper})
-            self.assertContains(response,'Item subtotal PKR 200.00');self.assertContains(response,'Invoice discount PKR 20.00');self.assertContains(response,'Test rate (5%)');self.assertContains(response,'Total PKR 189.00')
+            self.assertContains(response,'Item subtotal PKR 200.00');self.assertContains(response,'Invoice discount PKR 20.00');self.assertContains(response,'Test rate (5%)');self.assertContains(response,'PKR 189.00')
         credit=self.credit(sale,1);response=self.client.get(reverse('receipt',args=[credit.pk]))
         self.assertEqual(response.context['lines'][0].receipt_amount,-100);self.assertContains(response,'Invoice discount PKR -10.00')
     def test_register_and_staff_reports_exclude_tax_from_sales(self):

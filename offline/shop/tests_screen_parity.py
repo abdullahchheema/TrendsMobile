@@ -69,7 +69,7 @@ class ScreenParity(TestCase):
             source={'is_pos':1,'base_change_amount':100,'payments':[{'mode_of_payment':'Cash','base_amount':1100}]})
         Line.objects.create(document=doc,product=self.product,quantity=1,rate=1000,snapshot={'imei_1':imei(21),'battery':'Not recorded'})
         response=self.client.get(reverse('receipt',args=[doc.pk]))
-        self.assertContains(response,'1100.00');self.assertContains(response,'Change returned PKR 100.00');self.assertNotContains(response,'Ayesha Malik');self.assertContains(response,'receipt-thermal')
+        self.assertContains(response,'1100.00');self.assertContains(response,'Change returned: PKR 100.00');self.assertNotContains(response,'Ayesha Malik');self.assertContains(response,'receipt-thermal')
         self.assertNotContains(response,'Not recorded%')
         self.assertContains(self.client.get(reverse('receipt',args=[doc.pk]),{'paper':'a4'}),'receipt-a4')
         self.assertContains(self.client.get(reverse('receipt',args=[doc.pk]),{'paper':'58'}),'receipt-58')

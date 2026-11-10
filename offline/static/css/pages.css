@@ -145,3 +145,19 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 @media (max-width:1000px){.pos-terminal{grid-template-columns:1fr}.pos-order{position:static;max-height:none}.pos-cards{max-height:340px}}
 
 .pos-shop-tag{color:var(--accent-text);font-weight:600}
+
+/* POS: payment cards (stacked, spaced) and a quiet warranty picker */
+.pay-section{margin-top:var(--s4);display:flex;flex-direction:column;gap:var(--s3)}
+.pay-title{margin:0;font-size:14px;color:var(--ink-2);font-weight:600}
+.pay-rows{display:flex;flex-direction:column;gap:var(--s3)}
+.pay-row{display:flex;flex-direction:column;gap:var(--s3);padding:var(--s3);border:1px solid var(--line-2);border-radius:var(--r-md,12px);background:var(--surface-2)}
+.pay-line{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.pay-line label,.pay-cash label{display:flex;flex-direction:column;gap:6px;margin:0;font-size:13px}
+.pay-line input,.pay-line select,.pay-cash input{width:100%}
+.pay-cash{display:flex;flex-direction:column;gap:var(--s2)}.pay-cash[hidden]{display:none}
+.pay-change{margin:0;font-size:13px;color:var(--ink-2)}
+.pay-remove{align-self:flex-start;background:none;border:0;color:var(--ink-3);padding:0;min-height:0;font-size:13px;text-decoration:underline;cursor:pointer}
+.pay-add{align-self:flex-start}
+.pay-summary{margin:0;font-size:13px;color:var(--ink-2)}.pay-note{margin:0;font-size:12px}
+.cart-warranty{display:flex;flex-direction:column;gap:6px;margin-top:var(--s2);font-size:13px}.cart-warranty select{width:100%}
+@media (max-width:420px){.pay-line{grid-template-columns:1fr}}
