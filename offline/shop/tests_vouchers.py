@@ -37,7 +37,6 @@ class Postings(VoucherBase):
         vouchers.post(self.data('capital',self.capital,5000),self.user)
         with self.assertRaisesMessage(ValidationError,'cannot be paid from it'):vouchers.post(self.data('expense',self.rent,9000),self.user)
         self.assertEqual(self.cash(),Decimal('5000'));self.assertEqual(Document.objects.filter(kind='Voucher').count(),1)
-        with self.assertRaisesMessage(ValidationError,'transaction reference'):vouchers.post(self.data('capital',self.capital,1000,mode='Bank Transfer'),self.user)
         self.assertTrue(vouchers.post(self.data('capital',self.capital,1000,mode='Bank Transfer',reference='TX-1'),self.user).pk)
     def test_wrong_account_section_control_accounts_and_missing_description_are_rejected(self):
         with self.assertRaisesMessage(ValidationError,'expense account'):vouchers.post(self.data('expense',self.capital,100),self.user)

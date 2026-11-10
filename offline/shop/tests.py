@@ -74,7 +74,7 @@ class Workflows(TestCase):
         self.assertEqual(doc.linked.filter(kind='Payment Entry').count(),2);self.assertFalse(doc.demo_batch);self.assertIn('TEST-DEMO',doc.data['initial_record_batches']);self.assert_balanced()
     def test_failed_second_payment_rolls_back_whole_sale(self):
         _,_,device=self.intake();doc=self.sale(device)
-        with self.assertRaises(ValidationError):s.checkout(doc,self.user,[dict(mode='Cash',amount='30000'),dict(mode='Bank Transfer',amount='20000')],self.handler)
+        with self.assertRaises(ValidationError):s.checkout(doc,self.user,[dict(mode='Cash',amount='30000'),dict(mode='Gold coins',amount='20000')],self.handler)
         device.refresh_from_db();doc.refresh_from_db();self.assertEqual(device.status,'Available');self.assertEqual(doc.status,'Draft');self.assertFalse(doc.ledger.exists())
     def test_double_selling_rejected(self):
         _,_,device=self.intake();s.checkout(self.sale(device),self.user,[],None)
@@ -98,9 +98,6 @@ class Workflows(TestCase):
         first=s.return_sale(doc,self.user,[str(device.pk)],'Same','Return');s.submit(first,self.user)
         second=s.return_sale(doc,self.user,[str(device.pk)],'Same','Again')
         with self.assertRaises(ValidationError):s.submit(second,self.user)
-    def test_non_cash_reference_required(self):
-        pe=s.new_doc('Payment Entry',self.branch,customer=self.customer,handler=self.handler,data=dict(amount='1000',direction='Receive',mode='Bank Transfer'))
-        with self.assertRaises(ValidationError):s.submit(pe,self.user)
     def test_customer_advance_allocation_without_second_cash_entry(self):
         _,_,device=self.intake();sale=s.checkout(self.sale(device),self.user,[],None)
         advance=s.new_doc('Payment Entry',self.branch,customer=self.customer,handler=self.handler,data=dict(amount='10000',direction='Receive',mode='Cash'))

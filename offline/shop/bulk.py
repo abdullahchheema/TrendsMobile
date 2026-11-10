@@ -132,7 +132,7 @@ class BulkForm(forms.Form):
     @property
     def visible_fields_head(self):return [self[n] for n in ('party_name','posting_date','warehouse','staff')]
     @property
-    def visible_fields_tail(self):return [self[n] for n in ('payment_status','amount_paid','method','payment_reference','later','notes','handler')]
+    def visible_fields_tail(self):return [self[n] for n in ('payment_status','amount_paid','method','later','notes','handler')]
 
     def clean(self):
         data=super().clean()
@@ -143,7 +143,6 @@ class BulkForm(forms.Form):
                 if not data.get(name) or data[name].branch_id!=branch.pk:data[name]=default
         if data.get('payment_status') in ('full','part'):
             if not data.get('method'):self.add_error('method','Choose a payment method.')
-            elif data['method'] not in s.cash_modes(data['branch']) and not data.get('payment_reference'):self.add_error('payment_reference','Enter the bank or wallet transaction reference.')
         return data
 
 

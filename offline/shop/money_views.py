@@ -84,18 +84,18 @@ def _panels(request,branch,which):
             account=account_of(d);return money.record_voucher(user,branch,kind,account,d['amount'],d['method'],d['date'],d.get('description') or desc_default,d.get('reference',''))
         return run
     panels={
-     'customer_payment':dict(title='Customer payment received',fields=['party','amount','method','date','reference','description'],party_kind='Customer',done='Customer payment recorded.',
+     'customer_payment':dict(title='Customer payment received',fields=['party','amount','method','date','description'],party_kind='Customer',done='Customer payment recorded.',
         run=lambda d:money.record_party_payment(user,d['party'],d['amount'],d['method'],d['date'],d.get('reference',''),d.get('description',''))),
-     'supplier_refund':dict(title='Refund received from a supplier',fields=['party','amount','method','date','reference','description'],party_kind='Supplier',done='Supplier refund recorded.',
+     'supplier_refund':dict(title='Refund received from a supplier',fields=['party','amount','method','date','description'],party_kind='Supplier',done='Supplier refund recorded.',
         run=lambda d:money.record_party_cash_back(user,d['party'],d['amount'],d['method'],d['date'],d.get('reference',''),d.get('description',''))),
-     'other_income':dict(title='Other income',fields=['income_account','amount','method','date','reference','description'],done='Income recorded.',run=lambda d:money.record_voucher(user,branch,'income',d['income_account'],d['amount'],d['method'],d['date'],d.get('description') or d['income_account'].name,d.get('reference',''))),
-     'owner_funds':dict(title='Money put in by the owner',fields=['amount','method','date','reference','description'],done='Owner funds recorded.',run=voucher('capital',lambda d:_by_code('COA-3100'),'Owner funds')),
-     'supplier_payment':dict(title='Pay a supplier',fields=['party','amount','method','date','reference','description'],party_kind='Supplier',done='Supplier payment recorded.',
+     'other_income':dict(title='Other income',fields=['income_account','amount','method','date','description'],done='Income recorded.',run=lambda d:money.record_voucher(user,branch,'income',d['income_account'],d['amount'],d['method'],d['date'],d.get('description') or d['income_account'].name,d.get('reference',''))),
+     'owner_funds':dict(title='Money put in by the owner',fields=['amount','method','date','description'],done='Owner funds recorded.',run=voucher('capital',lambda d:_by_code('COA-3100'),'Owner funds')),
+     'supplier_payment':dict(title='Pay a supplier',fields=['party','amount','method','date','description'],party_kind='Supplier',done='Supplier payment recorded.',
         run=lambda d:money.record_party_payment(user,d['party'],d['amount'],d['method'],d['date'],d.get('reference',''),d.get('description',''))),
-     'customer_refund':dict(title='Refund a customer',fields=['party','amount','method','date','reference','description'],party_kind='Customer',done='Customer refund recorded.',
+     'customer_refund':dict(title='Refund a customer',fields=['party','amount','method','date','description'],party_kind='Customer',done='Customer refund recorded.',
         run=lambda d:money.record_party_cash_back(user,d['party'],d['amount'],d['method'],d['date'],d.get('reference',''),d.get('description',''))),
-     'expense':dict(title='Record an expense',fields=['category','amount','method','date','reference','description'],done='Expense recorded.',run=lambda d:money.record_voucher(user,branch,'expense',d['category'],d['amount'],d['method'],d['date'],d.get('description') or d['category'].name,d.get('reference',''))),
-     'owner_drawings':dict(title='Money taken by the owner',fields=['amount','method','date','reference','description'],done='Owner drawings recorded.',run=voucher('drawings',lambda d:_by_code('COA-3300'),'Owner drawings')),
+     'expense':dict(title='Record an expense',fields=['category','amount','method','date','description'],done='Expense recorded.',run=lambda d:money.record_voucher(user,branch,'expense',d['category'],d['amount'],d['method'],d['date'],d.get('description') or d['category'].name,d.get('reference',''))),
+     'owner_drawings':dict(title='Money taken by the owner',fields=['amount','method','date','description'],done='Owner drawings recorded.',run=voucher('drawings',lambda d:_by_code('COA-3300'),'Owner drawings')),
     }
     out=[]
     for name in which:
@@ -188,7 +188,7 @@ def party_account(request,pk):
     _guard(request);party=get_object_or_404(access.scoped_parties(request.user),pk=pk)
     if not party.branch_id:raise PermissionDenied('This record belongs to no shop yet.')
     branch=party.branch;customer=party.kind=='Customer'
-    form=Quick(request.POST or None,branch=branch,fields=['amount','method','date','reference','description'])
+    form=Quick(request.POST or None,branch=branch,fields=['amount','method','date','description'])
     if request.method=='POST':
         try:
             key=uuid.UUID(request.POST.get('request_key',''))
@@ -212,7 +212,6 @@ def cash_and_bank(request):
             self.fields['source']=forms.ChoiceField(label='Move from',choices=choices);self.fields['target']=forms.ChoiceField(label='Move to',choices=choices,initial=choices[1][0] if len(choices)>1 else None)
             self.fields['amount']=forms.DecimalField(label='Amount (PKR)',min_value=0,max_digits=15,decimal_places=2)
             self.fields['date']=forms.DateField(label='Date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
-            self.fields['reference']=forms.CharField(label='Bank / wallet reference',required=False,max_length=180)
             self.fields['notes']=forms.CharField(label='Reason',required=False,max_length=240)
     form=Move(request.POST or None)
     if request.method=='POST':

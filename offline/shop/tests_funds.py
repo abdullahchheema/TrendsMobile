@@ -99,9 +99,6 @@ class FundTransfers(TestCase):
             with self.subTest(amount=amount):
                 with self.assertRaises(ValidationError):self.draft(amount=amount)
         self.assertEqual(Document.objects.count(),before)
-    def test_reference_and_reason_required(self):
-        with self.assertRaises(ValidationError):self.draft(transfer_reference='')
-        with self.assertRaises(ValidationError):self.draft(notes='')
     def test_closed_or_future_date_rejected(self):
         future=self.draft(source_method='Bank Transfer',target_method='JazzCash',posting_date=timezone.localdate()+timedelta(days=1))
         with self.assertRaises(ValidationError):s.submit(future,self.user)
@@ -133,7 +130,6 @@ class FundTransfers(TestCase):
         shift=self.opening();original=self.post()
         with self.assertRaisesMessage(ValidationError,'reverse internal transfer'):s.cancel(original,self.user)
         draft=f.reverse(original,self.user);self.assertEqual(f.reverse(original,self.user),draft)
-        with self.assertRaisesMessage(ValidationError,'reference'):s.submit(draft,self.user)
         f.save(self.data(source_method='Bank Transfer',target_method='Cash',transfer_reference='ACTUAL-REVERSE'),self.user,draft)
         reverse=s.submit(draft,self.user)
         self.assertEqual(s.till_balance(shift)['expected'],'1000.00');self.assertEqual(reverse.reference,original)

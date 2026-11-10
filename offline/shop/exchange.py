@@ -110,7 +110,7 @@ class ExchangeForm(forms.Form):
     @property
     def visible_fields_new(self):return [self[n] for n in ('party_name','phone','pta_status','price','posting_date','staff','buyer','handler','warehouse')]
     @property
-    def visible_fields_settle(self):return [self[n] for n in ('method','payment_reference','notes')]
+    def visible_fields_settle(self):return [self[n] for n in ('method','notes')]
 
     def clean(self):
         data=super().clean()
@@ -120,7 +120,6 @@ class ExchangeForm(forms.Form):
             for name in ('staff','buyer','handler'):
                 if not data.get(name) or data[name].branch_id!=data['branch'].pk:data[name]=me
             if not data.get('warehouse') or data['warehouse'].branch_id!=data['branch'].pk:data['warehouse']=shopdefaults.warehouse(data['branch'])
-        if data.get('method') and data['method'] not in s.cash_modes(data['branch']) and not data.get('payment_reference'):self.add_error('payment_reference','Enter the bank or wallet transaction reference.')
         return data
 
 

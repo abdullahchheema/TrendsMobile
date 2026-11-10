@@ -36,7 +36,6 @@ def validate(values,user,branch):
     source,target=resolve(branch,values.get('source_method'),values.get('target_method'))
     amount=s.payment_money(values.get('amount'))
     if amount<=0:raise ValidationError('Transfer amount must be positive.')
-    if not str(values.get('transfer_reference','')).strip() or not str(values.get('notes','')).strip():raise ValidationError('Record the actual transaction reference and transfer reason.')
     scope=values.get('cash_scope','till') if 'Cash' in (source.account_type,target.account_type) else 'bank'
     if scope not in ('till','shop','bank') or (scope=='bank' and 'Cash' in (source.account_type,target.account_type)):raise ValidationError('Select the cash custody for this transfer.')
     if scope=='shop':
@@ -55,10 +54,10 @@ def save(values,user,doc=None):
     source,target,amount,scope=validate(values,user,branch)
     if not doc:doc=s.new_doc('Payment Entry',branch,data={'direction':'Internal Transfer'})
     shift=s.active_shift(branch,user) if scope=='till' else None
-    doc.posting_date=values['posting_date'];doc.handler=values['handler'];doc.notes=values['notes'].strip();doc.total=amount
+    doc.posting_date=values['posting_date'];doc.handler=values['handler'];doc.notes=str(values.get('notes','')).strip();doc.total=amount
     doc.data.update(direction='Internal Transfer',source_method=values['source_method'],target_method=values['target_method'],
         source_account=str(source.pk),target_account=str(target.pk),amount=str(amount),cash_scope=scope,
-        outside_till_confirmed=values.get('outside_till_confirmed') is True,transfer_reference=values['transfer_reference'].strip(),
+        outside_till_confirmed=values.get('outside_till_confirmed') is True,transfer_reference=str(values.get('transfer_reference','')).strip(),
         source_name=str(source),target_name=str(target),expected_shift=str(shift.pk) if shift else None,
         expected_till=str(shift.till) if shift and shift.till_id else None)
     s.assigned(doc,'handler','can_handle_payments')

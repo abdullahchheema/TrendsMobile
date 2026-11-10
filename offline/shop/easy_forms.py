@@ -48,7 +48,7 @@ class EasyEntryForm(forms.Form):
             self.fields['phone_notes']=forms.CharField(label='Notes about the phone (optional)',required=False,max_length=400,widget=forms.Textarea(attrs={'rows':2,'placeholder':'e.g. battery changed, display replaced, back glass cracked'}))
         person=access.staff(user);can_pay=person is None or person.manager or person.can_handle_payments
         choices=[('full','Paid in full'),('part','Part payment'),('unpaid','Pay later / on credit')] if can_pay else [('unpaid','Pay later / payment collected separately')]
-        self.fields['payment_status']=forms.ChoiceField(label='Payment',choices=choices,initial='full' if can_pay else 'unpaid')
+        self.fields['payment_status']=forms.ChoiceField(label='Payment',choices=choices,initial='full' if can_pay else 'unpaid',help_text='Choose “Pay later / on credit” when no money is paid now. The remaining amount is recorded automatically.')
         self.fields['amount_paid']=forms.DecimalField(label='Amount paid now (PKR)',min_value=0,max_digits=15,decimal_places=2,required=False)
         self.fields['method']=forms.ChoiceField(label='Payment method',choices=[(x,x) for x in (config.payment_methods if config else [])],initial='Cash',required=False)
         self.fields['payment_reference']=forms.CharField(label='Bank / wallet transaction reference',required=False,max_length=180)
@@ -70,7 +70,7 @@ class EasyEntryForm(forms.Form):
         for name,default in self.shop_defaults.items():       # nobody is asked who handled it or which warehouse: the shop fills these in
             if name in self.fields:self.fields[name].widget=forms.HiddenInput();self.fields[name].required=False;self.fields[name].initial=default.pk
         self.main_fields=[self[name] for name in ('party_name','find_imei','phone','brand','model','storage','colour','quantity','imeis','pta_status','device_type','condition','phone_notes','price') if name in self.fields]
-        self.payment_fields=[self[name] for name in ('payment_status','amount_paid','method','payment_reference','due_date','instalments') if name in self.fields]
+        self.payment_fields=[self[name] for name in ('payment_status','amount_paid','method','due_date','instalments') if name in self.fields]
         self.extra_fields=[self[name] for name in ('staff','handler','posting_date','warehouse','override_approver','override_pin','notes') if name in self.fields]
 
     def clean(self):
@@ -90,7 +90,6 @@ class EasyEntryForm(forms.Form):
             if paid and not data.get('handler'):self.add_error('handler','Choose who handled the payment.')
             if paid and not data.get('method'):self.add_error('method','Choose a payment method.')
             config=ShopSettings.objects.filter(branch=data.get('branch')).first()
-            if paid and config and data.get('method') not in services.cash_modes(data['branch']) and not data.get('payment_reference'):self.add_error('payment_reference','Enter the bank or wallet transaction reference.')
         if self.kind=='purchase' and not data.get('product'):
             try:data['variant']=catalog_entry.check({k:data.get(k) for k in ('brand','model','storage','colour')})
             except forms.ValidationError as error:

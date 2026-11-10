@@ -79,7 +79,6 @@ class CustomerDues(Base):
         self.fund();sale=self.credit_sale(10000)
         with self.assertRaises(ValidationError):money.record_party_payment(self.user,sale.customer,D(0),'Cash',self.today)
         with self.assertRaises(ValidationError):money.record_party_payment(self.user,sale.customer,D(10),'Gold coins',self.today)
-        with self.assertRaises(ValidationError):money.record_party_payment(self.user,sale.customer,D(10),'Bank Transfer',self.today)      # bank needs a reference
         nobody=Party.objects.create(code='NOB',kind='Customer',name='No Shop')
         with self.assertRaises(ValidationError):money.record_party_payment(self.user,nobody,D(10),'Cash',self.today)
     def test_screens_list_record_and_show_history(self):

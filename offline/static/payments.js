@@ -34,7 +34,7 @@
   const state=refresh(form);if(!state.valid)throw Error('Check the cash handed and applied amounts.');
   const result=[];
   for(const row of rows(form)){
-   const mode=row.querySelector('[name=payment_mode]').value,amount=row.querySelector('[name=payment_amount]').value,tender=row.querySelector('[name=payment_tendered]').value,reference=row.querySelector('[name=payment_reference]').value;
+   const mode=row.querySelector('[name=payment_mode]').value,amount=row.querySelector('[name=payment_amount]').value,tender=row.querySelector('[name=payment_tendered]').value,reference=(row.querySelector('[name=payment_reference]')||{}).value||'';
    if((!amount||cents(amount)===0)&&!tender)continue;
    if(cents(amount)===null||cents(amount)<=0)throw Error('Enter a positive applied amount for each payment.');
    const payment={mode,amount,reference};if(modes.includes(mode)&&tender)payment.cash_tendered=tender;

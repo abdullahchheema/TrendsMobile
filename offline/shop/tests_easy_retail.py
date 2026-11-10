@@ -46,7 +46,7 @@ class EasyRetail(TestCase):
         response,data=self.post('purchase',self.purchase_data());data['price']='51000'
         replay=self.client.post(reverse('easy_entry',args=['purchase']),data);self.assertEqual(replay.status_code,200);self.assertEqual(Device.objects.count(),1)
     def test_failed_payment_rolls_back_supplier_customer_stock_and_documents(self):
-        data=self.purchase_data();data.update(payment_status='full',method='Bank Transfer',payment_reference='')
+        data=self.purchase_data();data.update(payment_status='full',method='Gold coins')
         from django.core.exceptions import ValidationError
         with self.assertRaises(ValidationError):easy_retail.purchase(data,self.user)
         self.assertFalse(Device.objects.exists());self.assertFalse(Document.objects.exists());self.assertFalse(Party.objects.filter(name='Counter Supplier').exists())

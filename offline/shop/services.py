@@ -327,7 +327,6 @@ def _voucher(doc):
     if not conf:raise ValidationError('Choose a payment method set up for this shop.')
     cash=Account.objects.get(pk=conf)
     if cash.account_type not in ('Cash','Bank') or not cash.enabled or cash.is_group:raise ValidationError('The payment method must use an enabled cash or bank account.')
-    if cash.account_type=='Bank' and not str(spec.get('reference','')).strip():raise ValidationError('Enter the bank or wallet transaction reference.')
     if not str(spec.get('description','')).strip():raise ValidationError('Describe what this voucher is for.')
     if flow=='out':
         available=account_balance(doc.branch,cash)
@@ -427,7 +426,6 @@ def _payment(doc):
     if not conf:raise ValidationError('Configure this payment method first.')
     cash=Account.objects.get(pk=conf)
     if cash.account_type not in ('Cash','Bank') or not cash.enabled or cash.is_group:raise ValidationError('Select an enabled cash or bank account.')
-    if cash.account_type=='Bank' and not str(doc.data.get('reference','')).strip():raise ValidationError('Enter the actual non-cash transaction reference.')
     shift=doc.pos_shift or active_shift(doc.branch,doc.posted_by)
     if shift:
         shift=Document.objects.select_for_update().get(pk=shift.pk)

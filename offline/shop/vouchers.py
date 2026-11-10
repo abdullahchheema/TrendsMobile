@@ -28,7 +28,6 @@ class VoucherForm(forms.Form):
         self.fields['account']=forms.ChoiceField(label='Account / category',choices=choices,help_text='Expenses: pick the category (rent, salaries, electricity...). Install the standard chart first if the list is empty.')
         config=ShopSettings.objects.filter(branch=branch).first()
         self.fields['mode']=forms.ChoiceField(label='Paid from / received into',choices=[(m,m) for m in (config.payment_methods if config else [])],initial='Cash')
-        self.fields['reference']=forms.CharField(label='Bank / wallet transaction reference',required=False,max_length=180)
         self.fields['description']=forms.CharField(label='Description',max_length=240,widget=forms.TextInput(attrs={'placeholder':'e.g. October shop rent, paid to landlord'}))
 
 

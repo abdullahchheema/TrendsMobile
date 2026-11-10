@@ -17,7 +17,7 @@ class FundTransferForm(forms.Form):
     handler=forms.ModelChoiceField(queryset=None,label='Handled by')
     cash_scope=forms.ChoiceField(label='Cash custody',choices=[('till','My open POS till'),('shop','Shop cash outside all tills'),('bank','Bank/wallet only (no cash)')],required=False)
     outside_till_confirmed=forms.BooleanField(label='I confirm this cash is outside every POS till',required=False)
-    transfer_reference=forms.CharField(label='Actual bank / wallet transaction reference',max_length=180)
+    transfer_reference=forms.CharField(label='Reference (optional)',required=False,max_length=180)
     notes=forms.CharField(label='Reason / completed movement details',widget=forms.Textarea(attrs={'rows':3}))
     def __init__(self,*args,user,doc=None,branch=None,**kwargs):
         super().__init__(*args,**kwargs);self.actor=user;self.doc=doc

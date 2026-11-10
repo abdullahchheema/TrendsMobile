@@ -283,7 +283,6 @@ class AssetForm(forms.Form):
         self.fields['expense_account']=forms.ChoiceField(label='Depreciation expense account',choices=_choices(_accounts('Expense','Depreciation')))
         self.fields['funding']=forms.ChoiceField(label='How was it paid?',choices=_modes(branch)+[('existing','Already owned (opening balance)')])
         self.fields['equity_account']=forms.ChoiceField(label='Owner equity account (already-owned assets)',required=False,choices=_choices(_accounts('Equity'),'—'))
-        self.fields['reference']=forms.CharField(label='Bank / wallet reference',required=False,max_length=180)
 
 
 class DeferralForm(forms.Form):
@@ -298,7 +297,6 @@ class DeferralForm(forms.Form):
         self.fields['expense_account']=forms.ChoiceField(label='Expense account',choices=_choices(_accounts('Expense')))
         self.fields['balance_account']=forms.ChoiceField(label='Prepaid asset / accrued liability account',choices=_choices(_accounts('Asset','Current Asset')|_accounts('Liability','Current Liability')))
         self.fields['mode']=forms.ChoiceField(label='Paid from (prepaid)',required=False,choices=_modes(branch))
-        self.fields['reference']=forms.CharField(label='Bank / wallet reference',required=False,max_length=180)
 
 
 class LoanForm(forms.Form):
@@ -312,7 +310,6 @@ class LoanForm(forms.Form):
         self.fields['liability_account']=forms.ChoiceField(label='Loan account',choices=_choices(_accounts('Liability')))
         self.fields['interest_account']=forms.ChoiceField(label='Interest expense account',choices=_choices(_accounts('Expense')))
         self.fields['mode']=forms.ChoiceField(label='Received into',choices=_modes(branch))
-        self.fields['reference']=forms.CharField(label='Bank / wallet reference',required=False,max_length=180)
 
 
 def _page(request,template,title,form_class,add,items_fn,actions):
