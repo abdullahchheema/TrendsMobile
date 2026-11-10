@@ -149,7 +149,9 @@ class BulkForm(forms.Form):
 
 @login_required
 def bulk_purchase(request):
-    from .views import selected_branch,error_text
+    from .views import selected_branch,error_text,ask_which_shop
+    gate=ask_which_shop(request,'Bulk purchase','Choose the shop that will receive these phones.')
+    if gate:return gate
     branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not branch:return redirect('setup')
     access.require(request.user,branch,'can_buy')

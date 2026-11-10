@@ -18,7 +18,10 @@ class InvalidEntry(Exception):pass
 @login_required
 def entry(request,kind):
     if kind not in ('sale','purchase'):raise Http404('Choose a sale or purchase.')
-    from .views import selected_branch,scoped_devices,error_text
+    from .views import selected_branch,scoped_devices,error_text,ask_which_shop
+    if kind=='purchase':
+        gate=ask_which_shop(request,'Buy a phone','Choose the shop that will receive these phones.')
+        if gate:return gate
     branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not branch:return redirect('setup')
     access.require(request.user,branch,'can_sell' if kind=='sale' else 'can_buy')

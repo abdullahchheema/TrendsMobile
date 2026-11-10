@@ -5,6 +5,7 @@
  const rules=JSON.parse(document.getElementById('pos-tax-rules').textContent),customers=JSON.parse(document.getElementById('pos-customers').textContent);
  const list=document.getElementById('pos-products'),cartEl=document.getElementById('cart-items'),form=document.getElementById('pos-cart');
  const search=document.getElementById('pos-search'),error=document.getElementById('pos-error'),submit=form.querySelector('button.pos-complete');
+ const allShops=root.dataset.allShops==='true',shopBox=document.getElementById('pos-shop'),fromEl=document.getElementById('pos-from');
  const nameBox=document.getElementById('pos-customer-name'),phoneBox=document.getElementById('pos-customer-phone');
  const brandBox=document.getElementById('pos-brand'),modelBox=document.getElementById('pos-model'),storageBox=document.getElementById('pos-storage');
  let sending=false,pending=null,uncertain=false;
@@ -29,6 +30,7 @@
  /* ---------- the order ---------- */
  function add(product){
   if(pending)return;
+  if(allShops&&cart.length&&cart[0].branch!==product.branch){error.textContent='One sale can include phones from one shop only ('+cart[0].shop+'). Finish or clear this sale first.';return;}
   const existing=cart.find(row=>row.product===product.product&&row.device===product.device&&row.warehouse===product.warehouse);
   if(existing){
    if(product.serialized){error.textContent='This exact phone is already in the sale.';return;}
@@ -39,6 +41,7 @@
  }
  function render(){
   cartEl.replaceChildren();document.getElementById('pos-empty').hidden=cart.length>0;
+  if(fromEl){fromEl.hidden=!(allShops&&cart.length);fromEl.textContent=cart.length?'Selling from: '+cart[0].shop:'';}
   cart.forEach((product,index)=>{
    const row=make('div',undefined,'cart-row');
    const head=make('div',undefined,'cart-head');head.append(make('strong',product.name));
@@ -67,13 +70,14 @@
   list.replaceChildren();const terms=search.value.toLowerCase().split(/\s+/).filter(Boolean);
   const condition=document.getElementById('pos-condition')?.value||'',maxPrice=Number(document.getElementById('pos-max')?.value||0);
   const found=products.filter(p=>{const hay=`${p.code} ${p.name} ${p.barcode} ${p.brand||''} ${p.model||''} ${p.storage||''} ${p.colour||''} ${p.condition||''}`.toLowerCase();
-   return terms.every(t=>hay.includes(t))&&(!brandBox.value||p.brand===brandBox.value)&&(!modelBox.value||p.model===modelBox.value)&&(!storageBox.value||p.storage===storageBox.value)&&(!condition||p.condition===condition)&&(!maxPrice||!priced(p)||Number(p.rate)<=maxPrice);});
+   return terms.every(t=>hay.includes(t))&&(!shopBox||!shopBox.value||p.shop===shopBox.value)&&(!brandBox.value||p.brand===brandBox.value)&&(!modelBox.value||p.model===modelBox.value)&&(!storageBox.value||p.storage===storageBox.value)&&(!condition||p.condition===condition)&&(!maxPrice||!priced(p)||Number(p.rate)<=maxPrice);});
   document.getElementById('pos-count').textContent=`${found.length} item${found.length===1?'':'s'} available${found.length>120?' (showing the first 120 — narrow the search)':''}`;
   if(!found.length)list.append(make('p','Nothing in stock matches. Check the filters or scan the IMEI.','empty-state'));
   found.slice(0,120).forEach(product=>{
    const button=make('button');button.type='button';button.disabled=Boolean(pending);button.className='pos-card';
    const initial=make('span',(product.brand||product.name||'?').trim().charAt(0).toUpperCase(),'pos-avatar');initial.setAttribute('aria-hidden','true');
    const body=make('span',undefined,'pos-card-body');
+   if(allShops)body.append(make('small','Shop: '+product.shop,'pos-shop-tag'));
    body.append(make('strong',product.name),make('small',[product.storage,product.colour,product.condition,product.grade?product.grade+'/10':''].filter(Boolean).join(' · ')));
    if(product.imeis&&product.imeis.length)body.append(make('small','IMEI '+product.imeis.join(' / ')));
    const foot=make('span',undefined,'pos-card-foot');foot.append(make('b',priced(product)?format(product.rate):'Price at sale'));
@@ -123,7 +127,7 @@
    try{totals();}catch(problem){error.textContent=problem.message;return;}
    const values=new FormData(form);
    let payments;try{payments=window.covisonPayments.read(form);}catch(problem){error.textContent=problem.message;return;}
-   pending={request_key:root.dataset.requestKey,branch:root.dataset.branch,customer_name:values.get('customer_name'),customer_phone:values.get('customer_phone')||'',seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate,pta_status})=>({product,device,warehouse,quantity,rate,pta_status})),adjustments:adjustments(),override:{approver:values.get('override_approver')||'',pin:values.get('override_pin')||''},credit:{due_date:values.get('credit_due')||'',instalments:values.get('credit_instalments')||'0'},payments};
+   pending={request_key:root.dataset.requestKey,branch:(cart[0]&&cart[0].branch)||root.dataset.branch,customer_name:values.get('customer_name'),customer_phone:values.get('customer_phone')||'',seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate,pta_status})=>({product,device,warehouse,quantity,rate,pta_status})),adjustments:adjustments(),override:{approver:values.get('override_approver')||'',pin:values.get('override_pin')||''},credit:{due_date:values.get('credit_due')||'',instalments:values.get('credit_instalments')||'0'},payments};
   }
   sending=true;error.textContent='';lockEditor();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
@@ -137,6 +141,7 @@
    uncertain=true;error.textContent='The sale result is uncertain. Keep this page open. Reconnect (or sign in in another tab), then retry this same sale. Check recent invoices before starting another sale.';
   }finally{clearTimeout(timeout);sending=false;if(!form.hidden)lockEditor();}
  });
+ if(shopBox){[...new Set(products.map(p=>p.shop))].sort().forEach(name=>{const o=make('option',name);o.value=name;shopBox.append(o);});shopBox.addEventListener('change',show);}
  filters();show();render();updateButton();search.focus();
  if(root.dataset.addDevice){const wanted=products.find(item=>item.device===root.dataset.addDevice);if(wanted)add(wanted);}
 })();

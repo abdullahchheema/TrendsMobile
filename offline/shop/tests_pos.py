@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
+from .tests import imei
 from .tests_money import Base,D
 from . import customer_names,shopdefaults,services as s
 
@@ -85,3 +86,39 @@ class ReturnsAndExchange(PosBase):
 
 
 def money_total(sale):return sale.total
+
+
+class OwnerChoosesTheShop(PosBase):
+    def stock_in(self,branch,n):
+        device=Device.objects.create(code=f'OWN-{n}',product=self.product,warehouse=shopdefaults.warehouse(branch),branch=branch,status='Available',purchase_cost=1000,asking_price=0)
+        IMEI.objects.create(number=imei(7000+n),device=device,slot=1);return device
+    def test_adding_stock_asks_which_shop_first_for_the_owner_only(self):
+        self.login(self.user)
+        for name,args in (('easy_entry',['purchase']),('bulk_purchase',[]),('stock_adjust',[]),('exchange',[])):
+            page=self.client.get(reverse(name,args=args));self.assertContains(page,'Which shop?',msg_prefix=name);self.assertContains(page,self.branch.name);self.assertContains(page,self.other.name)
+            self.assertContains(page,'?branch='+str(self.other.pk))
+            form=self.client.get(reverse(name,args=args),{'branch':str(self.other.pk)});self.assertNotContains(form,'Which shop?');self.assertContains(form,'Shop: <strong>'+self.other.name+'</strong>');self.assertContains(form,'Change shop')
+        self.login(self.a)
+        for name,args in (('easy_entry',['purchase']),('bulk_purchase',[]),('stock_adjust',[])):self.assertNotContains(self.client.get(reverse(name,args=args)),'Which shop?')
+    def test_a_purchase_by_the_owner_lands_in_the_chosen_shop(self):
+        self.login(self.user);post=self.client.post(reverse('easy_entry',args=['purchase']),dict(branch=str(self.other.pk),request_key='00000000-0000-4000-8000-0000000000aa',party_name='Owner Supplier',brand='Oppo',model='A5',storage='64GB',colour='Blue',quantity='1',price='20000',pta_status='PTA',device_type='Used',condition='Good',payment_status='unpaid',posting_date=str(self.today),imeis=imei(7100)))
+        self.assertEqual(post.status_code,302);device=Device.objects.get(imeis__number=imei(7100));self.assertEqual((device.branch_id,device.warehouse.branch_id),(self.other.pk,self.other.pk))
+    def test_a_single_shop_owner_is_not_asked(self):
+        Branch.objects.filter(pk=self.other.pk).update(enabled=False);self.login(self.user);self.assertNotContains(self.client.get(reverse('easy_entry',args=['purchase'])),'Which shop?')
+    def test_owner_pos_shows_every_shops_phones_with_the_shop_name_and_a_shop_login_only_its_own(self):
+        a=self.stock_in(self.branch,1);b=self.stock_in(self.other,2);self.login(self.user);page=self.client.get(reverse('pos'));self.assertTrue(page.context['all_shops'])
+        items={i['device']:i for i in page.context['items'] if i.get('serialized')};self.assertEqual({items[str(a.pk)]['shop'],items[str(b.pk)]['shop']},{self.branch.name,self.other.name});self.assertContains(page,'pos-shop')
+        one=self.client.get(reverse('pos'),{'branch':str(self.other.pk)});self.assertFalse(one.context['all_shops']);self.assertEqual({i['device'] for i in one.context['items'] if i.get('serialized')},{str(b.pk)})
+        self.login(self.a);mine={i['device'] for i in self.client.get(reverse('pos')).context['items'] if i.get('serialized')};self.assertIn(str(a.pk),mine);self.assertNotIn(str(b.pk),mine)
+    def test_owner_sells_a_phone_from_any_shop_and_the_sale_is_recorded_in_that_shop(self):
+        b=self.stock_in(self.other,3);self.login(self.user)
+        data=dict(request_key=str(uuid.uuid4()),branch=str(self.other.pk),customer_name='Owner Customer',customer_phone='0300 1112223',seller='x',handler='x',
+                  items=[dict(product=str(b.product_id),device=str(b.pk),warehouse=str(b.warehouse_id),quantity=1,rate='5000',pta_status='PTA')],adjustments=dict(discount_type='amount',discount_value='0',tax_rule='',tax_version=''),payments=[dict(mode='Cash',amount='5000')])
+        result=self.client.post(reverse('pos_checkout'),json.dumps(data),content_type='application/json');self.assertEqual(result.status_code,200,result.content)
+        sale=Document.objects.get(pk=result.json()['id']);b.refresh_from_db();self.assertEqual((sale.branch_id,sale.customer.branch_id,b.status),(self.other.pk,self.other.pk,'Sold'))
+    def test_one_sale_cannot_mix_phones_from_two_shops(self):
+        a=self.stock_in(self.branch,4);b=self.stock_in(self.other,5);self.login(self.user)
+        data=dict(request_key=str(uuid.uuid4()),branch=str(self.other.pk),customer_name='Mixer',customer_phone='',seller='x',handler='x',adjustments=dict(discount_type='amount',discount_value='0',tax_rule='',tax_version=''),payments=[],
+                  items=[dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),quantity=1,rate='5000',pta_status='PTA') for d in (b,a)])
+        bad=self.client.post(reverse('pos_checkout'),json.dumps(data),content_type='application/json');self.assertEqual(bad.status_code,400);self.assertIn('one shop only',bad.json()['error'])
+        a.refresh_from_db();b.refresh_from_db();self.assertEqual((a.status,b.status),('Available','Available'))

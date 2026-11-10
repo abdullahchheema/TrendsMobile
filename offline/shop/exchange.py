@@ -126,7 +126,9 @@ class ExchangeForm(forms.Form):
 
 @login_required
 def exchange(request):
-    from .views import selected_branch,error_text
+    from .views import selected_branch,error_text,ask_which_shop
+    gate=ask_which_shop(request,'Phone exchange','Choose the shop where the exchange is happening.')
+    if gate:return gate
     branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not branch:return redirect('setup')
     access.require(request.user,branch,'can_sell')

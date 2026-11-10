@@ -55,6 +55,15 @@ def document(user,pk):
     if funds.is_transfer(doc) and not funds.allowed(user):raise PermissionDenied('Internal transfer records require payment or management access.')
     if journals.is_manual(doc):shop_setup.owner(user)
     return doc
+def ask_which_shop(request,title,purpose=''):
+    """The owner must say which shop is receiving stock before the form opens (no silent default). A shop login is always its own shop,
+    and with only one shop there is nothing to ask."""
+    if not request.user.is_superuser or request.GET.get('branch') or request.POST.get('branch'):return None
+    shops=list(access.branches(request.user))
+    if len(shops)<=1:return None
+    query=request.GET.copy();query.pop('branch',None);extra=('&'+query.urlencode()) if query else ''
+    return render(request,'choose_shop.html',dict(title=title,purpose=purpose,choices=shops,path=request.path,extra=extra))
+
 def selected_branch(user,value=None):
     places=access.branches(user)
     try:branch=places.filter(pk=value).first() if value else places.first()
@@ -555,29 +564,44 @@ def receipt(request,pk):
 
 @login_required
 def pos(request):
-    places=access.branches(request.user)
-    branch=selected_branch(request.user,request.GET.get('branch'))
-    if not branch:return redirect('collection',kind='Shop')
-    access.require(request.user,branch,'can_sell')
-    configuration=ShopSettings.objects.filter(branch=branch).first()
-    if not configuration or not configuration.accounts or not configuration.payment_methods:
+    """New Sale. A shop login sells from its own stock. The owner sees every shop's stock together (or one shop if chosen);
+    a sale is recorded in the shop that holds the phones, and one sale uses one shop only."""
+    every=access.branches(request.user)
+    all_shops=request.user.is_superuser and not request.GET.get('branch') and every.count()>1
+    if all_shops:places=list(every)
+    else:
+        one=selected_branch(request.user,request.GET.get('branch'))
+        if not one:return redirect('collection',kind='Shop')
+        places=[one]
+    branch=places[0]
+    for place in places:access.require(request.user,place,'can_sell')
+    configured=[p for p in places if (lambda c:c and c.accounts and c.payment_methods)(ShopSettings.objects.filter(branch=p).first())]
+    if not configured:
         return render(request,'empty.html',{'title':'Point of Sale setup','text':'This shop needs its payment and posting accounts configured by an administrator before POS can start.'})
+    places=configured;branch=places[0]
     items=[]
-    for d in scoped_devices(request.user).filter(warehouse__branch=branch,status='Available').select_related('product__model','warehouse').prefetch_related('imeis'):
+    for d in scoped_devices(request.user).filter(branch__in=places,status='Available',warehouse__isnull=False).select_related('product__model','warehouse','branch').prefetch_related('imeis'):
         imeis=[i.number for i in d.imeis.all()]
-        items.append(dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),code=d.code,
-            name=d.product.name,rate=str(d.asking_price),stock=1,pta_status=d.pta_status,barcode=' '.join([d.code]+imeis),barcodes=[d.code]+imeis,imeis=imeis,warehouse_name=d.warehouse.name,serialized=True,
+        items.append(dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),branch=str(d.branch_id),shop=d.branch.name,code=d.code,
+            name=d.product.name,rate=str(d.asking_price),stock=1,pta_status=d.pta_status,barcode=' '.join([d.code]+imeis),barcodes=[d.code]+imeis,imeis=imeis,serialized=True,
             model=(d.product.model.name if d.product.model_id else d.product.name),brand=(d.product.model.brand if d.product.model_id else d.product.brand) or '',storage=d.product.storage,colour=d.product.colour,condition=d.condition,grade=d.grade))
-    for p in Product.objects.filter(enabled=True,serialized=False):
-        for warehouse in [shopdefaults.warehouse(branch)]:
+    for place in places:
+        warehouse=shopdefaults.warehouse(place)
+        for p in Product.objects.filter(enabled=True,serialized=False):
             qty,_=services.on_hand(p,warehouse)
-            if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,warehouse_name=warehouse.name,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False))
-    shift=services.active_shift(branch,request.user)
-    customers=[dict(name=p.name,phone=p.phone) for p in access.parties_for(branch,'Customer').filter(enabled=True).order_by('name')[:2000]]
+            if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),branch=str(place.pk),shop=place.name,code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False))
+    shift=services.active_shift(branch,request.user) if not all_shops else None
+    if all_shops:
+        seen={};[seen.setdefault(p.name.casefold(),dict(name=p.name,phone=p.phone)) for p in access.scoped_parties(request.user).filter(kind='Customer',enabled=True).order_by('name')[:3000]]
+        customers=list(seen.values())
+    else:customers=[dict(name=p.name,phone=p.phone) for p in access.parties_for(branch,'Customer').filter(enabled=True).order_by('name')[:2000]]
+    methods={}
+    for place in places:
+        for name,account in ShopSettings.objects.get(branch=place).payment_methods.items():methods.setdefault(name,account)
     stale_shift=bool(shift and shift.posting_date!=timezone.localdate())
-    return render(request,'pos.html',dict(title='New Sale',items=items,customers=customers,stale_shift=stale_shift,prefill=request.GET.get('customer',''),add_device=request.GET.get('phone',''),
+    return render(request,'pos.html',dict(title='New Sale',items=items,customers=customers,stale_shift=stale_shift,prefill=request.GET.get('customer',''),add_device=request.GET.get('phone',''),all_shops=all_shops,
         me=shopdefaults.person(request.user,branch),cash_modes=services.cash_modes(branch),
-        branch=branch,methods=configuration.payment_methods,request_key=uuid.uuid4(),tax_rules=pricing.rules(branch),
+        branch=branch,methods=methods,request_key=uuid.uuid4(),tax_rules=pricing.rules(branch),
         shift=shift,reconciliation=services.till_balance(shift) if shift else None))
 
 @login_required
@@ -594,7 +618,8 @@ def pos_checkout(request):
             phone=' '.join(str(data.get('customer_phone') or '').split())
             if phone and not customer.phone:
                 customer.phone=phone;customer.clean();customer.save(update_fields=['phone','modified'])
-            seller=Staff.objects.get(pk=data['seller']);handler=Staff.objects.get(pk=data['handler']) if data.get('handler') else None
+            seller=shopdefaults.person(request.user,branch)       # whoever sells, the shop stands behind it
+            handler=shift.handler if shift and shift.till_id and shift.handler_id else seller       # an open till shift keeps its own cashier
             doc=services.new_doc('POS Invoice' if shift and shift.till_id else 'Sales Invoice',branch,customer=customer,seller=seller)
             adjustments=data.get('adjustments',{})
             if not isinstance(adjustments,dict):raise ValidationError('Invalid invoice adjustment values.')
@@ -606,6 +631,7 @@ def pos_checkout(request):
                 overrides.apply(doc,request.user,override.get('approver'),override.get('pin'),'POS sale')
             for row in data['items']:
                 device=get_object_or_404(scoped_devices(request.user),pk=row['device']) if row.get('device') else None
+                if device and device.branch_id!=branch.pk:raise ValidationError('One sale can include phones from one shop only.')
                 place=Warehouse.objects.get(pk=row['warehouse'],branch=branch)
                 product=Product.objects.select_for_update().get(pk=row['product'],enabled=True)
                 if device and 'pta_status' in row:

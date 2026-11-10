@@ -143,3 +143,5 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 .pos-done{text-align:center}.pos-done .actions{justify-content:center;flex-wrap:wrap}
 .pos-status{font-size:12px;color:var(--ink-3)}
 @media (max-width:1000px){.pos-terminal{grid-template-columns:1fr}.pos-order{position:static;max-height:none}.pos-cards{max-height:340px}}
+
+.pos-shop-tag{color:var(--accent-text);font-weight:600}

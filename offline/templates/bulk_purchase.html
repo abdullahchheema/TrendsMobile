@@ -1,5 +1,5 @@
 {% extends 'base.html' %}{% load static %}{% block content %}
-<div class="page-head"><div><h1>Bulk purchase</h1><p>{{ branch.name }} · many phones from one supplier in a single saved purchase. All prices in PKR.</p></div><a href="{% url 'easy_entry' 'purchase' %}">Buy one kind of phone</a></div>
+<div class="page-head"><div><h1>Bulk purchase</h1><p>Shop: <strong>{{ branch.name }}</strong> {% if user.is_superuser and shops|length > 1 %}· <a href="{{ request.path }}">Change shop</a>{% endif %} · many phones from one supplier in a single saved purchase. All prices in PKR.</p></div><a href="{% url 'easy_entry' 'purchase' %}">Buy one kind of phone</a></div>
 <form method="post" class="panel" data-bulk>{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.rows_json }}{{ form.non_field_errors }}
 <h2 style="margin-top:0">1. Supplier and delivery</h2>
 <div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_head %}</div>

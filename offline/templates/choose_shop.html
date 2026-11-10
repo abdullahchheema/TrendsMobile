@@ -1,0 +1,6 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>{{ title }}</h1><p>{{ purpose|default:"Choose a shop to continue." }}</p></div></div>
+<section class="panel" aria-label="Choose a shop"><h2 style="margin-top:0">Which shop?</h2>
+<div class="statement-cards">{% for shop in choices %}<a class="panel ov-kpi" href="{{ path }}?branch={{ shop.pk }}{{ extra }}"><span>Shop</span><strong>{{ shop.name }}</strong><small>Continue in this shop →</small></a>{% endfor %}</div>
+<p class="muted">Everything you save on the next screen is recorded in the shop you choose. You can change shop from the top of that screen.</p></section>
+{% endblock %}

@@ -1,15 +1,15 @@
 {% extends 'base.html' %}{% load static %}{% block content %}
-<div class="page-head"><div><h1>New Sale</h1><p>{{ branch.name }} · all prices in PKR</p></div>
-  <div class="actions" style="margin:0">{% if shops|length > 1 %}<form method="get" class="search-bar" style="margin:0"><select name="branch" aria-label="Shop">{% for place in shops %}<option value="{{ place.pk }}" {% if place.pk == branch.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select><button>Switch shop</button></form>{% endif %}
+<div class="page-head"><div><h1>New Sale</h1><p>{% if all_shops %}Selling from <strong>any shop</strong>{% else %}{{ branch.name }}{% endif %} · all prices in PKR</p></div>
+  <div class="actions" style="margin:0">{% if shops|length > 1 %}<form method="get" class="search-bar" style="margin:0"><select name="branch" aria-label="Shop">{% if user.is_superuser %}<option value="" {% if all_shops %}selected{% endif %}>All shops</option>{% endif %}{% for place in shops %}<option value="{{ place.pk }}" {% if not all_shops and place.pk == branch.pk %}selected{% endif %}>{{ place.name }}</option>{% endfor %}</select><button>Switch shop</button></form>{% endif %}
   <span class="pos-status" data-server-status role="status" aria-live="polite">Checking connection…</span><button type="button" data-check-server hidden>Check connection</button></div></div>
 {% if stale_shift %}<p class="notice">You have an old till shift still open. <a href="{% url 'new' 'POS Closing Entry' %}?shift={{ shift.pk }}">Close it</a> before selling today.</p>{% endif %}
-<div id="pos" data-endpoint="{% url 'pos_checkout' %}" data-branch="{{ branch.pk }}" data-request-key="{{ request_key }}" data-shop="{{ branch.name }}" data-add-device="{{ add_device }}">
+<div id="pos" data-endpoint="{% url 'pos_checkout' %}" data-branch="{% if not all_shops %}{{ branch.pk }}{% endif %}" data-all-shops="{{ all_shops|yesno:"true,false" }}" data-request-key="{{ request_key }}" data-shop="{{ branch.name }}" data-add-device="{{ add_device }}">
 <div class="pos-terminal">
   <section class="pos-catalog panel" aria-label="Phones and products">
     <div class="pos-filters">
       <input type="search" id="pos-search" placeholder="Scan an IMEI or type a model, brand or storage…" aria-label="Find an item" autocomplete="off" autofocus>
       <div class="pos-filter-row">
-        <select id="pos-brand" aria-label="Brand"><option value="">All brands</option></select>
+        {% if all_shops %}<select id="pos-shop" aria-label="Shop"><option value="">All shops</option></select>{% endif %}<select id="pos-brand" aria-label="Brand"><option value="">All brands</option></select>
         <select id="pos-model" aria-label="Model"><option value="">All models</option></select>
         <select id="pos-storage" aria-label="Storage"><option value="">Any storage</option></select>
         <select id="pos-condition" aria-label="Condition"><option value="">Any condition</option><option>Excellent</option><option>Very Good</option><option>Good</option><option>Fair</option><option>For Parts</option></select>
@@ -29,7 +29,7 @@
       </div>
       <datalist id="pos-customer-suggestions"></datalist>
       <input type="hidden" name="seller" value="{{ me.pk }}"><input type="hidden" name="handler" value="{{ me.pk }}">
-      <div id="cart-items" class="pos-cart"></div>
+      <p class="muted" id="pos-from" hidden></p><div id="cart-items" class="pos-cart"></div>
       <p class="muted pos-empty" id="pos-empty">Tap a phone on the left, or scan its IMEI, to add it.</p>
       <details class="easy-extra"><summary>Discount, tax and credit terms</summary>
         <label>Discount type<select name="discount_type"><option value="amount">PKR amount</option><option value="percent">Percentage</option></select></label>

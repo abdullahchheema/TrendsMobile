@@ -1,5 +1,5 @@
 {% extends 'base.html' %}{% block content %}
-<div class="page-head"><div><h1>Phone exchange</h1><p>{{ branch.name }} · sell a phone and take the customer's old phone(s) in part payment. All prices in PKR.</p></div><a href="{% url 'dashboard' %}">Back to dashboard</a></div>
+<div class="page-head"><div><h1>Phone exchange</h1><p>Shop: <strong>{{ branch.name }}</strong> {% if user.is_superuser and shops|length > 1 %}· <a href="{{ request.path }}">Change shop</a>{% endif %} · sell a phone and take the customer's old phone(s) in part payment. All prices in PKR.</p></div><a href="{% url 'dashboard' %}">Back to dashboard</a></div>
 <form method="post" class="panel easy-entry">{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.non_field_errors }}
 <h2 style="margin-top:0">1. The phone the customer is buying</h2>
 <div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_new %}</div>

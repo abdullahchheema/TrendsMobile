@@ -58,6 +58,9 @@ def post(data,user):
 @login_required
 def adjust(request):
     from .views import selected_branch,error_text
+    from .views import ask_which_shop
+    gate=ask_which_shop(request,'Stock adjustment','Choose the shop whose stock you are adjusting.')
+    if gate:return gate
     branch=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not branch:return redirect('setup')
     if not access.manager(request.user):raise PermissionDenied('A manager must adjust stock.')
