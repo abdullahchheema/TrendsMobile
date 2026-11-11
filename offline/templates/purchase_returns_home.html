@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Return to Supplier</h1><p>Shop: <strong>{{ branch.name }}</strong> {% if user.is_superuser %}· <a href="{% url 'purchase_returns' %}">Change shop</a>{% endif %} · Step 1: find the supplier bill the stock came in on.</p></div><a href="{% url 'collection' 'Purchase Return' %}">Supplier return history</a></div>
+<form method="get" class="search-bar"><input type="hidden" name="branch" value="{{ branch.pk }}"><input type="search" name="q" value="{{ q }}" placeholder="Scan or type IMEI, supplier name or phone, or bill number" autofocus aria-label="Find a purchase"><button>Find purchase</button></form>
+<div class="panel table-scroll"><table><thead><tr><th>Date</th><th>Supplier</th><th>Bill</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Still owed</th><th></th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.bill.posting_date|date:'j M Y' }}</td><td>{{ r.bill.supplier.name }}</td><td>{{ r.bill.code }}</td><td class="num">PKR {{ r.bill.total|floatformat:'2g' }}</td><td class="num">PKR {{ r.paid|floatformat:'2g' }}</td><td class="num">{% if r.bill.outstanding > 0 %}PKR {{ r.bill.outstanding|floatformat:'2g' }}{% else %}—{% endif %}</td><td><a class="button" href="{% url 'purchase_return' r.bill.pk %}">Return stock</a></td></tr>
+{% empty %}<tr><td colspan="7">{% if q %}No purchase matches “{{ q }}”.{% else %}No purchases yet.{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<p class="muted">Phones are returned one by one at the price you paid; accessories by quantity. Phones already sold cannot be returned to the supplier.</p>
+{% endblock %}

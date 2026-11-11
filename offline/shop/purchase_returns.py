@@ -81,6 +81,46 @@ def create(bill,user,device_ids,accessory_qty,reason):
     return doc
 
 
+@transaction.atomic
+def settle(bill,user,resolution,method,amount,when):
+    """After stock goes back, the supplier owes the shop for what was already paid. Either leave it as credit with the supplier
+    (it reduces the next bill) or take the money back now into a real cash/bank account."""
+    if resolution!='refund':return None
+    from . import money,shopdefaults
+    bill=Document.objects.select_for_update().get(pk=bill.pk)
+    credit=-bill.outstanding if bill.outstanding<0 else ZERO
+    if credit<=0:return None
+    take=s.payment_money(amount) if str(amount or '').strip() else credit
+    if take<=0:raise ValidationError('Enter an amount greater than zero.')
+    if take>credit:raise ValidationError(f'The supplier owes you only PKR {credit:,.2f} on this bill, so you cannot take back PKR {take:,.2f}.')
+    money._method(bill.branch,method)
+    me=shopdefaults.person(user,bill.branch)
+    doc=s.new_doc('Payment Entry',bill.branch,posting_date=when,handler=me,reference=bill,supplier=bill.supplier,notes='Refund from supplier for returned stock',data=dict(direction='Receive',mode=method,amount=str(take),reference=''))
+    return s.submit(doc,user)
+
+
+@login_required
+def find_bill(request):
+    """Return to Supplier, step 1: find the supplier bill the stock came in on (by supplier, IMEI, bill number)."""
+    from django.db.models import Q
+    from .views import ask_which_shop,selected_branch
+    gate=ask_which_shop(request,'Return to Supplier','Choose the shop that bought the stock.')
+    if gate:return gate
+    branch=selected_branch(request.user,request.GET.get('branch'))
+    if not branch:return redirect('setup')
+    access.require(request.user,branch)
+    if not _allowed(request.user):raise PermissionDenied('A manager or accountant must return stock to a supplier.')
+    q=(request.GET.get('q') or '').strip()
+    bills=Document.objects.filter(branch=branch,kind='Purchase Invoice',status='Submitted',is_return=False,supplier__isnull=False,reference__isnull=False).select_related('supplier')
+    if q:
+        digits=''.join(ch for ch in q if ch.isdigit())
+        match=Q(code__icontains=q)|Q(supplier__name__icontains=q)|Q(supplier__phone__icontains=q)
+        if len(digits)>=6:match|=Q(reference__lines__device__imeis__number__contains=digits)
+        bills=bills.filter(match).distinct()
+    rows=[dict(bill=b,paid=b.total-b.outstanding) for b in bills.order_by('-posting_date','-created')[:40]]
+    return render(request,'purchase_returns_home.html',dict(title='Return to Supplier',branch=branch,rows=rows,q=q))
+
+
 @login_required
 def purchase_return(request,pk):
     from .views import document,error_text
@@ -91,8 +131,12 @@ def purchase_return(request,pk):
     if request.method=='POST':
         try:
             qty={k[4:]:v for k,v in request.POST.items() if k.startswith('qty_') and v.strip() and v.strip() not in ('0','0.0')}
-            doc=create(bill,request.user,request.POST.getlist('devices'),qty,request.POST.get('reason',''))
-            messages.success(request,f'Return {doc.code} posted: PKR {doc.total:,.2f} taken off what you owe {bill.supplier.name}.')
+            with transaction.atomic():
+                doc=create(bill,request.user,request.POST.getlist('devices'),qty,request.POST.get('reason',''))
+                refund=settle(bill,request.user,request.POST.get('resolution','credit'),request.POST.get('method','Cash'),request.POST.get('refund_amount',''),timezone.localdate())
+            messages.success(request,f'Return {doc.code} posted: PKR {doc.total:,.2f} taken off what you owe {bill.supplier.name}.'+(f' Refund of PKR {refund.total:,.2f} received ({refund.code}).' if refund else ''))
             return redirect('detail',pk=doc.pk)
         except (ValidationError,ValueError,Device.DoesNotExist) as error:messages.error(request,error_text(error) if isinstance(error,ValidationError) else 'Check the selected items.')
-    return render(request,'purchase_return.html',dict(title='Return to supplier',bill=bill,devices=devices,accessories=accessories))
+    from .models import ShopSettings
+    config=ShopSettings.objects.filter(branch=bill.branch).first()
+    return render(request,'purchase_return.html',dict(title='Return to supplier',bill=bill,devices=devices,accessories=accessories,paid=bill.total-bill.outstanding,methods=list(config.payment_methods) if config else ['Cash']))

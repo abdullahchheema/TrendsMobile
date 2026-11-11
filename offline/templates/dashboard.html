@@ -27,7 +27,7 @@
 
 <section class="panel ov" aria-label="Money"><div class="cov-eyebrow">MONEY</div>
 <div class="ov-kpis">
-  <a class="ov-kpi" href="{% url 'cash_and_bank' %}{% if selected_shop %}?branch={{ selected_shop.pk }}{% endif %}"><span>Cash in hand</span><strong>PKR {{ overview.cash_in_hand|floatformat:"0g" }}</strong><small>Cash drawers</small></a>
+  <a class="ov-kpi" href="{% url 'cash_and_bank' %}{% if selected_shop %}?branch={{ selected_shop.pk }}{% endif %}"><span>Cash in hand</span><strong>PKR {{ overview.cash_in_hand|floatformat:"0g" }}</strong><small>{% if overview.cash_in_hand < 0 %}Minus: opening cash was never recorded — see Cash and Bank{% else %}Cash accounts, from the books{% endif %}</small></a>
   <a class="ov-kpi" href="{% url 'cash_and_bank' %}{% if selected_shop %}?branch={{ selected_shop.pk }}{% endif %}"><span>Bank and wallets</span><strong>PKR {{ overview.bank_total|floatformat:"0g" }}</strong><small>Bank, Easypaisa, JazzCash and cards</small></a>
   <a class="ov-kpi" href="{% url 'customer_dues' %}{% if selected_shop %}?branch={{ selected_shop.pk }}{% endif %}"><span>Customers owe you</span><strong>PKR {{ overview.receivable|floatformat:"0g" }}</strong><small>Customer dues</small></a>
   <a class="ov-kpi" href="{% url 'supplier_dues' %}{% if selected_shop %}?branch={{ selected_shop.pk }}{% endif %}"><span>You owe suppliers</span><strong>PKR {{ overview.payable|floatformat:"0g" }}</strong><small>Supplier dues</small></a>

@@ -52,7 +52,7 @@
   <div class="quick"><a href="{% url 'pos' %}" class="primary-nav">New Sale</a><a href="{% url 'easy_entry' 'purchase' %}" class="primary-nav">New Purchase</a></div>
   {% for section in menu %}{% if section.items %}<details{% if section.open %} open{% endif %}><summary><svg class="ico"><use href="#i-{{ section.icon }}"/></svg>{{ section.title }}</summary>{% for item in section.items %}<a href="{{ item.url }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}</details>{% else %}<a href="{{ section.url }}"><svg class="ico"><use href="#i-{{ section.icon }}"/></svg>{{ section.title }}</a>{% endif %}{% endfor %}
 </aside>
-<main class="app-main" id="content" tabindex="-1">{% block content %}{% endblock %}</main>
+<main class="app-main" id="content" tabindex="-1">{% if request.resolver_match.url_name != 'dashboard' %}<div class="page-back"><button type="button" data-go-back aria-label="Go back to the previous page">← Back</button></div>{% endif %}{% block content %}{% endblock %}</main>
 <footer class="app-footer" role="contentinfo">
   <div class="foot-credit"><img src="{% static 'covison-logo-mark.png' %}" alt="" width="22" height="22"><span>Designed &amp; developed by <a href="https://covison.com" rel="noopener">covison.com</a></span></div>
   <span class="foot-rule" aria-hidden="true"></span>

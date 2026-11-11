@@ -56,6 +56,17 @@ class PhoneReturns(ReturnBase):
         self.client.post(reverse('purchase_return',args=[bill.pk]),dict(devices=[str(device.pk)],reason='Faulty'))
         device.refresh_from_db();self.assertEqual(device.status,pr.RETURNED)
 
+    def test_supplier_can_refund_the_money_at_once_and_cannot_refund_more_than_the_credit(self):
+        from . import money
+        bill=self.bill([109],paid='full');device=bill.reference.lines.get().device
+        before=sum((b['amount'] for b in money.balances([self.branch]) if b['kind']=='Cash'),Decimal(0))
+        bad=self.client.post(reverse('purchase_return',args=[bill.pk]),dict(devices=[str(device.pk)],reason='Faulty',resolution='refund',method='Cash',refund_amount='99999999'))
+        device.refresh_from_db();self.assertEqual(device.status,'Available')          # nothing saved when the refund is refused
+        self.client.post(reverse('purchase_return',args=[bill.pk]),dict(devices=[str(device.pk)],reason='Faulty',resolution='refund',method='Cash',refund_amount=''))
+        bill.refresh_from_db();after=sum((b['amount'] for b in money.balances([self.branch]) if b['kind']=='Cash'),Decimal(0))
+        self.assertEqual((bill.outstanding,after-before),(Decimal('0.00'),Decimal('50000.00')))
+        self.assertEqual(self.payable(bill.supplier),Decimal('0.00'))
+
 
 class AccessoryReturns(ReturnBase):
     def test_accessory_return_by_quantity_is_limited_to_what_was_received_and_is_in_stock(self):

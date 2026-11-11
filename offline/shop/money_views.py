@@ -167,11 +167,30 @@ def expenses(request):
 def _dues(request,kind):
     _guard(request);shops,branch,posting=_scope(request)
     if not branch:return redirect('setup')
-    rows=money.customer_dues(shops) if kind=='Customer' else money.supplier_dues(shops)
-    total=sum((r['remaining'] for r in rows),money.ZERO)
+    rows=money.customer_balances(shops) if kind=='Customer' else money.supplier_balances(shops)
+    owes_you=sum((r['owes_you'] for r in rows),money.ZERO);you_owe=sum((r['you_owe'] for r in rows),money.ZERO)
     title='Customer Dues' if kind=='Customer' else 'Supplier Dues'
-    intro='Money customers still owe the shop.' if kind=='Customer' else 'Money the shop still owes its suppliers.'
-    return render(request,'money_dues.html',dict(title=title,intro=intro,kind=kind,rows=rows,total=total,branch=branch,scope_shops=shops,owner=request.user.is_superuser))
+    intro='What customers owe the shop, and what the shop owes customers (advance payments and returned goods).' if kind=='Customer' else 'What the shop owes its suppliers, and what suppliers owe the shop (overpayments and returned stock).'
+    return render(request,'money_dues.html',dict(title=title,intro=intro,kind=kind,rows=rows,owes_you=owes_you,you_owe=you_owe,branch=branch,scope_shops=shops,owner=request.user.is_superuser))
+
+
+def _payments(request,kind):
+    _guard(request);shops,branch,posting=_scope(request)
+    if not branch:return redirect('setup')
+    q=request.GET.get('q','');rows=money.payment_history(shops,kind,q)
+    from .views import paginate
+    page,pager=paginate(request,rows,60)
+    title=('Customer' if kind=='Customer' else 'Supplier')+' Payment History'
+    return render(request,'money_payments.html',dict(title=title,kind=kind,rows=page.object_list,page_obj=page,pager_query=pager,q=q,branch=branch,scope_shops=shops,
+        intro='Every payment, newest first: paid with the sale, clearing an older due, paid in advance, and refunds.' if kind=='Customer' else 'Every payment, newest first: paid against a bill, paid in advance, and refunds from suppliers.'))
+
+
+@login_required
+def customer_payments(request):return _payments(request,'Customer')
+
+
+@login_required
+def supplier_payments(request):return _payments(request,'Supplier')
 
 
 @login_required
@@ -224,4 +243,5 @@ def cash_and_bank(request):
         except (ValidationError,IntegrityError,ValueError) as error:form.add_error(None,error_text(error))
     accounts=money.balances(shops)
     rows,_=money.history(shops)
-    return render(request,'money_cash.html',dict(title='Cash and Bank',branch=branch,scope_shops=shops,accounts=accounts,total=sum((a['amount'] for a in accounts),money.ZERO),form=form,request_key=uuid.uuid4(),recent=rows[:25]))
+    negative=[a for a in accounts if a['amount']<0]
+    return render(request,'money_cash.html',dict(title='Cash and Bank',branch=branch,scope_shops=shops,accounts=accounts,negative=negative,total=sum((a['amount'] for a in accounts),money.ZERO),form=form,request_key=uuid.uuid4(),recent=rows[:25]))

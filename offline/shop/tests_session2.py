@@ -100,9 +100,9 @@ class InventoryAndScreens(TestCase):
     def test_identical_phones_are_one_line_with_a_count(self):
         self.stock(5);self.stock(2,'Fair',5400)
         page=self.client.get(reverse('collection',args=['Mobile Device']))
-        self.assertContains(page,'<strong>5</strong>');self.assertContains(page,'<strong>2</strong>');self.assertNotContains(page,'>Record<')
-        group=page.context['rows']
-        self.assertEqual(sorted(r['count'] for r in group),[2,5])
+        self.assertContains(page,'<strong>7</strong>');self.assertNotContains(page,'>Record<');self.assertContains(page,'<th>Colour</th>');self.assertNotContains(page,'<th>Condition</th>')
+        group=page.context['rows']                       # condition no longer splits the line
+        self.assertEqual([r['count'] for r in group],[7])
         units=self.client.get(reverse('collection',args=['Mobile Device'])+'?'+group[0]['query'])
         self.assertEqual(len(units.context['rows']),group[0]['count'])
     def test_header_names_the_shop_or_admin(self):
@@ -164,3 +164,23 @@ class ReturnsFlow(TestCase):
     def test_receipt_shows_no_warranty_line_when_none_given(self):
         device=self.phone(7);sale=self.sale(device,100000)
         self.assertNotContains(self.client.get(reverse('receipt',args=[sale.pk])),'No warranty')
+
+
+class DuesHistoryAndNotes(TestCase):
+    def setUp(self):
+        self.__dict__.update(fixtures());self.client.force_login(self.user);self.today=timezone.localdate()
+    def sell(self,price='60000',paid='10000',note=''):
+        from .tests_pos import PosBase
+        return None
+    def test_advance_payment_shows_as_what_you_owe_the_customer(self):
+        from . import money
+        cust=Party.objects.create(kind='Customer',name='Advance Cust',branch=self.branch)
+        money.record_party_payment(self.user,cust,Decimal('800000'),'Cash',self.today)
+        rows=money.customer_balances([self.branch]);row=[r for r in rows if r['party']==cust][0]
+        self.assertEqual((row['owes_you'],row['you_owe']),(Decimal('0.00'),Decimal('800000.00')))
+        page=self.client.get(reverse('customer_dues'));self.assertContains(page,'Advance Cust');self.assertContains(page,'You owe customers')
+        hist=self.client.get(reverse('customer_payments'));self.assertContains(hist,'Advance / on account')
+    def test_payment_history_and_back_button_pages_load(self):
+        for name in ('customer_payments','supplier_payments','supplier_dues','purchase_returns','cash_and_bank'):
+            r=self.client.get(reverse(name));self.assertEqual(r.status_code,200,name)
+        self.assertContains(self.client.get(reverse('cash_and_bank')),'data-go-back')

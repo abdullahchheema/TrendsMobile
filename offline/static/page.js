@@ -36,6 +36,16 @@
     var form=event.target&&event.target.closest&&event.target.closest('form');
     if(form&&typeof window.covisonToast==='function')window.covisonToast('Could not reach the server. Check the connection, then check the list before saving again.','error');
   });
+  /* Back button on every page (falls back to the dashboard when there is nothing to go back to). */
+  document.addEventListener('click',function(event){
+    var button=event.target.closest&&event.target.closest('[data-go-back]');if(!button)return;
+    event.preventDefault();
+    if(window.history.length>1)window.history.back();else if(window.Turbo)window.Turbo.visit('/desk/mobile-shop');else window.location.href='/desk/mobile-shop';
+  });
+  /* Scrolling the page with the wheel must never change a number being typed in. */
+  document.addEventListener('wheel',function(event){
+    var el=document.activeElement;if(el&&el.tagName==='INPUT'&&el.type==='number'&&el===event.target)el.blur();
+  },{passive:true});
   document.addEventListener('turbo:submit-end',function(event){
     var form=event.target;if(!form||!form.querySelectorAll)return;
     form.querySelectorAll('button.is-loading').forEach(function(b){b.classList.remove('is-loading');b.removeAttribute('aria-busy')});

@@ -113,12 +113,45 @@ def _party_rows(branches,kind):
         for pid,remaining in owed.items():
             party=parties.get(pid)
             if party is None or remaining==0:continue
-            rows.append(dict(party=party,branch=config.branch,billed=billed[pid],received=billed[pid]-remaining if remaining>0 else billed[pid],remaining=remaining,due=due[pid],overdue=bool(due[pid] and due[pid]<today and remaining>0)))
-    return sorted(rows,key=lambda r:(-r['remaining'],r['party'].name))
+            # remaining is "what the customer owes the shop" / "what the shop owes the supplier"; a negative number is the other way round
+            # (a customer who paid in advance or returned goods; a supplier who was paid too much or took goods back).
+            theirs=remaining>0 if kind=='Customer' else remaining<0
+            rows.append(dict(party=party,branch=config.branch,billed=billed[pid],received=billed[pid]-remaining if remaining>0 else billed[pid],remaining=remaining,due=due[pid],overdue=bool(due[pid] and due[pid]<today and remaining>0),
+                             owes_you=abs(remaining) if theirs else ZERO,you_owe=ZERO if theirs else abs(remaining)))
+    return sorted(rows,key=lambda r:(-abs(r['remaining']),r['party'].name))
 
 
 def customer_dues(branches):return [r for r in _party_rows(branches,'Customer') if r['remaining']>0]
 def supplier_dues(branches):return [r for r in _party_rows(branches,'Supplier') if r['remaining']>0]
+def customer_balances(branches):return _party_rows(branches,'Customer')     # who owes the shop, and whom the shop owes (advance, returned goods)
+def supplier_balances(branches):return _party_rows(branches,'Supplier')     # whom the shop owes, and who owes the shop (overpaid, returned goods)
+
+
+def payment_history(branches,kind,search='',party=None):
+    """Every payment with customers (or suppliers), newest first, said in plain words: paid with the sale, clearing an older due,
+    paid in advance / on account, refund. Cancelled payments stay visible."""
+    side='customer' if kind=='Customer' else 'supplier'
+    docs=Document.objects.filter(branch__in=branches,kind='Payment Entry',**{side+'__isnull':False}).exclude(data__direction='Internal Transfer').select_related(side,'reference','branch')
+    if party:docs=docs.filter(**{side:party})
+    rows=[]
+    for d in docs.order_by('-posting_date','-created'):
+        direction=d.data.get('direction');ref=d.reference
+        if kind=='Customer':
+            if direction=='Receive':
+                if ref is None:label='Advance / on account'
+                elif ref.is_return:label='Against a return credit'
+                elif ref.posting_date==d.posting_date:label='Paid with the sale'
+                else:label='Clearing an older due'
+            else:label='Refund to customer'
+        else:
+            if direction=='Pay':label='Paid against a bill' if ref else 'Advance / on account'
+            else:label='Refund from supplier'
+        received=direction=='Receive'
+        rows.append(dict(doc=d,date=d.posting_date,code=d.code,party=getattr(d,side),shop=d.branch.name,label=label,method=d.data.get('mode',''),against=ref.code if ref else '',amount=d.total,
+                         money_in=received,status='Cancelled' if d.status=='Cancelled' else 'Posted',note=d.notes))
+    if search:
+        q=search.casefold();rows=[r for r in rows if q in ' '.join((r['code'],r['party'].name,r['label'],r['against'],r['method'],r['note'])).casefold()]
+    return rows
 
 
 def party_detail(party):
@@ -132,7 +165,7 @@ def party_detail(party):
     if not customer:remaining=-remaining
     invoices=list(docs[:100])
     for d in invoices:d.paid=d.total-d.outstanding
-    return dict(invoices=invoices,payments=list(payments[:100]),remaining=remaining,billed=sum((d.total for d in docs if not d.is_return),ZERO))
+    return dict(invoices=invoices,payments=list(payments[:100]),remaining=remaining,owes_you=max(remaining,ZERO) if customer else max(-remaining,ZERO),you_owe=max(-remaining,ZERO) if customer else max(remaining,ZERO),billed=sum((d.total for d in docs if not d.is_return),ZERO))
 
 
 # ------------------------------------------------------------------ posting

@@ -117,6 +117,7 @@ def collection(request,kind):
     if kind=='Mobile Device':
         from . import inventory
         return inventory.listing(request)
+    show_dues=False
     if kind in MASTER_MODELS:
         model=MASTER_MODELS[kind][0];objects=model.objects.all()
         if kind in ('Customer','Supplier'):objects=access.scoped_parties(request.user).filter(kind=kind)
@@ -129,7 +130,9 @@ def collection(request,kind):
         if kind=='Stock Entry' and not request.user.is_superuser:raise PermissionDenied
         if kind=='Payment Entry' and not funds.allowed(request.user):objects=objects.filter(Q(data__direction__isnull=True)|~Q(data__direction='Internal Transfer'))
         if kind=='Journal Entry' and not request.user.is_superuser:objects=objects.filter(Q(data__manual_journal__isnull=True)|~Q(data__manual_journal__version=1))
-        rows=[dict(id=o.pk,code=o.code,name=str(o.customer or o.supplier or ''),state=o.status+(' · '+o.state if o.state else ''),amount=o.total,currency=o.currency,party=o.posting_date) for o in objects]
+        show_dues=kind in ('Sales Invoice','Purchase Invoice')
+        rows=[dict(id=o.pk,code=o.code,name=str(o.customer or o.supplier or ''),state=o.status+(' · '+o.state if o.state else ''),amount=o.total,currency=o.currency,party=o.posting_date,
+                   **(dict(paid=o.total-o.outstanding if o.status=='Submitted' else o.total*0,pending=o.outstanding if o.status=='Submitted' and o.outstanding>0 else None) if show_dues else {})) for o in objects]
         if kind in ('POS Opening Entry','POS Closing Entry'):
             rows=[]
             for o in objects.select_related('till','handler'):
@@ -140,7 +143,7 @@ def collection(request,kind):
     query=request.GET.get('search','').lower()
     if query:rows=[r for r in rows if any(query in str(value).lower() for value in r.values())]
     page,pager_query=paginate(request,rows)
-    return render(request,'list.html',dict(title=kind,kind=kind,rows=page.object_list,page_obj=page,pager_query=pager_query))
+    return render(request,'list.html',dict(title=kind,kind=kind,show_dues=show_dues,rows=page.object_list,page_obj=page,pager_query=pager_query))
 
 @login_required
 def master_edit(request,kind,pk=None):
@@ -645,6 +648,7 @@ def pos_checkout(request):
             seller=shopdefaults.person(request.user,branch)       # whoever sells, the shop stands behind it
             handler=shift.handler if shift and shift.till_id and shift.handler_id else seller       # an open till shift keeps its own cashier
             doc=services.new_doc('POS Invoice' if shift and shift.till_id else 'Sales Invoice',branch,customer=customer,seller=seller)
+            doc.notes=' '.join(str(data.get('note') or '').split())[:500]
             adjustments=data.get('adjustments',{})
             if not isinstance(adjustments,dict):raise ValidationError('Invalid invoice adjustment values.')
             pricing.inputs(doc,adjustments.get('discount_type','amount'),adjustments.get('discount_value','0'),adjustments.get('tax_rule',''),adjustments.get('tax_version',''))

@@ -5,6 +5,10 @@
 {% if accessories %}<h2>Accessories</h2><div class="table-scroll"><table><thead><tr><th>Item</th><th class="num">Can return</th><th class="num">Return quantity</th></tr></thead><tbody>{% for a in accessories %}<tr><td>{{ a.line.product.name }}</td><td class="num">{{ a.left }}</td><td class="num"><input type="number" min="0" max="{{ a.left }}" step="1" name="qty_{{ a.line.pk }}" value="0"></td></tr>{% endfor %}</tbody></table></div>{% endif %}
 {% if not devices and not accessories %}<p class="empty-state">Nothing from this bill is left to return.</p>{% else %}
 <div class="field" style="margin-top:16px"><label for="why">Reason for the return</label><input id="why" name="reason" maxlength="240" required placeholder="e.g. Faulty on arrival, supplier agreed to take back"></div>
-<p class="muted">The amount comes off what you owe this supplier. If the bill was already paid, the supplier now owes you a credit: record it as a supplier payment received, or use it against the next bill.</p>
+<fieldset class="field" style="margin-top:16px;border:0;padding:0"><legend>If you have already paid this supplier (PKR {{ paid|floatformat:"2g" }} paid so far)</legend>
+<label style="display:flex;gap:8px;align-items:center"><input type="radio" name="resolution" value="credit" checked> Keep the credit with the supplier (it comes off the next purchase)</label>
+<label style="display:flex;gap:8px;align-items:center"><input type="radio" name="resolution" value="refund"> The supplier gives the money back now</label>
+<div class="form-grid" style="margin-top:8px"><label>Received in<select name="method">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></label><label>Amount received (leave empty for the full credit)<input type="number" name="refund_amount" min="0" step="0.01" inputmode="decimal"></label></div></fieldset>
+<p class="muted">The value of the returned stock comes off what you owe this supplier. Only money that was really paid can be taken back; if the bill is still unpaid the return just reduces it.</p>
 <div class="form-actions"><button class="primary" type="submit" data-confirm="Post this return to the supplier? Phones leave your stock at their purchase cost.">Post return</button></div>{% endif %}</form>
 {% endblock %}

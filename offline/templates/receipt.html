@@ -21,6 +21,7 @@
   {% for p in payments %}<p class="paid-line">{% if p.direction == 'Pay' %}Refunded{% else %}Received{% endif %} by {{ p.mode }}: {{ doc.currency }} {{ p.amount }}</p>{% endfor %}
   {% if change %}<p class="paid-line">Change returned: {{ doc.currency }} {{ change }}</p>{% endif %}
   {% for application in credit_applications %}<p class="paid-line">Credit applied {{ doc.currency }} {{ application.amount }} · {{ application.reference_code }}</p>{% endfor %}
+  {% if doc.notes %}<p class="paid-line note">Note: {{ doc.notes }}</p>{% endif %}
   {% if shop.receipt_terms %}<p class="terms">{{ shop.receipt_terms|linebreaksbr }}</p>{% endif %}{% if shop.urdu_receipt_note %}<p class="terms" dir="auto">{{ shop.urdu_receipt_note }}</p>{% endif %}
   <p class="thanks">Thank you for shopping with us.</p>
   <button data-print>Print receipt</button>

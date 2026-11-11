@@ -33,6 +33,7 @@
       <p class="muted" id="pos-from" hidden></p><div id="cart-items" class="pos-cart"></div>
       <p class="muted pos-empty" id="pos-empty">Tap a phone on the left, or scan its IMEI, to add it.</p>
       <input type="hidden" name="tax_rule" value=""><input type="hidden" name="credit_due" value=""><input type="hidden" name="credit_instalments" value="0"><input type="hidden" name="override_approver" value=""><input type="hidden" name="override_pin" value="">
+      <label class="pos-note">Note for this order (optional)<textarea name="note" rows="2" maxlength="500" placeholder="Anything to remember: delivery, accessories included, agreement…"></textarea></label>
       <div class="pos-discount" data-pos-discount>
         <label>Discount<span class="pos-discount-row"><select name="discount_type" aria-label="Discount type"><option value="amount">PKR</option><option value="percent">%</option></select><input name="discount_value" type="number" min="0" step="0.01" value="0" inputmode="decimal" aria-label="Discount"></span></label>
         <label>Or set the final total<input id="pos-final" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Total agreed with the customer" aria-label="Final total"></label>

@@ -32,12 +32,23 @@
  function lockEditor(){const locked=Boolean(pending);form.dataset.paymentLocked=String(locked);for(const element of form.elements)if(element!==submit&&element.type!=='hidden')element.disabled=locked;search.disabled=locked;list.querySelectorAll('button').forEach(button=>button.disabled=locked);window.covisonPayments.refresh(form);render();updateButton();}
 
  /* ---------- the order ---------- */
+ /* Identical phones (same model, shop, PTA, condition, grade, battery and price) are one card and one cart line with a quantity. */
+ const gkey=p=>[p.product,p.branch,p.pta_status,p.condition,p.grade,p.kind,p.battery,p.rate].join('|');
+ const inCart=p=>cart.some(r=>r.devices&&r.devices.includes(p));
+ const freeOf=key=>products.filter(p=>p.serialized&&gkey(p)===key&&!inCart(p));
  function add(product){
   if(pending)return;
   if(allShops&&cart.length&&cart[0].branch!==product.branch){error.textContent='One sale can include phones from one shop only ('+cart[0].shop+'). Finish or clear this sale first.';return;}
+  if(product.serialized){
+   const key=gkey(product),device=inCart(product)?freeOf(key)[0]:product;
+   if(!device){error.textContent='All '+products.filter(p=>p.serialized&&gkey(p)===key).length+' of these phones are already in the sale.';return;}
+   const row=cart.find(r=>r.devices&&r.key===key);
+   if(row){row.devices.push(device);row.quantity=row.devices.length;}
+   else cart.push({...device,key,devices:[device],quantity:1,list:device.rate});
+   error.textContent='';render();return;
+  }
   const existing=cart.find(row=>row.product===product.product&&row.device===product.device&&row.warehouse===product.warehouse);
   if(existing){
-   if(product.serialized){error.textContent='This exact phone is already in the sale.';return;}
    if(product.stock_item&&existing.quantity>=Number(product.stock)){error.textContent='The available quantity is already in the sale.';return;}
    existing.quantity++;
   }else cart.push({...product,quantity:1,list:product.rate});
@@ -50,18 +61,25 @@
    const row=make('div',undefined,'cart-row');
    const head=make('div',undefined,'cart-head');head.append(make('strong',product.name));
    const remove=make('button','Remove');remove.type='button';remove.className='cart-remove';remove.disabled=Boolean(pending);remove.addEventListener('click',()=>{if(pending)return;cart.splice(index,1);error.textContent='';render();});head.append(remove);row.append(head);
-   if(product.imeis&&product.imeis.length)row.append(make('small','IMEI '+product.imeis.join(' / '),'cart-imei'));
+   const imeis=product.devices?product.devices.flatMap(d=>d.imeis||[]):(product.imeis||[]);
+   if(imeis.length)row.append(make('small','IMEI '+(imeis.length>4?imeis.slice(0,4).join(' / ')+' … +'+(imeis.length-4)+' more':imeis.join(' / ')),'cart-imei'));
    const controls=make('div',undefined,'cart-controls');
    const rate=make('input');rate.type='number';rate.min='0';rate.step='.01';rate.value=priced(product)?product.rate:'';rate.placeholder='Selling price';rate.disabled=Boolean(pending);rate.setAttribute('aria-label','Selling price PKR');rate.className='cart-rate';
    rate.addEventListener('change',()=>{if(pending)return;product.rate=rate.value;render();});
-   if(product.serialized){controls.append(make('span','1 phone','cart-qty-static'));}
+   if(product.serialized){
+    const total=products.filter(p=>p.serialized&&gkey(p)===product.key).length;
+    const qty=make('input');qty.type='number';qty.min='1';qty.max=String(total);qty.step='1';qty.value=product.devices.length;qty.disabled=Boolean(pending);qty.setAttribute('aria-label','Number of phones');qty.className='cart-qty';
+    qty.addEventListener('change',()=>{if(pending)return;const typed=Math.floor(Number(qty.value))||1,want=Math.max(1,Math.min(total,typed));
+     while(product.devices.length<want){const next=freeOf(product.key)[0];if(!next)break;product.devices.push(next);}
+     while(product.devices.length>want)product.devices.pop();product.quantity=product.devices.length;error.textContent=typed>total?'Only '+total+' of these phones are in stock.':'';render();});
+    controls.append(make('label','Qty'),qty,make('span','of '+total+' in stock','cart-qty-static'));}
    else{const qty=make('input');qty.type='number';qty.min='1';qty.step='1';qty.value=product.quantity;qty.disabled=Boolean(pending);qty.setAttribute('aria-label','Quantity');qty.className='cart-qty';
     if(product.stock_item)qty.max=product.stock;
     qty.addEventListener('change',()=>{if(pending)return;product.quantity=Number(qty.value);render();});controls.append(make('label','Qty'),qty);}
    controls.append(make('label','Price (PKR)'),rate);row.append(controls);
    const listed=Number(product.list||0),now=Number(product.rate||0);
    if(priced(product)&&listed>0&&now<listed)row.append(make('small','List price '+format(listed)+' · discount '+format(listed-now)+' each','cart-discount'));
-   if(priced(product)&&product.cost!=null&&product.cost!==''&&now<=Number(product.cost))row.append(make('small','Selling price is at or below the purchase price ('+format(Number(product.cost))+'). Check it before selling. If this phone came in a bulk purchase, its recorded cost may be a shared average.','cart-warn'));
+   if(priced(product)&&product.cost!=null&&product.cost!==''&&now<=Math.max(...(product.devices?product.devices.map(d=>Number(d.cost)||0):[Number(product.cost)])))row.append(make('small','Selling price is at or below the purchase price ('+format(Number(product.cost))+'). Check it before selling. If this phone came in a bulk purchase, its recorded cost may be a shared average.','cart-warn'));
    if(product.serialized){const label=make('label','Warranty','cart-warranty'),sel=make('select');sel.required=true;sel.disabled=Boolean(pending);for(const [value,text] of [['','Choose warranty'],['0','No warranty'],['7','7 days'],['15','15 days'],['30','1 month'],['90','3 months'],['180','6 months'],['365','1 year']]){const o=make('option',text);o.value=value;sel.append(o);}sel.value=product.warranty||'';sel.addEventListener('change',()=>{if(!pending)product.warranty=sel.value;});label.append(sel);row.append(label);}
    cartEl.append(row);
   });
@@ -96,11 +114,14 @@
  function show(){
   list.replaceChildren();const terms=search.value.toLowerCase().split(/\s+/).filter(Boolean);
   const condition=document.getElementById('pos-condition')?.value||'',maxPrice=Number(document.getElementById('pos-max')?.value||0);
-  const found=products.filter(p=>{const hay=`${p.code} ${p.name} ${p.barcode} ${p.brand||''} ${p.model||''} ${p.storage||''} ${p.colour||''} ${p.condition||''}`.toLowerCase();
+  const matched=products.filter(p=>{const hay=`${p.code} ${p.name} ${p.barcode} ${p.brand||''} ${p.model||''} ${p.storage||''} ${p.colour||''} ${p.condition||''}`.toLowerCase();
    return terms.every(t=>hay.includes(t))&&(!shopBox||!shopBox.value||p.shop===shopBox.value)&&(!brandBox.value||p.brand===brandBox.value)&&(!modelBox.value||p.model===modelBox.value)&&(!storageBox.value||p.storage===storageBox.value)&&(!condition||p.condition===condition)&&(!maxPrice||!priced(p)||Number(p.rate)<=maxPrice);});
-  document.getElementById('pos-count').textContent=`${found.length} item${found.length===1?'':'s'} available${found.length>120?' (showing the first 120 — narrow the search)':''}`;
+  const groups=new Map(),found=[];
+  for(const p of matched){if(!p.serialized){found.push(p);continue;}const key=gkey(p);let g=groups.get(key);if(!g){g={rep:p,key,count:0};groups.set(key,g);found.push(g);}g.count++;}
+  document.getElementById('pos-count').textContent=`${matched.length} item${matched.length===1?'':'s'} available${found.length>120?' (showing the first 120 — narrow the search)':''}`;
   if(!found.length)list.append(make('p','Nothing in stock matches. Check the filters or scan the IMEI.','empty-state'));
-  found.slice(0,120).forEach(product=>{
+  found.slice(0,120).forEach(entry=>{
+   const product=entry.rep||entry,count=entry.count||1;
    const card=make('div',undefined,'pos-card');
    const pick=make('button');pick.type='button';pick.disabled=Boolean(pending);pick.className='pos-card-pick';
    const initial=make('span',(product.brand||product.name||'?').trim().charAt(0).toUpperCase(),'pos-avatar');initial.setAttribute('aria-hidden','true');
@@ -111,7 +132,7 @@
    const facts=product.serialized?[product.storage,product.colour,product.pta_status&&product.pta_status!=='Not recorded'?product.pta_status:'',product.battery?'Battery '+product.battery+'%':'',product.condition,product.kind]:[product.category,product.colour];
    body.append(make('small',facts.filter(Boolean).join(' · ')));
    const foot=make('span',undefined,'pos-card-foot');foot.append(make('b',priced(product)?format(product.rate):'Price at sale'));
-   foot.append(make('em',product.serialized?'In stock':(product.stock_item?`${product.stock} in stock`:'Service'),'pos-avail'));
+   foot.append(make('em',product.serialized?count+' in stock':(product.stock_item?`${product.stock} in stock`:'Service'),'pos-avail'));
    pick.append(initial,body,foot);pick.addEventListener('click',()=>{add(product);search.focus();});
    const eye=make('button');eye.type='button';eye.className='pos-eye';eye.setAttribute('aria-label','Quick preview of '+title);eye.title='Quick preview';
    eye.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -143,6 +164,7 @@
  search.addEventListener('keydown',event=>{
   if(event.key!=='Enter'||pending)return;event.preventDefault();const value=search.value.trim();if(!value)return;
   const matches=products.filter(p=>p.code===value||(p.barcodes||p.barcode.split(/\s+/)).includes(value));
+  if(matches.length===1&&matches[0].serialized&&inCart(matches[0])){error.textContent='This exact phone is already in the sale.';return;}
   if(matches.length===1){add(matches[0]);search.value='';show();search.focus();}
   else error.textContent=matches.length?'More than one item has this code. Choose the right one from the list.':'No exact stock reference or IMEI match. Choose an item from the search results.';
  });
@@ -178,7 +200,7 @@
    let payments;try{payments=window.covisonPayments.read(form);}catch(problem){error.textContent=problem.message;return;}
    if(received()>Number(totals().total)+0.004){error.textContent='The amount received ('+format(received())+') is more than the sale total ('+format(Number(totals().total))+'). Correct the amount before completing the sale.';return;}
    if(payments.some(p=>Number(p.amount)<=0)){error.textContent='Payment amounts must be more than zero.';return;}
-   pending={request_key:root.dataset.requestKey,branch:(cart[0]&&cart[0].branch)||root.dataset.branch,customer_name:values.get('customer_name'),customer_phone:values.get('customer_phone')||'',seller:values.get('seller'),handler:values.get('handler'),items:cart.map(({product,device,warehouse,quantity,rate,warranty})=>({product,device,warehouse,quantity,rate,warranty_days:warranty===undefined?'':warranty})),credit_doc:(document.getElementById('pos-credit')||{dataset:{}}).dataset.creditDoc||'',adjustments:adjustments(),override:{approver:values.get('override_approver')||'',pin:values.get('override_pin')||''},credit:{due_date:values.get('credit_due')||'',instalments:values.get('credit_instalments')||'0'},payments};
+   pending={request_key:root.dataset.requestKey,branch:(cart[0]&&cart[0].branch)||root.dataset.branch,customer_name:values.get('customer_name'),customer_phone:values.get('customer_phone')||'',seller:values.get('seller'),handler:values.get('handler'),items:cart.flatMap(({product,device,warehouse,quantity,rate,warranty,devices})=>devices?devices.map(d=>({product:d.product,device:d.device,warehouse:d.warehouse,quantity:1,rate,warranty_days:warranty===undefined?'':warranty})):[{product,device,warehouse,quantity,rate,warranty_days:warranty===undefined?'':warranty}]),note:(values.get('note')||'').trim(),credit_doc:(document.getElementById('pos-credit')||{dataset:{}}).dataset.creditDoc||'',adjustments:adjustments(),override:{approver:values.get('override_approver')||'',pin:values.get('override_pin')||''},credit:{due_date:values.get('credit_due')||'',instalments:values.get('credit_instalments')||'0'},payments};
   }
   sending=true;error.textContent='';lockEditor();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
