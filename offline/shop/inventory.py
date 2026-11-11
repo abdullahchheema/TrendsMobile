@@ -24,10 +24,10 @@ def listing(request):
         first=phones[0]['device'] if phones else None
         page,pager_query=paginate(request,phones)
         return render(request,'inventory_units.html',dict(title=first.product.name if first else 'Phones',rows=page.object_list,page_obj=page,pager_query=pager_query,first=first,see_cost=access.costs(request.user),back=request.GET.get('back','')))
-    groups=objects.values('product_id','product__name','product__storage','product__colour','branch_id','branch__name','device_type','pta_status','status').annotate(count=Count('id',distinct=True),low=Min('asking_price'),high=Max('asking_price')).order_by('product__name','branch__name')
+    groups=objects.values('product_id','product__name','product__storage','product__colour','product__brand','product__model__name','product__model__brand','branch_id','branch__name','device_type','pta_status','status').annotate(count=Count('id',distinct=True),low=Min('asking_price'),high=Max('asking_price')).order_by('product__name','branch__name')
     rows=[]
     for g in groups:
-        rows.append(dict(name=g['product__name'],storage=g['product__storage'],colour=g['product__colour'],shop=g['branch__name'],kind=g['device_type'],pta=g['pta_status'],status=g['status'],count=g['count'],low=g['low'],high=g['high'],
+        rows.append(dict(name=(' '.join(x for x in ((g['product__model__brand'] or g['product__brand'] or ''),g['product__model__name']) if x) if g['product__model__name'] else g['product__name']),storage=g['product__storage'],colour=g['product__colour'],shop=g['branch__name'],kind=g['device_type'],pta=g['pta_status'],status=g['status'],count=g['count'],low=g['low'],high=g['high'],
             query=f"product={g['product_id']}&shop={g['branch_id']}&type={g['device_type']}&pta={g['pta_status']}&status={g['status']}"))
     total=sum(r['count'] for r in rows)
     page,pager_query=paginate(request,rows)
