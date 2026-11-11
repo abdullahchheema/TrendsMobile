@@ -724,7 +724,8 @@ def cancel(doc,user):
     if doc.is_return:raise ValidationError('Posted returns require a stock and credit review rather than cancellation.')
     if doc.kind in ('Mobile Daily Closing','POS Opening Entry','POS Closing Entry','Mobile Exchange','Journal Entry','Purchase Return'):
         raise ValidationError('This record requires a dedicated reconciliation review rather than cancellation.')
-    if doc.linked.exclude(status='Cancelled').exists() or doc.allocations.exclude(document=doc).exists():raise ValidationError('Reverse linked invoices, returns or payments first.')
+    others=doc.allocations.exclude(document=doc).aggregate(d=Sum('debit'),c=Sum('credit'))        # payments already cancelled and reversed net to nothing and no longer block
+    if doc.linked.exclude(status='Cancelled').exists() or money(others['d'])!=money(others['c']):raise ValidationError('Reverse linked invoices, returns or payments first.')
     for exchange in Document.objects.filter(kind='Mobile Exchange').exclude(state='Cancelled'):
         if str(doc.pk) in (exchange.data.get('sales_invoice'),exchange.data.get('purchase_invoice')):raise ValidationError('This invoice belongs to an exchange; review its settlement first.')
     if doc.kind=='Payment Entry':

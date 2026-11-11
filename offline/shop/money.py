@@ -178,16 +178,40 @@ def record_party_payment(user,party,amount,method,when,reference='',notes=''):
 
 @transaction.atomic
 def record_party_cash_back(user,party,amount,method,when,reference='',notes=''):
-    """The opposite direction: refund a customer, or receive a refund from a supplier. Recorded on account, not against a bill."""
+    """The opposite direction: refund a customer, or receive a refund from a supplier.
+
+    The refund settles the party's open return credit notes (oldest first), so a credit can never be refunded twice or
+    refunded after it was applied to an invoice. It can never be more than the shop really owes the customer (or the
+    supplier owes the shop)."""
     if not party.branch_id:raise ValidationError('This record belongs to no shop yet.')
     branch=_lock_shop(user,party.branch);_method(branch,method)
     amount=s.payment_money(amount)
     if amount<=0:raise ValidationError('Enter an amount greater than zero.')
     customer=party.kind=='Customer'
     if customer:_enough(branch,method,amount)
-    doc=s.new_doc('Payment Entry',branch,posting_date=when,handler=shopdefaults.person(user,branch),notes=notes,**({'customer':party} if customer else {'supplier':party}),
-                  data=dict(direction='Pay' if customer else 'Receive',mode=method,amount=str(amount),reference=reference))
-    done=s.submit(doc,user);s.audit(user,'Customer refund paid' if customer else 'Supplier refund received',done,branch=branch,party=party.name,amount=str(amount));return done
+    kinds=list(s.SELL) if customer else ['Purchase Invoice'];side={('customer' if customer else 'supplier'):party}
+    notes_open=list(Document.objects.select_for_update().filter(branch=branch,status='Submitted',kind__in=kinds,is_return=True,outstanding__lt=0,**side).order_by('posting_date','created'))
+    usable=[n for n in notes_open if not (customer and n.reference_id and Document.objects.get(pk=n.reference_id).outstanding>0)]   # credit is refundable once the original invoice is paid
+    advances=[a for a in Document.objects.select_for_update().filter(branch=branch,status='Submitted',kind='Payment Entry',reference__isnull=True,**side).order_by('posting_date','created')
+              if a.data.get('direction')==('Receive' if customer else 'Pay') and s.money(a.data.get('unallocated'))>0]
+    prepaid=sum((s.money(a.data.get('unallocated')) for a in advances),ZERO)
+    refundable=sum((-n.outstanding for n in usable),ZERO)+prepaid
+    if amount>refundable:
+        raise ValidationError(('This is more than the customer can be refunded' if customer else 'This is more than the supplier owes you')+f' ({refundable:,.2f}). Apply any return credit to the unpaid invoice first.')
+    left=amount;done=None;me=shopdefaults.person(user,branch)
+    def post(ref,part):
+        doc=s.new_doc('Payment Entry',branch,posting_date=when,handler=me,notes=notes,reference=ref,**({'customer':party} if customer else {'supplier':party}),
+                      data=dict(direction='Pay' if customer else 'Receive',mode=method,amount=str(part),reference=reference))
+        return s.submit(doc,user)
+    for note in usable:
+        if left<=0:break
+        part=min(left,-note.outstanding);done=post(note,part);left-=part
+    if left>0:                                                  # an advance being given back: use it up so it cannot be refunded twice
+        done=post(None,left);done.data['unallocated']='0.00';done.save(update_fields=['data','modified']);take=left
+        for adv in advances:
+            if take<=0:break
+            use=min(take,s.money(adv.data.get('unallocated')));adv.data['unallocated']=str(s.money(adv.data.get('unallocated'))-use);adv.save(update_fields=['data','modified']);take-=use
+    s.audit(user,'Customer refund paid' if customer else 'Supplier refund received',done,branch=branch,party=party.name,amount=str(amount));return done
 
 
 @transaction.atomic

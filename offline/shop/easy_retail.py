@@ -69,7 +69,8 @@ def sale(data,user,demo_batch=''):
     demo_batch=demo_batch or branch.demo_batch
     customer=customer_names.resolve(data['party_name'],user,demo_batch=demo_batch,branch=branch)
     Product.objects.select_for_update().get(pk=data['phone'].product_id,enabled=True,serialized=True)
-    phone=Device.objects.select_for_update().get(pk=data['phone'].pk,branch=branch)
+    phone=Device.objects.select_for_update().filter(pk=data['phone'].pk,branch=branch).first()
+    if phone is None:raise ValidationError('This phone is not in this shop’s stock. A shop can only sell its own phones.')
     if phone.status!='Available' or not phone.warehouse_id:raise ValidationError('This phone has already been sold. Choose another available phone.')
     if data['pta_status'] not in ('PTA','Non-PTA'):raise ValidationError('Choose PTA or Non-PTA.')
     phone.pta_status=data['pta_status'];phone.save(update_fields=['pta_status','modified'])
