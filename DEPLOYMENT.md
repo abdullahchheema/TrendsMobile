@@ -113,7 +113,8 @@ variables disappear. Re-running any of these commands is safe.
 | Symptom | Likely cause and fix |
 | --- | --- |
 | `DisallowedHost` / 400 on the site | the address is missing from `DJANGO_ALLOWED_HOSTS` (custom domains only) |
-| `CSRF verification failed` on login | add `https://your-domain` to `COVISON_TRUSTED_ORIGINS`, redeploy |
+| `CSRF verification failed` on login | a custom domain must be in `COVISON_TRUSTED_ORIGINS` (redeploy). A form left open in an old tab now just returns to the page with a "try again" message |
+| Pages are slow | `DATABASE_URL` must use the pooler on port **6543** (the app then keeps its connection open between pages; set `DATABASE_CONN_MAX_AGE` to change the seconds). Also check the Supabase project region is close to Vercel's `bom1` (Mumbai) |
 | 500 on every page, log says *relation does not exist* | Part 2 `migrate` has not run against this database, or `search_path` was not set (re-run `setup.sql`) |
 | `password authentication failed` | wrong `DB_PASSWORD`, or the user is missing the `.PROJECTREF` suffix |
 | `prepared statement … does not exist` | the app is not reading `DATABASE_URL` (it must be set in Vercel exactly as named); with it set the app turns prepared statements off for the pooler |

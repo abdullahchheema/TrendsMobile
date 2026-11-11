@@ -10,7 +10,8 @@ MIDDLEWARE=['django.middleware.security.SecurityMiddleware','whitenoise.middlewa
     'django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware',
     'shop.requestctx.RequestContextMiddleware','shop.supabase_auth.SupabaseSessionMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware']
+    'django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware','shop.csrf_pages.NoStaleHtmlMiddleware']
+CSRF_FAILURE_VIEW='shop.csrf_pages.csrf_failed'
 ROOT_URLCONF='config.urls'
 TEMPLATES=[dict(BACKEND='django.template.backends.django.DjangoTemplates',DIRS=[BASE_DIR/'templates'],APP_DIRS=True,
     OPTIONS=dict(context_processors=['django.template.context_processors.request','django.contrib.auth.context_processors.auth',
@@ -56,6 +57,10 @@ DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
 SESSION_COOKIE_AGE=int(os.environ.get('COVISON_SESSION_HOURS','12'))*3600
 SESSION_SAVE_EVERY_REQUEST=False
 CSRF_TRUSTED_ORIGINS=_VERCEL_ORIGINS
+if os.environ.get('VERCEL'):
+    # Vercel always serves over HTTPS and sets this header itself, so Django must see the request as secure; otherwise its
+    # same-origin check compares the browser's https:// origin with http:// and rejects valid form posts.
+    SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
 if os.environ.get('COVISON_HTTPS')=='1':
     SESSION_COOKIE_SECURE=CSRF_COOKIE_SECURE=SECURE_SSL_REDIRECT=True
     SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')

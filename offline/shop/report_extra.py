@@ -2,7 +2,7 @@
 branch comparison. Every report is shop-scoped by the caller and returns plain rows so it exports to CSV like the others."""
 from collections import defaultdict
 from decimal import Decimal
-from django.db.models import Sum
+from django.db.models import Count,Sum
 from .models import Device,Document,Line,LedgerEntry,ShopSettings,StockMovement
 from . import financial_reports,services as s
 
@@ -38,7 +38,8 @@ DESCRIPTIONS={
 
 
 def cogs_accounts():
-    return {str(c.accounts.get('cogs')) for c in ShopSettings.objects.all() if c.accounts.get('cogs')}
+    from . import reqcache
+    return reqcache.remember('cogs_accounts', lambda: {str(c.accounts.get('cogs')) for c in ShopSettings.objects.all() if c.accounts.get('cogs')})
 
 
 def is_cogs(account,cogs):
@@ -111,8 +112,33 @@ def transfer_report(shops,start,end):
     return rows
 
 
-def branch_comparison(shops,start,end):
+def span_totals(shops,spans):
+    """Sales, purchases, expenses and profit summed over all `shops` for each (start, end) span, from two queries in total
+    (the ledger and the purchase bills), however many spans are asked for."""
+    from django.db.models import Q
+    shops=list(shops)
+    if not shops or not spans:return [dict(sales=ZERO,purchases=ZERO,expenses=ZERO,profit=ZERO) for _ in spans]
     classes=financial_reports.classifications();cogs=cogs_accounts()
+    out=[dict(income=ZERO,cogs=ZERO,expense=ZERO,purchases=ZERO) for _ in spans]
+    notes={}
+    for i,(a,b) in enumerate(spans):
+        notes[f'd{i}']=Sum('debit',filter=Q(posting_date__range=[a,b]));notes[f'c{i}']=Sum('credit',filter=Q(posting_date__range=[a,b]))
+    low=min(a for a,_ in spans);high=max(b for _,b in spans)
+    for r in LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[low,high]).values('account_id').annotate(**notes):
+        account,root=classes[r['account_id']]
+        if root not in ('Income','Expense'):continue
+        for i in range(len(spans)):
+            net=(r[f'd{i}'] or ZERO)-(r[f'c{i}'] or ZERO)
+            if root=='Income':out[i]['income']-=net
+            else:out[i]['cogs' if is_cogs(account,cogs) else 'expense']+=net
+    pnotes={f't{i}':Sum('total',filter=Q(posting_date__range=[a,b])) for i,(a,b) in enumerate(spans)}
+    bought=Document.objects.filter(branch__in=shops,status='Submitted',kind='Purchase Invoice',posting_date__range=[low,high]).aggregate(**pnotes)
+    for i in range(len(spans)):out[i]['purchases']=bought[f't{i}'] or ZERO
+    return [dict(sales=o['income'],purchases=o['purchases'],expenses=o['expense'],profit=o['income']-o['cogs']-o['expense']) for o in out]
+
+
+def branch_comparison(shops,start,end):
+    shops=list(shops);classes=financial_reports.classifications();cogs=cogs_accounts()
     per=defaultdict(lambda:defaultdict(lambda:ZERO))
     for r in LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[start,end]).values('branch_id','account_id').annotate(d=Sum('debit'),c=Sum('credit')):
         account,root=classes[r['account_id']];net=(r['d'] or ZERO)-(r['c'] or ZERO)
@@ -127,12 +153,12 @@ def branch_comparison(shops,start,end):
         if conf and str(r['account_id'])==str(conf.accounts.get('payable')):balances[r['branch_id']]['payable']-=net
     stock={r['warehouse__branch_id']:r['v'] or ZERO for r in StockMovement.objects.filter(warehouse__branch__in=shops,posting_date__lte=end).values('warehouse__branch_id').annotate(v=Sum('value'))}
     purchases={r['branch_id']:r['t'] or ZERO for r in Document.objects.filter(branch__in=shops,status='Submitted',kind='Purchase Invoice',posting_date__range=[start,end]).values('branch_id').annotate(t=Sum('total'))}
-    sold={shop.pk:Device.objects.filter(branch=shop,status='Sold',sold_on__range=[start,end]).count() for shop in shops}
+    sold=dict(Device.objects.filter(branch__in=shops,status='Sold',sold_on__range=[start,end]).values_list('branch_id').annotate(n=Count('pk')))
     rows=[]
     for shop in shops:
         p=per[shop.pk];b=balances[shop.pk];income=p['income'];gross=income-p['cogs'];net=gross-p['expense']
         rows.append({'Shop':shop.name,'Net sales':income,'Purchases':purchases.get(shop.pk,ZERO),'Gross profit':gross,'Gross margin %':(gross*100/income).quantize(Decimal('0.1')) if income else ZERO,'Expenses':p['expense'],'Net profit':net,
-                     'Stock value':stock.get(shop.pk,ZERO),'Cash and bank':b['cash'],'Customers owe':b['receivable'],'You owe suppliers':b['payable'],'Phones sold':sold[shop.pk]})
+                     'Stock value':stock.get(shop.pk,ZERO),'Cash and bank':b['cash'],'Customers owe':b['receivable'],'You owe suppliers':b['payable'],'Phones sold':sold.get(shop.pk,0)})
     return sorted(rows,key=lambda r:-r['Net profit'])
 
 

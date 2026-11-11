@@ -52,7 +52,8 @@ def plan(doc,user,instalments,first_due):
 
 def schedule(doc):
     """Instalments with what each still owes, applying payments oldest-first."""
-    rows=list(doc.installments.order_by('number'))
+    prefetched=getattr(doc,'_prefetched_objects_cache',{}).get('installments')
+    rows=sorted(prefetched,key=lambda r:r.number) if prefetched is not None else list(doc.installments.order_by('number'))
     if not rows:return []
     planned=sum((r.amount for r in rows),ZERO);paid=max(planned-max(doc.outstanding,ZERO),ZERO)
     result=[]

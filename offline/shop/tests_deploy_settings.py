@@ -9,8 +9,12 @@ class DatabaseSettings(SimpleTestCase):
     def test_pooled_url_disables_persistent_connections_cursors_and_prepared_statements(self):
         db=deploy.database({'DATABASE_URL':self.URL})
         self.assertEqual((db['USER'],db['PASSWORD'],db['HOST'],db['PORT'],db['NAME']),('covison_app.abcdefgh','p@ss','aws-0-ap-south-1.pooler.supabase.com','6543','postgres'))
-        self.assertEqual(db['CONN_MAX_AGE'],0);self.assertTrue(db['DISABLE_SERVER_SIDE_CURSORS'])
+        self.assertEqual(db['CONN_MAX_AGE'],300);self.assertTrue(db['CONN_HEALTH_CHECKS']);self.assertTrue(db['DISABLE_SERVER_SIDE_CURSORS'])
         self.assertIsNone(db['OPTIONS']['prepare_threshold']);self.assertEqual(db['OPTIONS']['sslmode'],'require');self.assertNotIn('options',db['OPTIONS'])
+    def test_other_pooler_ports_open_one_connection_per_request_unless_asked(self):
+        session=self.URL.replace(':6543/',':5432/')
+        self.assertEqual(deploy.database({'DATABASE_URL':session})['CONN_MAX_AGE'],0)
+        self.assertEqual(deploy.database({'DATABASE_URL':session,'DATABASE_CONN_MAX_AGE':'45'})['CONN_MAX_AGE'],45)
     def test_malformed_url_is_rejected_clearly(self):
         for bad in ('mysql://u:p@h/db','postgresql://hostonly','not a url'):
             with self.assertRaisesMessage(ValueError,'DATABASE_URL must look like'):deploy.database({'DATABASE_URL':bad})

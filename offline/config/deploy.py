@@ -16,8 +16,13 @@ def database(environ):
         parts=urlparse(url)
         if parts.scheme not in ('postgres','postgresql') or not parts.hostname or not parts.username:
             raise ValueError('DATABASE_URL must look like postgresql://user:password@host:port/database')
+        port=parts.port or 5432
+        # The transaction pooler (6543) is built for long-lived clients, so a warm serverless instance keeps its connection and
+        # skips the TLS handshake + login on every page. Other poolers stay one-connection-per-request unless asked.
+        keep=environ.get('DATABASE_CONN_MAX_AGE','').strip()
+        keep=int(keep) if keep.isdigit() else (300 if port==6543 else 0)
         return dict(ENGINE='django.db.backends.postgresql',NAME=unquote(parts.path.lstrip('/')) or 'postgres',USER=unquote(parts.username),
-            PASSWORD=unquote(parts.password or ''),HOST=parts.hostname,PORT=str(parts.port or 5432),CONN_MAX_AGE=0,DISABLE_SERVER_SIDE_CURSORS=True,
+            PASSWORD=unquote(parts.password or ''),HOST=parts.hostname,PORT=str(port),CONN_MAX_AGE=keep,CONN_HEALTH_CHECKS=bool(keep),DISABLE_SERVER_SIDE_CURSORS=True,
             OPTIONS={'sslmode':environ.get('DATABASE_SSLMODE','require'),'prepare_threshold':None},TEST=test)
     return dict(ENGINE='django.db.backends.postgresql',NAME=environ.get('DATABASE_NAME','covison'),USER=environ.get('DATABASE_USER','covison'),
         PASSWORD=environ['DATABASE_PASSWORD'],HOST=environ.get('DATABASE_HOST','db'),PORT=environ.get('DATABASE_PORT','5432'),CONN_MAX_AGE=60,

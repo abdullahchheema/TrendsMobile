@@ -25,6 +25,11 @@ ZERO=Decimal('0.00')
 
 
 def classifications():
+    from . import reqcache
+    return reqcache.remember('classifications',_classifications)
+
+
+def _classifications():
     mapped=defaultdict(set)
     for config in ShopSettings.objects.all():
         for key,value in config.accounts.items():

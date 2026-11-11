@@ -69,9 +69,12 @@ def recent(branches,limit=6):
 def low_stock(branch):
     """Accessories whose stock in this shop is at or below their reorder level (products with a level of 0 are never listed)."""
     from .models import Product,StockMovement
+    products=list(Product.objects.filter(enabled=True,stock_item=True,serialized=False,reorder_level__gt=0).order_by('name'))
+    if not products:return []
+    held=dict(StockMovement.objects.filter(product__in=products,warehouse__branch=branch).values_list('product_id').annotate(q=Sum('quantity')))
     rows=[]
-    for p in Product.objects.filter(enabled=True,stock_item=True,serialized=False,reorder_level__gt=0).order_by('name'):
-        qty=StockMovement.objects.filter(product=p,warehouse__branch=branch).aggregate(q=Sum('quantity'))['q'] or ZERO
+    for p in products:
+        qty=held.get(p.pk) or ZERO
         if qty<=p.reorder_level:rows.append(dict(product=p,quantity=qty,level=p.reorder_level))
     return rows
 
@@ -141,20 +144,21 @@ def overview(shops,start,end):
 def month_start(day):return day.replace(day=1)
 
 
-def trend(shops,months=6,today=None):
-    """Sales, purchases and profit per month for the last `months` months (oldest first), with bar widths for a simple chart."""
-    from . import report_extra
+def _month_spans(months,today):
     import calendar
-    today=today or timezone.localdate();shops=list(shops);rows=[]
-    year,month=today.year,today.month
-    spans=[]
+    year,month=today.year,today.month;spans=[]
     for _ in range(months):
         spans.append((year,month));month-=1
         if month==0:year,month=year-1,12
-    for year,month in reversed(spans):
-        start=date(year,month,1);end=min(date(year,month,calendar.monthrange(year,month)[1]),today)
-        parts=report_extra.branch_comparison(shops,start,end)
-        rows.append(dict(label=start.strftime('%b %Y'),sales=sum((p['Net sales'] for p in parts),ZERO),purchases=sum((p['Purchases'] for p in parts),ZERO),profit=sum((p['Net profit'] for p in parts),ZERO)))
+    return [(date(y,m,1),min(date(y,m,calendar.monthrange(y,m)[1]),today)) for y,m in reversed(spans)]
+
+
+def trend(shops,months=6,today=None):
+    """Sales, purchases and profit per month for the last `months` months (oldest first), with bar widths for a simple chart."""
+    from . import report_extra
+    today=today or timezone.localdate();spans=_month_spans(months,today)
+    totals=report_extra.span_totals(list(shops),spans)
+    rows=[dict(label=start.strftime('%b %Y'),sales=t['sales'],purchases=t['purchases'],profit=t['profit']) for (start,_),t in zip(spans,totals)]
     peak=max([abs(v) for r in rows for v in (r['sales'],r['purchases'],r['profit'])] or [ZERO]) or Decimal('1')
     for r in rows:
         for key in ('sales','purchases','profit'):r[key+'_w']=int(abs(r[key])*100/peak)
@@ -182,9 +186,9 @@ def snapshot(shops,start,end,today=None):
     from . import report_extra
     today=today or timezone.localdate();shops=list(shops)
     data=overview(shops,start,end)
-    now=report_extra.branch_comparison(shops,today,today);month=report_extra.branch_comparison(shops,month_start(today),today)
-    data['today_sales']=sum((r['Net sales'] for r in now),ZERO);data['month_sales']=sum((r['Net sales'] for r in month),ZERO)
-    data['today_expenses']=sum((r['Expenses'] for r in now),ZERO);data['month_expenses']=sum((r['Expenses'] for r in month),ZERO)
+    now,month=report_extra.span_totals(shops,[(today,today),(month_start(today),today)])
+    data['today_sales']=now['sales'];data['month_sales']=month['sales']
+    data['today_expenses']=now['expenses'];data['month_expenses']=month['expenses']
     balances=money.balances(shops)
     data['cash_in_hand']=sum((b['amount'] for b in balances if b['kind']=='Cash'),ZERO);data['bank_total']=sum((b['amount'] for b in balances if b['kind']!='Cash'),ZERO)
     data['accounts']=balances
