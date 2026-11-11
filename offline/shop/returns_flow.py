@@ -83,7 +83,7 @@ def return_sale(request,pk):
             from .views import error_text
             messages.error(request,error_text(error))
     return render(request,'return_sale.html',dict(title='Return or exchange',doc=original,branch=branch,options=options,warning=warning,reasons=REASONS,conditions=CONDITIONS,resolutions=RESOLUTIONS,
-        methods=methods,previous=previous,paid=original.total-original.outstanding,request_key=uuid.uuid4(),posted=request.POST))
+        methods=methods,receive_shops=list(Branch.objects.filter(enabled=True,is_online=False).order_by('name')) if original.branch.is_online else [],previous=previous,paid=original.total-original.outstanding,request_key=uuid.uuid4(),posted=request.POST))
 
 
 def process(request,original):
@@ -98,13 +98,19 @@ def process(request,original):
     if resolution not in [r for r,_ in RESOLUTIONS]:raise ValidationError('Choose what happens to the money: refund, credit or exchange.')
     if not device_ids and not quantities:raise ValidationError('Tick at least one item that is being returned.')
     full_reason=reason+(' — '+note if note else '')
-    return settle(user,original,device_ids,quantities,condition,full_reason,resolution,post.get('refund_method',''),post.get('refund_amount',''))
+    warehouse=None
+    if original.branch.is_online:        # an online return can go back into any shop
+        from . import shopdefaults
+        shop=Branch.objects.filter(pk=post.get('receive_shop') or None,enabled=True,is_online=False).first() if post.get('receive_shop') else None
+        if post.get('receive_shop') and not shop:raise ValidationError('Choose a valid shop to take the returned stock.')
+        warehouse=shopdefaults.warehouse(shop) if shop else None
+    return settle(user,original,device_ids,quantities,condition,full_reason,resolution,post.get('refund_method',''),post.get('refund_amount',''),warehouse)
 
 
 @transaction.atomic
-def settle(user,original,device_ids,quantities,condition,reason,resolution,method='',refund_amount=''):
+def settle(user,original,device_ids,quantities,condition,reason,resolution,method='',refund_amount='',warehouse=None):
     original=Document.objects.get(pk=original.pk)
-    draft=s.return_sale(original,user,device_ids,condition,reason,quantities)
+    draft=s.return_sale(original,user,device_ids,condition,reason,quantities,warehouse)
     credit=s.submit(draft,user)
     value=-credit.outstanding;applied=Decimal(0)
     original.refresh_from_db()

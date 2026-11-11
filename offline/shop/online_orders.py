@@ -12,7 +12,7 @@ Refunds and exchanges after dispatch use the normal Returns & Exchanges flow on 
 Prices always come from the ERP, never from the website. Variants of a phone are: product (model, storage, colour) + condition + PTA status +
 type + price; identical phones in several shops are one variant with the total quantity."""
 from collections import defaultdict
-from decimal import Decimal
+from decimal import ROUND_HALF_UP,Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
@@ -21,20 +21,42 @@ from .models import Branch,Device,Document,Line,OnlineAllocation,OnlineOrder,Onl
 from . import pricing,shopdefaults,services as s
 
 ZERO=Decimal('0.00')
-METHODS={'Cash on Delivery':'Cash','Bank Transfer':'Bank','Easypaisa':'Easypaisa','JazzCash':'JazzCash','Card':'Card'}   # order method -> shop payment method name
+METHODS={'Cash on Delivery':'Cash','Bank Transfer':'Bank Transfer','Easypaisa':'Easypaisa','JazzCash':'JazzCash','Card':'Card'}   # order method -> the Online Store's payment method
 MAX_LINES=40
 MAX_QTY=50
 DELIVERY_CODE='ONLINE-DELIVERY'
 
 
 # ------------------------------------------------------------------ prices and stock
-def device_price(device,product=None):
+def _after_discount(base,product):
+    pct=product.discount_percent or Decimal(0)
+    return (base*(Decimal(100)-pct)/Decimal(100)).quantize(Decimal('0.01'),rounding=ROUND_HALF_UP) if pct else base
+
+
+def device_base(device,product=None):
+    """The online price before any percentage off: the phone's own online price, else the product's, else the shop price."""
     product=product or device.product
     return device.online_price if device.online_price is not None else product.online_price if product.online_price is not None else device.asking_price
 
 
-def product_price(product):
+def device_price(device,product=None):
+    """What the website charges for this phone."""
+    product=product or device.product
+    return _after_discount(device_base(device,product),product)
+
+
+def product_base(product):
     return product.online_price if product.online_price is not None else product.selling_price
+
+
+def product_price(product):
+    return _after_discount(product_base(product),product)
+
+
+def compare_price(product,base):
+    """The crossed-out price shown next to a sale price (None when nothing is on sale)."""
+    if product.compare_price is not None:return product.compare_price
+    return base if (product.discount_percent or 0)>0 else None
 
 
 def reserved_qty(product,branch,exclude_order=None):
@@ -45,12 +67,28 @@ def reserved_qty(product,branch,exclude_order=None):
 
 
 def shops():
-    return list(Branch.objects.filter(enabled=True).order_by('name','code'))
+    """The shops that hold stock (never the Online Store itself)."""
+    return list(Branch.objects.filter(enabled=True,is_online=False).order_by('name','code'))
+
+
+def online_branch():
+    """The Online Store's own books: created the first time it is needed. It has its own cash, bank and wallets, customers, sales and
+    expenses, and no stock: it sells the shops' stock and owes each shop the cost (inter-shop clearing)."""
+    found=Branch.objects.filter(is_online=True).first()
+    if found:return found
+    from django.contrib.auth import get_user_model
+    from . import setup
+    owner=get_user_model().objects.filter(is_superuser=True,is_active=True).order_by('pk').first()
+    if owner is None:raise ValidationError('The owner account is needed to set up the Online Store books.')
+    company=Branch.objects.exclude(company='').exclude(is_online=True).values_list('company',flat=True).first() or 'Business'
+    branch=setup.create_shop(dict(code='ONLINE',name='Online Store',company=company,warehouse_name='Online',till_name='Online',payment_methods=list(setup.METHODS)),owner)
+    branch.is_online=True;branch.save(update_fields=['is_online'])
+    return branch
 
 
 def phone_pool(product,condition,pta,kind,price,lock=False):
     """{branch: [available devices of this exact variant, oldest first]}."""
-    qs=Device.objects.filter(product=product,status='Available',branch__enabled=True,condition=condition,pta_status=pta,device_type=kind,warehouse__isnull=False)
+    qs=Device.objects.filter(product=product,status='Available',branch__enabled=True,branch__is_online=False,condition=condition,pta_status=pta,device_type=kind,warehouse__isnull=False)
     if lock:qs=qs.select_for_update()
     pool=defaultdict(list)
     for d in qs.select_related('branch','product').order_by('received_on','code'):
@@ -58,31 +96,38 @@ def phone_pool(product,condition,pta,kind,price,lock=False):
     return pool
 
 
+def accessory_free(product_ids):
+    """{(product id, branch id): units free to sell} for accessories: stock minus units held by new online orders. Two queries for any number of products."""
+    from .models import StockMovement
+    shop_ids={b.pk for b in shops()};free={}
+    for r in StockMovement.objects.filter(product_id__in=list(product_ids),product__serialized=False,warehouse__branch_id__in=shop_ids).values('product_id','warehouse__branch_id').annotate(q=Sum('quantity')):
+        free[(r['product_id'],r['warehouse__branch_id'])]=r['q'] or ZERO
+    for r in OnlineAllocation.objects.filter(product_id__in=list(product_ids),device__isnull=True,line__order__status=OnlineOrder.NEW).values('product_id','branch_id').annotate(q=Sum('quantity')):
+        key=(r['product_id'],r['branch_id'])
+        if key in free:free[key]-=r['q'] or ZERO
+    return {k:v for k,v in free.items() if v>0}
+
+
 def accessory_pool(product,lock=False):
     """{branch id: units free to sell}."""
-    from .models import StockMovement
-    out={}
-    for b in shops():
-        place=shopdefaults.warehouse(b)
-        free=s.on_hand(product,place)[0]-reserved_qty(product,b)
-        if free>0:out[b.pk]=free
-    return out
+    return {b:q for (pid,b),q in accessory_free([product.pk]).items()}
 
 
 def variants(published_only=True):
     """What the website can sell right now: phones grouped by product+condition+PTA+type+price, accessories by product, each with the
-    quantity per shop. Used by the Online Store screens and checked on every order."""
-    rows=[]
+    quantity per shop. Used by the Online Store screens and checked on every order. A handful of queries however many products there are."""
     qs=Product.objects.filter(enabled=True)
     if published_only:qs=qs.filter(online_visible=True)
-    for p in qs.select_related('model'):
-        if p.serialized:
-            groups=defaultdict(lambda:defaultdict(int))
-            for d in Device.objects.filter(product=p,status='Available',branch__enabled=True,warehouse__isnull=False):groups[(d.condition,d.pta_status,d.device_type,device_price(d,p))][d.branch_id]+=1
-            for (cond,pta,kind,price),per in groups.items():rows.append(dict(product=p,condition=cond,pta_status=pta,device_type=kind,price=price,per_shop=dict(per),quantity=sum(per.values())))
-        elif p.stock_item:
-            per=accessory_pool(p)
-            if per:rows.append(dict(product=p,condition='',pta_status='',device_type='',price=product_price(p),per_shop={k:int(v) for k,v in per.items()},quantity=int(sum(per.values()))))
+    products={p.pk:p for p in qs.select_related('model')};rows=[]
+    groups=defaultdict(lambda:defaultdict(int));base_of={}
+    for d in Device.objects.filter(product_id__in=[pk for pk,p in products.items() if p.serialized],status='Available',branch__enabled=True,branch__is_online=False,warehouse__isnull=False):
+        p=products[d.product_id];key=(p.pk,d.condition,d.pta_status,d.device_type,device_price(d,p));groups[key][d.branch_id]+=1;base_of[key]=device_base(d,p)
+    for (pid,cond,pta,kind,price),per in groups.items():
+        p=products[pid];rows.append(dict(product=p,condition=cond,pta_status=pta,device_type=kind,price=price,compare=compare_price(p,base_of[(pid,cond,pta,kind,price)]),per_shop=dict(per),quantity=sum(per.values())))
+    acc={}
+    for (pid,b),q in accessory_free([pk for pk,p in products.items() if not p.serialized and p.stock_item]).items():acc.setdefault(pid,{})[b]=int(q)
+    for pid,per in acc.items():
+        p=products[pid];rows.append(dict(product=p,condition='',pta_status='',device_type='',price=product_price(p),compare=compare_price(p,product_base(p)),per_shop=per,quantity=sum(per.values())))
     return rows
 
 
@@ -214,7 +259,7 @@ def create(data,user=None,source='Website',credit=None):
         city=str(cust.get('city') or '')[:100],payment_method=method,payment_status='Paid' if (data.get('payment_status')=='Paid' and method!='Cash on Delivery') else 'Unpaid',payment_reference=str(data.get('payment_reference') or '')[:180],
         delivery_fee=fee,subtotal=subtotal,total=total,notes=str(data.get('notes') or '')[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit)
     for l in lines:l['line']=OnlineOrderLine.objects.create(order=order,product=l['product'],condition=l['condition'],pta_status=l['pta_status'],device_type=l['device_type'],quantity=l['quantity'],unit_price=l['unit_price'])
-    _reserve(order,plan(lines,prefer=credit.branch_id if credit else None))
+    _reserve(order,plan(lines))
     if getattr(user,'is_authenticated',False):s.audit(user,'Online order created',None,order=order.code,total=str(total))
     return order,True
 
@@ -260,7 +305,7 @@ def mark_paid(order,user,reference=''):
 
 
 def party_for(branch,order):
-    """The customer in this shop's own list: found by phone, else created. Shops never share customers."""
+    """The online customer, in the Online Store's own customer list (found by phone, else created). Shops never see them."""
     if order.exchange_credit_id and order.exchange_credit.branch_id==branch.pk and order.exchange_credit.customer_id:return order.exchange_credit.customer
     found=Party.objects.filter(branch=branch,kind='Customer',phone=order.customer_phone).first()
     if found:return found
@@ -276,47 +321,44 @@ def delivery_product():
 
 def shop_method(branch,order):
     name=METHODS[order.payment_method];conf=ShopSettings.objects.filter(branch=branch).first()
-    if not conf or name not in conf.payment_methods:raise ValidationError(f'{branch.name} has no “{name}” payment method set up, so it cannot receive this order’s money. Add it in Shop Settings first.')
+    if not conf or name not in conf.payment_methods:raise ValidationError(f'The Online Store has no “{name}” payment method set up, so it cannot receive this order’s money.')
     return name
 
 
 @transaction.atomic
 def dispatch(order,user,courier='',tracking=''):
-    """Post the sale: one invoice per supplying shop. Prepaid orders are received at once; cash on delivery stays owing until delivery."""
+    """Post the sale. One invoice in the Online Store's books holds the whole order: the customer, the revenue, the money. The stock leaves the
+    shops that held it, and each shop is owed its cost by the Online Store (see services.post_supply). Prepaid orders are received at once;
+    cash on delivery stays owing until delivery."""
     order=_lock(order)
     if order.status!=OnlineOrder.NEW:raise ValidationError('Only a new order can be dispatched.')
     if order.payment_method!='Cash on Delivery' and order.payment_status!='Paid':raise ValidationError('Confirm that the payment arrived before dispatching.')
     allocations=list(OnlineAllocation.objects.select_for_update().filter(line__order=order).select_related('line','product','device','branch'))
     if not allocations:raise ValidationError('This order has no reserved stock.')
-    per_branch=defaultdict(list)
-    for a in allocations:per_branch[a.branch_id].append(a)
-    release_devices=[a.device for a in allocations if a.device_id]
-    for d in Device.objects.select_for_update().filter(pk__in=[x.pk for x in release_devices]):
+    for d in Device.objects.select_for_update().filter(pk__in=[a.device_id for a in allocations if a.device_id]):
         if d.status!='Reserved':raise ValidationError(f'{d.code} is no longer reserved for this order. Cancel the order and create it again.')
     for a in allocations:                     # the reservation ends here: the invoice sells the exact phones
         if a.device_id:Device.objects.filter(pk=a.device_id).update(status='Available')
     OnlineAllocation.objects.filter(pk__in=[a.pk for a in allocations if not a.device_id]).delete()   # accessories: counted again by the invoice itself
-    first=True;made=[]
-    for branch_id,group in per_branch.items():
-        branch=Branch.objects.get(pk=branch_id);person=shopdefaults.shop_person(branch);warehouse=shopdefaults.warehouse(branch)
-        method=shop_method(branch,order) if order.payment_method!='Cash on Delivery' else None
-        doc=s.new_doc('Sales Invoice',branch,customer=party_for(branch,order),seller=person,channel='Online',online_order=order,notes=f'Online order {order.code}'+(f' · {order.notes}' if order.notes else ''),
-                      data=dict(channel='Online',online_order=order.code))
-        pricing.inputs(doc,'amount','0','','');doc.save()
-        for a in group:
-            if a.device_id:Line.objects.create(document=doc,product=a.product,device=a.device,warehouse=a.device.warehouse,quantity=1,rate=a.line.unit_price)
-            else:Line.objects.create(document=doc,product=a.product,warehouse=warehouse,quantity=a.quantity,rate=a.line.unit_price)
-        if first and order.delivery_fee>0:Line.objects.create(document=doc,product=delivery_product(),warehouse=warehouse,quantity=1,rate=order.delivery_fee)
-        first=False;doc.save()
-        sale=s.checkout(doc,user,[],person)
-        if order.exchange_credit_id and order.exchange_credit.branch_id==branch.pk:
-            from . import returns
-            returns.apply_to_sale(Document.objects.get(pk=order.exchange_credit_id),sale,user);sale.refresh_from_db()
-        if method and sale.outstanding>0:_receive(sale,order,method,user,order.payment_reference)
-        sale.refresh_from_db();made.append(sale)
+    branch=online_branch();person=shopdefaults.shop_person(branch)
+    method=shop_method(branch,order) if order.payment_method!='Cash on Delivery' else None
+    doc=s.new_doc('Sales Invoice',branch,customer=party_for(branch,order),seller=person,channel='Online',online_order=order,notes=f'Online order {order.code}'+(f' · {order.notes}' if order.notes else ''),
+                  data=dict(channel='Online',online_order=order.code))
+    pricing.inputs(doc,'amount','0','','');doc.save()
+    for a in allocations:
+        if a.device_id:Line.objects.create(document=doc,product=a.product,device=a.device,warehouse=a.device.warehouse,quantity=1,rate=a.line.unit_price)
+        else:Line.objects.create(document=doc,product=a.product,warehouse=shopdefaults.warehouse(a.branch),quantity=a.quantity,rate=a.line.unit_price)
+    if order.delivery_fee>0:Line.objects.create(document=doc,product=delivery_product(),warehouse=shopdefaults.warehouse(branch),quantity=1,rate=order.delivery_fee)
+    doc.save()
+    sale=s.checkout(doc,user,[],person)
+    if order.exchange_credit_id:
+        from . import returns
+        returns.apply_to_sale(Document.objects.get(pk=order.exchange_credit_id),sale,user);sale.refresh_from_db()
+    if method and sale.outstanding>0:_receive(sale,order,method,user,order.payment_reference)
+    sale.refresh_from_db()
     order.status=OnlineOrder.DISPATCHED;order.dispatched_on=timezone.localdate();order.courier=str(courier or '')[:100];order.tracking=str(tracking or '')[:100]
     order.save(update_fields=['status','dispatched_on','courier','tracking','modified'])
-    s.audit(user,'Online order dispatched',None,order=order.code,invoices=[d.code for d in made]);return made
+    s.audit(user,'Online order dispatched',None,order=order.code,invoices=[sale.code]);return [sale]
 
 
 def _receive(inv,order,method,user,reference=''):
@@ -327,13 +369,13 @@ def _receive(inv,order,method,user,reference=''):
 
 @transaction.atomic
 def deliver(order,user,method='Cash'):
-    """Delivered. Cash on delivery is collected now into the chosen shop account, against each shop's invoice."""
+    """Delivered. Cash on delivery is collected now into the chosen Online Store account."""
     order=_lock(order)
     if order.status!=OnlineOrder.DISPATCHED:raise ValidationError('Only a dispatched order can be marked delivered.')
     for inv in Document.objects.select_for_update().filter(online_order=order,kind__in=list(s.SELL),is_return=False,status='Submitted'):
         if inv.outstanding>0:
             conf=ShopSettings.objects.filter(branch=inv.branch).first()
-            if not conf or method not in conf.payment_methods:raise ValidationError(f'{inv.branch.name} has no “{method}” payment method set up.')
+            if not conf or method not in conf.payment_methods:raise ValidationError(f'The Online Store has no “{method}” payment method set up.')
             _receive(inv,order,method,user,f'Delivery of {order.code}')
     order.status=OnlineOrder.DELIVERED;order.payment_status='Paid';order.delivered_on=timezone.localdate()
     order.save(update_fields=['status','payment_status','delivered_on','modified']);s.audit(user,'Online order delivered',None,order=order.code);return order

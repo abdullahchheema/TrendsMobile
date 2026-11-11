@@ -51,10 +51,10 @@
   if(!blob||blob.type!=='image/webp')throw new Error(file.name+' could not be resized.');
   return blob;
  }
- function send(blob,name,tile){
+ function send(blob,name,tile,variant){
   return new Promise((done,fail)=>{
-   const form=new FormData();form.append('file',blob,name);const xhr=new XMLHttpRequest();xhr.open('POST',root.dataset.upload);xhr.setRequestHeader('X-CSRFToken',csrf());
-   xhr.upload.onprogress=e=>{if(e.lengthComputable)tile.querySelector('.bar i').style.width=Math.round(e.loaded*100/e.total)+'%';};
+   const form=new FormData();form.append('file',blob,name);if(variant)form.append('variant',variant);const xhr=new XMLHttpRequest();xhr.open('POST',root.dataset.upload);xhr.setRequestHeader('X-CSRFToken',csrf());
+   xhr.upload.onprogress=e=>{if(tile&&e.lengthComputable)tile.querySelector('.bar i').style.width=Math.round(e.loaded*100/e.total)+'%';};
    xhr.onload=()=>{let d={};try{d=JSON.parse(xhr.responseText);}catch{}xhr.status===200&&d.id?done(d):fail(new Error(d.error||'Upload failed.'));};
    xhr.onerror=()=>fail(new Error('Could not reach the server. Check the connection and try again.'));xhr.send(form);
   });
@@ -70,8 +70,17 @@
     catch(problem){say(problem.message);}
     tile.remove();render();
    }
+   if(images.length===1)say('This page is now live on the website.');
   }finally{busy=false;render();}
  }
+ const reload=()=>{if(window.Turbo)window.Turbo.visit(location.href,{action:'replace'});else location.reload();};
+ /* a photo for one colour/storage only */
+ document.querySelectorAll('[data-variant-photo]').forEach(box=>box.addEventListener('change',async()=>{
+  const files=[...box.files];box.value='';say('');
+  for(const file of files){try{const blob=await prepare(file);if(blob.size>maxBytes)throw new Error(file.name+' is still too large after resizing.');await send(blob,file.name.replace(/\.[^.]+$/,'')+(blob===file?'':'.webp'),null,box.dataset.variantPhoto);}catch(problem){say(problem.message);return;}}
+  reload();}));
+ document.querySelectorAll('[data-remove-photo]').forEach(button=>button.addEventListener('click',()=>{
+  if(!window.confirm('Remove this photo?'))return;json(deleteUrl(button.dataset.removePhoto),{}).then(reload).catch(e=>say(e.message));}));
  drop.addEventListener('click',()=>input.click());
  drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
  input.addEventListener('change',()=>{add([...input.files]);input.value='';});

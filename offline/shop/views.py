@@ -42,7 +42,8 @@ def paginate(request,rows,per_page=50):
     return page,(query.urlencode()+'&' if query else '')
 
 def scoped(user):
-    places=access.branches(user)
+    from . import online_access
+    places=access.branches(user,include_online=user.is_superuser or online_access.active())
     query=Q(branch__in=places)
     if user.is_superuser:query|=Q(kind='Stock Entry',status='Submitted',data__target_branch__in=[str(pk) for pk in places.values_list('pk',flat=True)])
     return Document.objects.filter(query)
@@ -100,7 +101,7 @@ def dashboard(request):
     from . import dashboard_metrics as dm
     owner=request.user.is_superuser
     branch=selected_branch(request.user,request.GET.get('branch') or None) if (request.GET.get('branch') or not owner) else None
-    places=list(access.branches(request.user).filter(pk=branch.pk) if branch else access.branches(request.user))
+    places=list(access.branches(request.user).filter(pk=branch.pk) if branch else access.branches(request.user,include_online=owner))
     overview=recent=None;low=[]
     if access.statements(request.user) and places:
         key,start,end=dm.period(request.GET)
@@ -122,7 +123,7 @@ def collection(request,kind):
         model=MASTER_MODELS[kind][0];objects=model.objects.all()
         if kind in ('Customer','Supplier'):objects=access.scoped_parties(request.user).filter(kind=kind)
         if kind in ('Mobile Staff','Warehouse','Till'):objects=objects.filter(branch__in=access.branches(request.user))
-        if kind=='Shop':objects=Branch.objects.all() if request.user.is_superuser else access.branches(request.user)
+        if kind=='Shop':objects=Branch.objects.filter(is_online=False) if request.user.is_superuser else access.branches(request.user)
         rows=[dict(id=o.pk,code=o.code,name=o.name,state=getattr(o,'designation','') or ('Active' if getattr(o,'enabled',True) else 'Inactive'),party=str(getattr(o,'branch','')),amount=None) for o in objects.order_by('code')]
     elif kind in KINDS:
         objects=scoped(request.user).filter(kind__in=services.SELL if kind=='Sales Invoice' else [kind]).select_related('customer','supplier').order_by('-posting_date','-created')

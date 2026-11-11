@@ -93,7 +93,7 @@ def post(doc):
     original=Document.objects.select_for_update().get(pk=doc.reference_id) if doc.reference_id else None
     doc.reference=original
     if not original:raise ValidationError('Select the original submitted customer sale.')
-    planned=plan(doc);total=cost_total=s.ZERO
+    planned=plan(doc);total=cost_total=s.ZERO;received={}
     reversed_totals={key:s.ZERO for key in ('base','discount','net','tax','total')}
     for line,source,amount,cost_value in planned:
         Product.objects.select_for_update().get(pk=line.product_id)
@@ -103,13 +103,18 @@ def post(doc):
         line.cost=source.cost
         if line.product.serialized:
             device=Device.objects.select_for_update().get(pk=line.device_id)
-            if device.branch_id!=doc.branch_id or device.sale_id!=original.pk or device.status!='Sold':
+            if (device.branch_id!=doc.branch_id and not doc.branch.is_online) or device.sale_id!=original.pk or device.status!='Sold':
                 raise ValidationError('The phone is not an unreturned device from this sale and shop.')
             device.warehouse=line.warehouse or doc.warehouse;device.status='Holding';device.sale=None;device.customer=None
+            device.branch=device.warehouse.branch                  # an online return can come back into any shop
             device.sold_on=None;device.sold_price=0;device.inspection_status='Pending'
             device.details['inspection_notes']='Returned: '+doc.notes;device.save()
         movement=s.stock(doc,line,line.quantity,line.cost)
         movement.value=cost_value;movement.save(update_fields=['value']);line.save()
+        if doc.branch.is_online:
+            where=line.warehouse or doc.warehouse
+            if where.branch_id==doc.branch_id or where.branch.is_online:raise ValidationError('Choose the shop that takes the returned stock back.')
+            received[where.branch_id]=received.get(where.branch_id,s.ZERO)+cost_value
         total+=amount;cost_total+=cost_value
     doc.seller=original.seller
     if original.staff_names.get('seller'):doc.staff_names['seller']=original.staff_names['seller']
@@ -121,7 +126,9 @@ def post(doc):
     if reversed_totals['tax']:
         from .pricing import tax_account
         s.entry(doc,tax_account(original),debit=reversed_totals['tax'])
-    s.entry(doc,'inventory',debit=cost_total);s.entry(doc,'cogs',credit=cost_total)
+    s.entry(doc,'cogs',credit=cost_total)
+    if doc.branch.is_online:s.post_supply(doc,received,cost_total,-1)
+    else:s.entry(doc,'inventory',debit=cost_total)
 
 
 @transaction.atomic
@@ -148,8 +155,14 @@ def create(original,user,device_ids,condition,reason,quantities=None,warehouse=N
         if key in selected:raise ValidationError('Select an invoice line once.')
         selected[key]=s.quantity(value)
     if not selected:raise ValidationError('Select at least one phone or accessory quantity.')
-    target=warehouse or (original.warehouse if original.warehouse_id and original.warehouse.enabled else None) or Warehouse.objects.filter(branch=original.branch,enabled=True).order_by('code').first()
-    if not target or not target.enabled or target.branch_id!=original.branch_id:raise ValidationError('Select an active receiving warehouse in this shop.')
+    if original.branch.is_online:
+        # Online sale: the stock goes back into the shop chosen by the user, or the shop it came from.
+        origin=next((l.warehouse for l in lines if l.warehouse_id and not l.warehouse.branch.is_online and (not l.device_id or str(l.device_id) in device_ids)),None)
+        target=warehouse or origin
+        if not target or not target.enabled or not target.branch.enabled or target.branch.is_online:raise ValidationError('Choose the shop that takes the returned stock back.')
+    else:
+        target=warehouse or (original.warehouse if original.warehouse_id and original.warehouse.enabled else None) or Warehouse.objects.filter(branch=original.branch,enabled=True).order_by('code').first()
+        if not target or not target.enabled or target.branch_id!=original.branch_id:raise ValidationError('Select an active receiving warehouse in this shop.')
     doc=s.new_doc('Sales Invoice',original.branch,customer=original.customer,seller=original.seller,is_return=True,reference=original,channel=original.channel,online_order=original.online_order,
         warehouse=target,notes=condition.strip()+'\n'+reason.strip(),demo_batch=original.demo_batch,
         data=dict(receipt=original.data.get('receipt',{}),returned_condition=condition.strip(),return_reason=reason.strip(),return_created_by=user.get_username()))

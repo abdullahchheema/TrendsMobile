@@ -1,26 +1,28 @@
-"""Online orders: variants across shops, reservation, allocation, dispatch (cash on delivery and prepaid), delivery, cancelling, refunds."""
+"""Online orders: variants across shops, reservation, allocation, dispatch (cash on delivery and prepaid), delivery, cancelling, returns,
+the Online Store's own books, inter-shop settlement, the online login and the website API."""
 import json
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
-from django.test import TestCase
+from django.test import TestCase,override_settings
+from django.urls import reverse
 from django.utils import timezone
 from .models import *
 from .tests import imei
 from .tests_transfers import transfer_setup
-from . import coa,online_orders as oo,shopdefaults,services as s
+from . import access,coa,online_accounts,online_orders as oo,shopdefaults,shop_accounts,services as s
 
 
 class OrderBase(TestCase):
     def setUp(self):
         transfer_setup(self);coa.install_standard(self.user);self.n=0
-        for b in (self.branch,self.other):
-            conf=ShopSettings.objects.get(branch=b)
-            bank=Account.objects.create(code=b.code+'-BANK-T',name=b.name+' bank',account_type='Bank');conf.payment_methods['Bank']=str(bank.pk);conf.save()
         model=PhoneModel.objects.create(code='M18',name='iPhone 18 Pro Max',brand='Apple')
         self.red=Product.objects.create(code='P18R',name='iPhone 18 Pro Max 256GB Red',model=model,brand='Apple',storage='256GB',colour='Red',serialized=True,stock_item=True,online_visible=True,slug='red')
         self.blue=Product.objects.create(code='P18B',name='iPhone 18 Pro Max 256GB Blue',model=model,brand='Apple',storage='256GB',colour='Blue',serialized=True,stock_item=True,online_visible=True,slug='blue')
         self.cover=Product.objects.create(code='COV1',name='Silicone cover',group='Cover / Case',serialized=False,stock_item=True,selling_price=Decimal('800'),online_visible=True,slug='cover')
+        from . import online_store
+        for p in (self.red,self.cover):ProductImage.objects.create(product=p,path='t/x.jpg',url='https://img.test/x.jpg');online_store.refresh_live(p)          # a photo is what makes a page live
+        self.red.refresh_from_db();self.blue.refresh_from_db();self.cover.refresh_from_db()
     def phone(self,branch,product=None,price='100000',cost='80000',cond='New'):
         self.n+=1;d=Device.objects.create(code=f'PH-{self.n}',product=product or self.red,warehouse=shopdefaults.warehouse(branch),branch=branch,status='Available',purchase_cost=Decimal(cost),asking_price=Decimal(price),condition=cond,pta_status='PTA',device_type='New')
         IMEI.objects.create(number=imei(9000+self.n),device=d,slot=1);return d
@@ -32,6 +34,12 @@ class OrderBase(TestCase):
         return oo.create(data)[0]
     def item(self,product=None,qty=1,price='100000',**extra):
         d=dict(product_id=str((product or self.red).pk),condition='New',pta_status='PTA',device_type='New',price=price,quantity=qty);d.update(extra);return d
+    def money(self,branch,method):
+        conf=ShopSettings.objects.get(branch=branch);return s.account_balance(branch,Account.objects.get(pk=conf.payment_methods[method]))
+    def clearing(self,branch):
+        acct=online_accounts._clearing(branch);e=LedgerEntry.objects.filter(branch=branch,account=acct).aggregate(d=Sum('debit'),c=Sum('credit'));return (e['d'] or 0)-(e['c'] or 0)
+    def inventory(self,branch):
+        acct=Account.objects.get(pk=ShopSettings.objects.get(branch=branch).accounts['inventory']);e=LedgerEntry.objects.filter(branch=branch,account=acct).aggregate(d=Sum('debit'),c=Sum('credit'));return (e['d'] or 0)-(e['c'] or 0)
 
 
 class Stock(OrderBase):
@@ -43,13 +51,18 @@ class Stock(OrderBase):
         self.assertEqual({r['product'].colour for r in oo.variants()},{'Red','Blue'});self.assertEqual({r['product'].model_id for r in oo.variants()},{self.red.model_id})
     def test_a_different_price_is_a_different_variant(self):
         self.phone(self.branch,price='100000');self.phone(self.branch,price='95000');self.assertEqual(sorted(r['price'] for r in oo.variants() if r['product']==self.red),[Decimal('95000'),Decimal('100000')])
+    def test_a_percentage_off_lowers_the_price_and_shows_the_old_price(self):
+        self.phone(self.branch);self.red.discount_percent=Decimal('10');self.red.save()
+        [v]=[r for r in oo.variants() if r['product']==self.red];self.assertEqual((v['price'],v['compare']),(Decimal('90000.00'),Decimal('100000')))
+        self.red.compare_price=Decimal('120000');self.red.save();[v]=[r for r in oo.variants() if r['product']==self.red];self.assertEqual(v['compare'],Decimal('120000'))
+        o=self.order([self.item(price='90000')]);self.assertEqual(o.subtotal,Decimal('90000.00'))
 
 
 class Orders(OrderBase):
     def test_creating_an_order_reserves_the_exact_phone_and_takes_the_price_from_the_erp(self):
         d=self.phone(self.branch);o=self.order([self.item()],delivery_fee='500')
         d.refresh_from_db();self.assertEqual(d.status,'Reserved');self.assertEqual((o.subtotal,o.total,o.status),(Decimal('100000'),Decimal('100500'),'New'))
-        self.assertEqual([r for r in oo.variants() if r['product']==self.red],[])                      # gone from the website the moment it is ordered
+        self.assertEqual([r for r in oo.variants() if r['product']==self.red],[])
     def test_wrong_price_or_total_or_missing_stock_is_refused_and_nothing_is_reserved(self):
         d=self.phone(self.branch)
         with self.assertRaisesMessage(ValidationError,'no longer available'):oo.create(dict(customer=dict(name='A',phone='03001234567'),items=[self.item(price='90000')]))
@@ -73,49 +86,84 @@ class Orders(OrderBase):
         OnlineAllocation.objects.all().delete();Device.objects.update(status='Available')
         split=self.order([self.item(qty=3)]);self.assertEqual({a.branch_id for a in OnlineAllocation.objects.filter(line__order=split)},{self.branch.pk,self.other.pk})
     def test_reassigning_moves_the_reservation_to_the_chosen_shop(self):
-        a=self.phone(self.branch);b=self.phone(self.other);o=self.order([self.item()])
+        self.phone(self.branch);self.phone(self.other);o=self.order([self.item()])
         target=self.other if OnlineAllocation.objects.get().branch_id==self.branch.pk else self.branch
         oo.reassign(o,self.user,target);self.assertEqual(OnlineAllocation.objects.get().branch_id,target.pk);self.assertEqual(Device.objects.filter(status='Reserved').count(),1)
 
 
-class Fulfilment(OrderBase):
-    def balanced(self,doc):
-        t=LedgerEntry.objects.filter(document=doc).aggregate(d=Sum('debit'),c=Sum('credit'));self.assertEqual(t['d'] or 0,t['c'] or 0)
-    def test_cash_on_delivery_posts_the_invoice_in_the_supplying_shop_then_collects_on_delivery(self):
-        d=self.phone(self.other);o=self.order([self.item()],delivery_fee='500');inv=oo.dispatch(o,self.user,'TCS','T123')[0]
-        d.refresh_from_db();o.refresh_from_db()
-        self.assertEqual((d.status,inv.branch_id,inv.channel,inv.online_order_id,inv.total,inv.outstanding,o.status),('Sold',self.other.pk,'Online',o.pk,Decimal('100500'),Decimal('100500'),'Dispatched'));self.balanced(inv)
-        self.assertEqual(inv.customer.branch_id,self.other.pk)                                       # the customer lives in the shop that sold to them
-        oo.deliver(o,self.user,'Cash');inv.refresh_from_db();o.refresh_from_db();self.assertEqual((inv.outstanding,o.status,o.payment_status),(Decimal('0.00'),'Delivered','Paid'))
-        cash=s.account_balance(self.other,Account.objects.get(pk=ShopSettings.objects.get(branch=self.other).payment_methods['Cash']));self.assertEqual(cash,Decimal('100500'))
-    def test_prepaid_orders_need_the_payment_confirmed_and_are_received_into_the_shop_account(self):
+class OnlineBooks(OrderBase):
+    def test_the_online_store_has_its_own_books_and_is_not_a_shop(self):
+        online=oo.online_branch();self.assertTrue(online.is_online);self.assertEqual(Branch.objects.filter(is_online=True).count(),1)
+        self.assertNotIn(online,list(access.branches(self.user)));self.assertIn(online,list(access.branches(self.user,include_online=True)))
+    def test_cash_on_delivery_sale_is_the_online_stores_and_the_shop_only_gives_up_stock_at_cost(self):
+        d=self.phone(self.other);o=self.order([self.item()],delivery_fee='500');inv=oo.dispatch(o,self.user)[0];online=oo.online_branch()
+        d.refresh_from_db();self.assertEqual((inv.branch_id,inv.channel,inv.total,inv.outstanding,d.status,d.branch_id),(online.pk,'Online',Decimal('100500'),Decimal('100500'),'Sold',self.other.pk))
+        self.assertEqual(inv.customer.branch_id,online.pk)
+        t=LedgerEntry.objects.filter(document=inv).aggregate(d=Sum('debit'),c=Sum('credit'));self.assertEqual(t['d'],t['c'])
+        self.assertEqual(self.clearing(self.other),Decimal('80000'));self.assertEqual(self.money(self.other,'Cash'),0)
+        oo.deliver(o,self.user,'Cash');self.assertEqual(self.money(online,'Cash'),Decimal('100500'));self.assertEqual(self.money(self.other,'Cash'),0)
+        rows,own=online_accounts.owed_to_shops();self.assertEqual(({r['shop'].pk:r['owed'] for r in rows},own),({self.other.pk:Decimal('80000')},Decimal('80000')))
+    def test_prepaid_orders_need_the_payment_confirmed_and_land_in_the_online_store_bank(self):
         self.phone(self.branch);o=self.order([self.item()],payment_method='Bank Transfer')
         with self.assertRaisesMessage(ValidationError,'payment arrived'):oo.dispatch(o,self.user)
-        oo.mark_paid(o,self.user,'TRX-77');inv=oo.dispatch(o,self.user)[0];self.assertEqual(inv.outstanding,Decimal('0.00'))
-        bank=s.account_balance(self.branch,Account.objects.get(pk=ShopSettings.objects.get(branch=self.branch).payment_methods['Bank']));self.assertEqual(bank,Decimal('100000'))
-    def test_a_split_order_makes_one_invoice_per_shop_and_one_delivery_fee(self):
-        self.phone(self.branch);self.phone(self.other);o=self.order([self.item(qty=2)],delivery_fee='400')
-        made=oo.dispatch(o,self.user);self.assertEqual(len(made),2);self.assertEqual(sum(m.total for m in made),Decimal('200400'));self.assertEqual({m.branch_id for m in made},{self.branch.pk,self.other.pk})
-        self.assertEqual(Device.objects.filter(status='Sold').count(),2)
-    def test_a_dispatched_order_cannot_be_cancelled_and_stock_is_not_released_twice(self):
-        self.phone(self.branch);o=self.order([self.item()]);oo.dispatch(o,self.user)
-        with self.assertRaisesMessage(ValidationError,'Only a new order'):oo.cancel(o,self.user,'x')
-        with self.assertRaisesMessage(ValidationError,'Only a new order'):oo.dispatch(o,self.user)
+        oo.mark_paid(o,self.user,'TRX-77');inv=oo.dispatch(o,self.user)[0];self.assertEqual(inv.outstanding,Decimal('0.00'));self.assertEqual(self.money(oo.online_branch(),'Bank Transfer'),Decimal('100000'))
+    def test_a_split_order_is_one_invoice_and_each_shop_is_owed_its_own_cost(self):
+        self.phone(self.branch,cost='80000');self.phone(self.other,cost='70000');o=self.order([self.item(qty=2)],delivery_fee='400')
+        made=oo.dispatch(o,self.user);self.assertEqual(len(made),1);self.assertEqual(made[0].total,Decimal('200400'))
+        self.assertEqual((self.clearing(self.branch),self.clearing(self.other)),(Decimal('80000'),Decimal('70000')));self.assertEqual(Device.objects.filter(status='Sold').count(),2)
+    def test_the_online_store_pays_the_shop_what_it_owes_in_parts_and_never_more(self):
+        self.phone(self.other);o=self.order([self.item()]);oo.dispatch(o,self.user);oo.deliver(o,self.user,'Cash');online=oo.online_branch()
+        with self.assertRaisesMessage(ValidationError,'owes'):online_accounts.pay_shop(self.user,self.other,'90000','Cash','Cash')
+        online_accounts.pay_shop(self.user,self.other,'50000','Cash','Cash')
+        self.assertEqual((self.money(self.other,'Cash'),self.money(online,'Cash'),self.clearing(self.other)),(Decimal('50000'),Decimal('50000'),Decimal('30000')))
+        online_accounts.pay_shop(self.user,self.other,'30000','Cash','Cash');rows,own=online_accounts.owed_to_shops();self.assertEqual((rows[0]['owed'],own),(Decimal('0'),Decimal('0')))
+    def test_the_online_store_cannot_pay_money_it_does_not_hold_and_only_the_owner_can_settle(self):
+        self.phone(self.other);o=self.order([self.item()]);oo.dispatch(o,self.user)
+        with self.assertRaisesMessage(ValidationError,'holds only'):online_accounts.pay_shop(self.user,self.other,'10000','Cash','Cash')
+        web=shop_accounts.create_online_login('Web','web-x','Strong-pass-for-WX-77!')
+        with self.assertRaisesMessage(ValidationError,'Only the owner'):online_accounts.pay_shop(web,self.other,'1','Cash','Cash')
+    def test_a_returned_online_phone_can_go_back_into_a_different_shop_and_both_sides_still_agree(self):
+        from . import returns
+        d=self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0];oo.deliver(o,self.user)
+        ret=s.submit(returns.create(inv,self.user,[str(d.pk)],'Good','Changed mind',warehouse=shopdefaults.warehouse(self.other)),self.user);d.refresh_from_db()
+        self.assertEqual((d.status,d.branch_id,d.warehouse.branch_id,ret.branch.is_online,ret.channel),('Holding',self.other.pk,self.other.pk,True,'Online'))
+        self.assertEqual((self.clearing(self.branch),self.clearing(self.other)),(Decimal('80000'),Decimal('-80000')))
+        rows,own=online_accounts.owed_to_shops();self.assertEqual((sum(r['owed'] for r in rows),own),(Decimal('0'),Decimal('0')))
+        self.assertEqual(self.inventory(self.other),Decimal('80000'))
+    def test_by_default_a_returned_phone_goes_back_to_the_shop_it_came_from(self):
+        from . import returns
+        d=self.phone(self.other);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0]
+        s.submit(returns.create(inv,self.user,[str(d.pk)],'Good','Wrong colour'),self.user);d.refresh_from_db();self.assertEqual((d.status,d.branch_id),('Holding',self.other.pk))
+        self.assertEqual(self.clearing(self.other),Decimal('0'))
+    def test_a_refund_to_the_online_customer_comes_out_of_the_online_stores_money(self):
+        from . import returns_flow
+        d=self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0];oo.deliver(o,self.user,'Cash');online=oo.online_branch()
+        returns_flow.settle(self.user,inv,[str(d.pk)],{},'Good, complete with box and accessories','Changed mind','refund','Cash','',shopdefaults.warehouse(self.branch))
+        self.assertEqual((self.money(online,'Cash'),self.money(self.branch,'Cash')),(Decimal('0'),Decimal('0')))
+
+
+class Fulfilment(OrderBase):
     def test_accessories_are_reserved_so_a_shop_cannot_sell_them_twice(self):
         self.accessories(self.branch,3);o=self.order([dict(product_id=str(self.cover.pk),quantity=2)])
         self.assertEqual(oo.reserved_qty(self.cover,self.branch),2);self.assertEqual(sum(r['quantity'] for r in oo.variants() if r['product']==self.cover),1)
         with self.assertRaisesMessage(ValidationError,'Only 1'):self.order([dict(product_id=str(self.cover.pk),quantity=2)])
-        inv=oo.dispatch(o,self.user)[0];self.assertEqual(s.on_hand(self.cover,shopdefaults.warehouse(self.branch))[0],1);self.assertEqual(oo.reserved_qty(self.cover,self.branch),0)
-    def test_returning_an_online_sale_brings_the_phone_back_to_the_shop(self):
-        from . import returns
-        d=self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0];oo.deliver(o,self.user)
-        draft=returns.create(inv,self.user,[str(d.pk)],'Good','Changed mind',warehouse=shopdefaults.warehouse(self.branch));ret=s.submit(draft,self.user);d.refresh_from_db()
-        self.assertEqual((d.status,ret.channel,ret.online_order_id),('Holding','Online',o.pk))
-
-
-from django.test import override_settings
-from django.urls import reverse
-from . import shop_accounts,online_accounts,online_access
+        oo.dispatch(o,self.user);self.assertEqual(s.on_hand(self.cover,shopdefaults.warehouse(self.branch))[0],1);self.assertEqual(oo.reserved_qty(self.cover,self.branch),0)
+        self.assertEqual(self.clearing(self.branch),Decimal('600'))
+    def test_a_dispatched_order_cannot_be_cancelled_or_dispatched_twice(self):
+        self.phone(self.branch);o=self.order([self.item()]);oo.dispatch(o,self.user)
+        with self.assertRaisesMessage(ValidationError,'Only a new order'):oo.cancel(o,self.user,'x')
+        with self.assertRaisesMessage(ValidationError,'Only a new order'):oo.dispatch(o,self.user)
+    def test_an_online_invoice_cannot_be_cancelled_behind_the_orders_back(self):
+        self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0]
+        with self.assertRaisesMessage(ValidationError,'belongs to an online order'):s.cancel(inv,self.user)
+    def test_reserved_stock_cannot_be_sold_in_the_shop(self):
+        d=self.phone(self.branch);self.order([self.item()]);d.refresh_from_db();self.assertEqual(d.status,'Reserved')
+        doc=s.new_doc('Sales Invoice',self.branch,customer=Party.objects.create(code='C1',name='Walk in',kind='Customer',branch=self.branch),seller=shopdefaults.shop_person(self.branch))
+        Line.objects.create(document=doc,product=self.red,device=d,warehouse=d.warehouse,quantity=1,rate=Decimal('100000'))
+        with self.assertRaises(ValidationError):s.submit(doc,self.user)
+    def test_two_orders_cannot_both_take_the_last_phone(self):
+        self.phone(self.branch);self.order([self.item()])
+        with self.assertRaises(ValidationError):self.order([self.item()])
 
 
 class Access(OrderBase):
@@ -134,16 +182,28 @@ class Access(OrderBase):
         self.client.force_login(self.shop)
         for name in ('online_dashboard','online_orders','online_stock','online_store','online_accounts'):self.assertEqual(self.client.get(reverse(name)).status_code,403,name)
     def test_only_online_records_can_be_opened_by_the_online_login(self):
-        d=self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0]
+        self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0]
         shop_sale=s.new_doc('Sales Invoice',self.branch);self.client.force_login(self.web)
         self.assertEqual(self.client.get(reverse('detail',args=[inv.pk])).status_code,200);self.assertEqual(self.client.get(reverse('return_sale',args=[inv.pk])).status_code,200)
         self.assertEqual(self.client.get(reverse('detail',args=[shop_sale.pk])).status_code,403);self.assertEqual(self.client.get(reverse('return_sale',args=[shop_sale.pk])).status_code,403)
-    def test_the_online_login_can_run_an_order_end_to_end_and_the_shop_sees_the_sale(self):
-        d=self.phone(self.branch);o=self.order([self.item()],delivery_fee='300');self.client.force_login(self.web)
+    def test_the_online_login_can_run_an_order_end_to_end(self):
+        self.phone(self.branch);o=self.order([self.item()],delivery_fee='300');self.client.force_login(self.web)
         r=self.client.post(reverse('online_order',args=[o.pk]),dict(action='dispatch',courier='TCS',tracking='T1'),follow=True);self.assertContains(r,'Dispatched')
         r=self.client.post(reverse('online_order',args=[o.pk]),dict(action='deliver',method='Cash'),follow=True);self.assertContains(r,'Delivered')
         inv=Document.objects.get(online_order=o,kind='Sales Invoice');self.assertEqual((inv.outstanding,inv.posted_by_id),(Decimal('0.00'),self.web.pk))
-        self.client.force_login(self.shop);self.assertContains(self.client.get(reverse('collection',args=['Sales Invoice'])),'Online')
+    def test_the_online_login_can_record_online_expenses_but_not_pay_a_shop(self):
+        self.phone(self.other);o=self.order([self.item()]);oo.dispatch(o,self.user);oo.deliver(o,self.user)
+        self.client.force_login(self.web);cat=Account.objects.filter(code__startswith='COA-',root_type='Expense',is_group=False).exclude(account_type__in=['Cost of Goods Sold']).first()
+        self.client.post(reverse('online_accounts'),dict(action='expense',category=str(cat.pk),amount='1200',method='Cash',description='Facebook ads'))
+        self.assertEqual(online_accounts.summary()['expenses'],Decimal('1200'))
+        r=self.client.post(reverse('online_accounts'),dict(action='pay_shop',shop=str(self.other.pk),amount='1000',method='Cash',shop_method='Cash'),follow=True);self.assertContains(r,'Only the owner')
+    def test_shops_know_nothing_about_online_sales_while_the_owner_sees_everything(self):
+        self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0]
+        self.client.force_login(self.shop)
+        self.assertNotContains(self.client.get(reverse('collection',args=['Sales Invoice'])),'Ali Khan');self.assertNotContains(self.client.get(reverse('collection',args=['Customer'])),'Ali Khan')
+        self.assertEqual(self.client.get(reverse('detail',args=[inv.pk])).status_code,404)
+        self.client.force_login(self.user);page=self.client.get(reverse('collection',args=['Sales Invoice']));self.assertContains(page,'Ali Khan');self.assertContains(page,'Online')
+        self.assertEqual(self.client.get(reverse('detail',args=[inv.pk])).status_code,200)
 
 
 @override_settings(ONLINE_API_KEY='secret-key-123')
@@ -170,48 +230,32 @@ class Api(OrderBase):
 
 
 class Accounting(OrderBase):
-    def test_online_sales_payments_pending_and_returns_add_up(self):
+    def test_online_sales_payments_pending_returns_and_profit_add_up(self):
         from . import returns
-        a=self.phone(self.branch);b=self.phone(self.other,cost='70000')
+        self.phone(self.branch);self.phone(self.other,cost='70000')
         o1=self.order([self.item(qty=1)],payment_method='Bank Transfer',payment_status='Paid');inv1=oo.dispatch(o1,self.user)[0]
-        o2=self.order([self.item(qty=1)],delivery_fee='500');inv2=oo.dispatch(o2,self.user)[0]
-        d=online_accounts.summary();self.assertEqual((d['sales'],d['pending'],d['received']),(Decimal('200500'),Decimal('100500'),Decimal('100000')))
+        o2=self.order([self.item(qty=1)],delivery_fee='500');oo.dispatch(o2,self.user)
+        d=online_accounts.summary();self.assertEqual((d['sales'],d['pending'],d['received']),(Decimal('200500'),Decimal('100500'),Decimal('100000')));self.assertTrue(d['books_agree'])
+        self.assertEqual(d['gross_profit'],d['revenue']-d['cogs']);self.assertEqual(d['revenue'],Decimal('200500'))
         oo.deliver(o2,self.user);d=online_accounts.summary();self.assertEqual((d['pending'],d['received']),(Decimal('0'),Decimal('200500')))
-        sold=Device.objects.filter(status='Sold',branch=inv1.branch).first()
-        s.submit(returns.create(inv1,self.user,[str(sold.pk)],'Good','Changed mind',warehouse=shopdefaults.warehouse(inv1.branch)),self.user)
-        d=online_accounts.summary();self.assertEqual(d['returned'],Decimal('100000'));self.assertEqual(d['net_sales'],Decimal('100500'))
-        self.assertGreater(d['cogs'],0)
-    def test_online_expenses_are_tagged_and_counted(self):
-        from . import money
-        coa.install_standard(self.user);cat=Account.objects.filter(code__startswith='COA-',root_type='Expense',is_group=False).exclude(account_type__in=['Cost of Goods Sold']).first()
-        money.record_voucher(self.user,self.branch,'capital',Account.objects.get(code='COA-3100'),Decimal('50000'),'Cash',timezone.localdate(),'capital')
-        money.record_voucher(self.user,self.branch,'expense',cat,Decimal('1200'),'Cash',timezone.localdate(),'Facebook ads','','Online')
-        money.record_voucher(self.user,self.branch,'expense',cat,Decimal('700'),'Cash',timezone.localdate(),'Shop tea')
-        self.assertEqual(online_accounts.summary()['expenses'],Decimal('1200'))
+        dev=Device.objects.get(sale=inv1)
+        s.submit(returns.create(inv1,self.user,[str(dev.pk)],'Good','Changed mind'),self.user)
+        d=online_accounts.summary();self.assertEqual((d['returned'],d['net_sales']),(Decimal('100000'),Decimal('100500')));self.assertTrue(d['books_agree'])
+    def test_shops_own_books_carry_no_online_revenue_or_cash(self):
+        self.phone(self.branch);o=self.order([self.item()]);oo.dispatch(o,self.user);oo.deliver(o,self.user)
+        income=LedgerEntry.objects.filter(branch=self.branch,account__account_type='Income Account').aggregate(c=Sum('credit'))['c'] or 0
+        self.assertEqual((income,self.money(self.branch,'Cash')),(0,0))
+        self.assertEqual(self.inventory(self.branch),Decimal('-80000'));self.assertEqual(self.clearing(self.branch),Decimal('80000'))
 
 
 class Exchange(OrderBase):
-    def test_an_online_return_credit_pays_for_the_replacement_order_from_the_same_shop(self):
-        from . import returns,returns_flow
-        a=self.phone(self.branch);self.phone(self.branch,self.blue);self.phone(self.other,self.blue)
+    def test_an_online_return_credit_pays_for_a_replacement_supplied_by_any_shop(self):
+        from . import returns_flow
+        a=self.phone(self.branch);self.phone(self.other,self.blue)
         o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0];oo.deliver(o,self.user)
         credit=returns_flow.settle(self.user,inv,[str(a.pk)],{},'Good, complete with box and accessories','Wrong colour','exchange')
         self.assertEqual(credit.channel,'Online')
         new,_=oo.create(dict(customer=dict(name='Ali Khan',phone='0300 1234567'),items=[self.item(self.blue)],external_ref='EX1'),self.user,'Manual',credit)
-        self.assertEqual({x.branch_id for x in OnlineAllocation.objects.filter(line__order=new)},{self.branch.pk})
+        self.assertEqual({x.branch_id for x in OnlineAllocation.objects.filter(line__order=new)},{self.other.pk})
         made=oo.dispatch(new,self.user)[0];made.refresh_from_db();credit.refresh_from_db()
         self.assertEqual((made.outstanding,credit.outstanding),(Decimal('0.00'),Decimal('0.00')))
-
-
-class Guards(OrderBase):
-    def test_an_online_invoice_cannot_be_cancelled_behind_the_orders_back(self):
-        self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0]
-        with self.assertRaisesMessage(ValidationError,'belongs to an online order'):s.cancel(inv,self.user)
-    def test_reserved_stock_cannot_be_sold_in_the_shop(self):
-        d=self.phone(self.branch);self.order([self.item()]);d.refresh_from_db();self.assertEqual(d.status,'Reserved')
-        doc=s.new_doc('Sales Invoice',self.branch,customer=Party.objects.create(code='C1',name='Walk in',kind='Customer',branch=self.branch),seller=shopdefaults.shop_person(self.branch))
-        Line.objects.create(document=doc,product=self.red,device=d,warehouse=d.warehouse,quantity=1,rate=Decimal('100000'))
-        with self.assertRaises(ValidationError):s.submit(doc,self.user)
-    def test_two_orders_cannot_both_take_the_last_phone(self):
-        self.phone(self.branch);self.order([self.item()])
-        with self.assertRaises(ValidationError):self.order([self.item()])

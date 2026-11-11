@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404,redirect,render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import Branch,Device,Document,OnlineAllocation,OnlineOrder,Product,ShopSettings
+from .models import Account,Branch,Device,Document,OnlineAllocation,OnlineOrder,Product,ShopSettings
 from . import online_access,online_accounts,online_orders as oo,services as s
 
 
@@ -98,7 +98,6 @@ def order_new(request):
     if request.GET.get('credit') or request.POST.get('credit'):
         credit=get_object_or_404(Document,pk=request.GET.get('credit') or request.POST.get('credit'),is_return=True,kind__in=list(s.SELL),channel='Online',status='Submitted')
     allv=oo.variants(published_only=False)
-    if credit:allv=[v for v in allv if credit.branch_id in v['per_shop']]
     if request.method=='POST':
         try:
             wanted=dict(zip(request.POST.getlist('variant'),request.POST.getlist('qty')));by={_key(v):v for v in allv};items=[]
@@ -143,12 +142,38 @@ def stock(request):
 
 @login_required
 def accounts(request):
+    """The Online Store's books: sales, money, what it owes the shops, and the forms to record online expenses, owner money and payments to shops."""
     _guard(request)
     from datetime import date
+    from . import money,money_views
+    online=oo.online_branch();methods=list(ShopSettings.objects.get(branch=online).payment_methods)
+    if request.method=='POST':
+        action=request.POST.get('action')
+        try:
+            when=date.fromisoformat(request.POST.get('date') or str(timezone.localdate()))
+            money_views._ensure_chart(request.user)
+            with transaction.atomic():
+                if action=='expense':
+                    category=get_object_or_404(money_views._accounts('Expense',('COA-6950','COA-5200')),pk=request.POST.get('category'))
+                    money.record_voucher(request.user,online,'expense',category,request.POST.get('amount'),request.POST.get('method'),when,request.POST.get('description') or category.name)
+                    messages.success(request,'Online expense recorded.')
+                elif action=='capital':
+                    money.record_voucher(request.user,online,'capital',money_views._by_code('COA-3100'),request.POST.get('amount'),request.POST.get('method'),when,request.POST.get('description') or 'Money put into the Online Store')
+                    messages.success(request,'Money put into the Online Store recorded.')
+                elif action=='pay_shop':
+                    online_accounts.pay_shop(request.user,get_object_or_404(Branch,pk=request.POST.get('shop'),is_online=False),request.POST.get('amount'),request.POST.get('method'),request.POST.get('shop_method'),when,request.POST.get('description',''))
+                    messages.success(request,'Payment to the shop recorded in both sets of books.')
+                else:raise ValidationError('Unknown action.')
+        except (ValidationError,ValueError,IntegrityError) as error:messages.error(request,_err(error))
+        return redirect('online_accounts')
     g=request.GET
     try:start=date.fromisoformat(g['from']) if g.get('from') else None;end=date.fromisoformat(g['to']) if g.get('to') else None
     except ValueError:start=end=None
-    return render(request,'online_accounts.html',dict(title='Online Accounts',data=online_accounts.summary(start,end),start=g.get('from',''),end=g.get('to',''),profit=request.user.is_superuser))
+    shop_methods={b.pk:list(ShopSettings.objects.filter(branch=b).values_list('payment_methods',flat=True).first() or []) for b in Branch.objects.filter(enabled=True,is_online=False)}
+    owner=request.user.is_superuser
+    return render(request,'online_accounts.html',dict(title='Online Accounts',data=online_accounts.summary(start,end),start=g.get('from',''),end=g.get('to',''),profit=owner,owner=owner,methods=methods,
+        categories=list(money_views._accounts('Expense',('COA-6950','COA-5200')).values_list('pk','name')) if Account.objects.filter(code='COA-6750').exists() else [],
+        shops=list(Branch.objects.filter(enabled=True,is_online=False).order_by('name')),all_shop_methods=sorted({m for ms in shop_methods.values() for m in ms}),today=timezone.localdate()))
 
 
 # ------------------------------------------------------------------ the website's API

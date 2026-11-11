@@ -263,7 +263,7 @@ def transfer(request):
     _owner(request.user)
     source=selected_branch(request.user,request.POST.get('branch') if request.method=='POST' else request.GET.get('branch'))
     if not source:return redirect('setup')
-    targets=Branch.objects.filter(enabled=True).exclude(pk=source.pk).order_by('name')
+    targets=Branch.objects.filter(enabled=True,is_online=False).exclude(pk=source.pk).order_by('name')
     if request.method=='POST':
         try:
             def make():
@@ -303,7 +303,7 @@ def detail(request,pk):
                 if action=='receive':return receive(request.user,doc,request.POST.getlist('arrived'))
                 if action in ('return','write_off'):return resolve(request.user,doc,action,request.POST.get('note','').strip())
                 if action=='update':
-                    ids=request.POST.getlist('phone');new_target=Branch.objects.filter(enabled=True).exclude(pk=doc.branch_id).get(pk=request.POST.get('target'))
+                    ids=request.POST.getlist('phone');new_target=Branch.objects.filter(enabled=True,is_online=False).exclude(pk=doc.branch_id).get(pk=request.POST.get('target'))
                     phones=list(Device.objects.filter(pk__in=ids).select_related('product'))+_imei_devices(request.POST.get('imeis',''),doc.branch)
                     return update_pending(request.user,doc,new_target,phones)
                 raise ValidationError('Unknown action.')
@@ -320,7 +320,7 @@ def detail(request,pk):
         d=devices.get(i)
         if d:lines.append(dict(device=d,state='Arrived' if i in doc.data.get('received',[]) or (status==RECEIVED and d.branch_id==target.pk) else 'Missing' if i in doc.data.get('missing',[]) else d.status))
     editable=[d for d in Device.objects.filter(branch=doc.branch,status='Available').select_related('product').prefetch_related('imeis').order_by('product__name')[:300]] if status==PENDING else []
-    return render(request,'transfer_detail.html',dict(title=doc.code,doc=doc,t=doc.data['transfer'],status=status,lines=lines,target=target,targets=Branch.objects.filter(enabled=True).exclude(pk=doc.branch_id).order_by('name'),editable=editable,request_key=uuid.uuid4(),show_costs=access.costs(request.user)))
+    return render(request,'transfer_detail.html',dict(title=doc.code,doc=doc,t=doc.data['transfer'],status=status,lines=lines,target=target,targets=Branch.objects.filter(enabled=True,is_online=False).exclude(pk=doc.branch_id).order_by('name'),editable=editable,request_key=uuid.uuid4(),show_costs=access.costs(request.user)))
 
 
 @login_required

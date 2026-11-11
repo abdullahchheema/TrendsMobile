@@ -31,7 +31,7 @@ FIELDS={
 class ReportFilters(forms.Form):
     def __init__(self,*args,user,name,**kwargs):
         super().__init__(*args,**kwargs)
-        places=branches(user)
+        places=branches(user,include_online=user.is_superuser)
         self.fields={
             'branch':forms.ModelChoiceField(label='Shop',queryset=places,required=False,empty_label='All permitted shops'),
             'from_date':forms.DateField(label='From date',required=False,widget=forms.DateInput(attrs={'type':'date'})),

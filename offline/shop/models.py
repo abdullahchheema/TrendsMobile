@@ -20,6 +20,7 @@ class Branch(Record):
     name=models.CharField(max_length=180)
     company=models.CharField(max_length=180)
     enabled=models.BooleanField(default=True)
+    is_online=models.BooleanField(default=False,help_text='The Online Store: its own books (money, customers, sales). It holds no stock of its own; it sells the stock of the shops and owes them its cost.')
     lock_through=models.DateField(null=True,blank=True,editable=False,help_text='Nothing can be posted, changed or cancelled on or before this date.')
     def __str__(self):return self.name
     def clean(self):
@@ -141,6 +142,9 @@ class Product(Record):
     online_price=models.DecimalField(max_digits=18,decimal_places=2,null=True,blank=True,help_text='Price on the website. Leave empty to use the shop price.')
     description=models.TextField(blank=True)
     slug=models.SlugField(max_length=200,unique=True,null=True,blank=True)
+    discount_percent=models.DecimalField(max_digits=5,decimal_places=2,null=True,blank=True,help_text='Percentage taken off the online price.')
+    compare_price=models.DecimalField(max_digits=18,decimal_places=2,null=True,blank=True,help_text='The old price shown crossed out next to the online price. Empty = the price before the percentage off.')
+    online_hidden=models.BooleanField(default=False,help_text='Keep this product off the website even if it has photos.')
     web_title=models.CharField(max_length=200,blank=True,help_text='The page this product is shown on in the website. Products with the same page title are variants of one page. Empty = the model name (phones) or the product name.')
     family_slug=models.SlugField(max_length=200,blank=True,db_index=True)
     def clean(self):
@@ -160,6 +164,7 @@ class ProductImage(models.Model):
     path=models.CharField(max_length=300)
     url=models.CharField(max_length=600)
     alt=models.CharField(max_length=200,blank=True)
+    variant_only=models.BooleanField(default=False,help_text='True: the photo belongs to this colour/storage only. False: it is shared by every variant on the page.')
     position=models.PositiveIntegerField(default=0)
     size=models.PositiveIntegerField(default=0)
     created=models.DateTimeField(default=timezone.now,editable=False)

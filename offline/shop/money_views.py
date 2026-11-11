@@ -57,7 +57,6 @@ class Quick(forms.Form):
         pool['date']=forms.DateField(label='Date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
         pool['reference']=forms.CharField(label='Bank / wallet reference',required=False,max_length=180)
         pool['description']=forms.CharField(label='Description',required=False,max_length=240)
-        pool['online']=forms.BooleanField(label='This is an online-store expense (ads, courier, packaging, gateway fees)',required=False)
         self.fields={name:pool[name] for name in fields}
 
 
@@ -95,7 +94,7 @@ def _panels(request,branch,which):
         run=lambda d:money.record_party_payment(user,d['party'],d['amount'],d['method'],d['date'],d.get('reference',''),d.get('description',''))),
      'customer_refund':dict(title='Refund a customer',fields=['party','amount','method','date','description'],party_kind='Customer',done='Customer refund recorded.',
         run=lambda d:money.record_party_cash_back(user,d['party'],d['amount'],d['method'],d['date'],d.get('reference',''),d.get('description',''))),
-     'expense':dict(title='Record an expense',fields=['category','amount','method','date','description','online'],done='Expense recorded.',run=lambda d:money.record_voucher(user,branch,'expense',d['category'],d['amount'],d['method'],d['date'],d.get('description') or d['category'].name,d.get('reference',''),'Online' if d.get('online') else 'Shop')),
+     'expense':dict(title='Record an expense',fields=['category','amount','method','date','description'],done='Expense recorded.',run=lambda d:money.record_voucher(user,branch,'expense',d['category'],d['amount'],d['method'],d['date'],d.get('description') or d['category'].name,d.get('reference',''))),
      'owner_drawings':dict(title='Money taken by the owner',fields=['amount','method','date','description'],done='Owner drawings recorded.',run=voucher('drawings',lambda d:_by_code('COA-3300'),'Owner drawings')),
     }
     out=[]

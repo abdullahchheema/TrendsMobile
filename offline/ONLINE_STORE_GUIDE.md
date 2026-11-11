@@ -1,85 +1,62 @@
-# Online store: what the website reads
+# Online store: how the website, the stock and the books fit together
 
-The ERP is the dashboard for the website. The owner adds photos, a description and an optional online price under **Online Store → Products & Photos**, and publishes a product. A product appears on the website only when it is **Published**, has **at least one photo** and **a price**. Shop prices, stock and the books are never changed from there.
+The ERP is the control room for the website. Photos, prices, discounts, orders and online accounting are managed here; the website only reads and places orders.
 
-## Prices
+## 1. The catalogue (Products & Photos)
+* **One line per brand and model**, with its variants (storage, colour, condition) and **where each variant is in stock** (every shop, with quantities). Stock of identical phones in several shops is one variant with the total.
+* **Photos are added here only.** Add a photo to a model and the whole page goes **live** on the website. A page with no photo exists only as a **draft** here. The owner can also hide a page. A new colour added to a page that already has photos goes live by itself.
+* Photos are for the page (shared by every variant) or for one colour/storage only. JPG, PNG or WebP, 5 MB, 12 per page; big photos are resized in the browser. Stored in the public Supabase bucket `product-images` (created on the first upload).
+* **Prices:** the shop price (set when stock is bought; the POS uses it) is never changed here. Per variant you can set an **online price**, a **percentage off** and a **compare price** (the crossed-out "was" price). Price the customer pays = online price (or shop price) minus the percentage off; the compare price must be higher than that. "Percentage off for every variant" puts the whole page on sale in one step.
 
-| Price | Where it is set | Used by |
+## 2. Accounting: the Online Store is its own set of books
+Each shop has its own books, so online sales cannot simply be posted in whichever shop held the phone. The Online Store therefore has **its own books** (its own cash, bank and wallets, customers, sales, refunds and expenses) and **holds no stock**:
+
+| Event | Online Store | The shop that held the phone |
 | --- | --- | --- |
-| Shop price | When stock is bought (every phone and accessory needs one) | POS and the shops |
-| Online price (product) | Online Store → product | The website (all units of that product) |
-| Online price (one phone) | The phone's own record | The website (that phone only) |
+| Online sale | Dr Cash/Receivable, Cr Sales (customer's price); Dr Cost of goods sold, Cr Inter-shop clearing (the shop's cost) | Dr Inter-shop clearing, Cr Inventory (the same cost) |
+| Online return into any shop | reverses the sale and the cost of goods; Dr Inter-shop clearing | Dr Inventory, Cr Inter-shop clearing (the shop that receives the phone) |
+| Online Store pays a shop | Dr Inter-shop clearing, Cr its bank/cash | Dr its bank/cash, Cr Inter-shop clearing |
 
-The website price is the phone's online price, else the product's online price, else the shop price.
+* Phones move at **cost**, so shop profit is not distorted; the online margin shows in the Online Store's books. The two sides always cancel out in the owner's consolidated view (Online Accounts shows "the books agree").
+* Money received online lands in the **Online Store's** accounts, not in a shop. COD collected on delivery goes to the Online Store.
+* **Pay a shop** (Online Accounts, owner only) moves real money from an Online Store account to a shop account and clears what is owed; it can be paid in parts and never more than owed or more than the account holds.
+* **Online expenses** (ads, courier, packaging, gateway fees) and **money put in by the owner** are recorded in Online Accounts, in the Online Store's books.
+* **Shops know nothing about online:** online customers, invoices and money are not in any shop's lists or reports. A shop's books show only the stock leaving at cost and a claim on the Online Store (inter-shop clearing). The **owner sees everything**: every shop, the Online Store, and all sales physical and online (Sales History marks online sales; reports and dashboard include the Online Store).
 
-## Photos
+## 3. Orders
+* A website order arrives through the API and **reserves stock** at once (phones become *Reserved*; accessory units are held back), from whichever shops hold it: one shop if it can supply everything, otherwise split. The order page shows the shop and the exact phones (IMEI); a New order can be moved to another shop that holds everything.
+* **Dispatch** posts one invoice in the Online Store's books; the stock leaves the shops. **Delivered** collects cash on delivery into the Online Store.
+* A phone sold in a shop disappears from the website at once; an online order takes it out of the shop's stock.
+* **Refund / exchange:** on the order, *Return / exchange* on the invoice. Choose which **shop takes the stock back** (default: the shop it came from). The phone goes to *Holding* there; the refund comes out of the Online Store's money. An exchange creates a replacement order paid by the credit and can be supplied by any shop.
+* The online-store **login** (Settings → Shop accounts → Online store logins) sees only these screens. Shops cannot see them.
 
-Public Supabase Storage bucket `product-images` (created automatically on the first upload). JPG, PNG or WebP, 5 MB each, 12 per product. The browser resizes large photos to 1600 px before uploading. The first photo is the cover; drag to reorder.
-
-## Read-only views for the website (migration 0022)
-
-| View | One row per | Columns |
-| --- | --- | --- |
-| `web_listings` | published product | product_id, slug, name, brand, model, storage, colour, category, description, is_phone, price_from, price_to, stock_total, cover_url |
-| `web_stock` | product and shop | product_id, shop_id, shop_name, quantity |
-| `web_phone_units` | available phone | unit_id, product_id, shop_id, shop_name, condition, grade, battery_health, pta_status, device_type, warranty_days, price |
-| `web_images` | photo | image_id, product_id, url, alt, position |
-
-The views contain no cost, IMEI, supplier, customer or account data. Stock follows the ERP at once: a phone sold, reserved or in transit disappears from `web_stock`, and a product with no stock can be hidden by the website.
-
-Give the website a **read-only** login that can only read these four views. Run once in the Supabase SQL editor (choose your own password):
-
-```sql
-create role web_reader login password 'CHANGE-ME';
-grant usage on schema public to web_reader;
-grant select on web_listings, web_stock, web_phone_units, web_images to web_reader;
-```
-
-Never give the website the ERP's own database login. If a later ERP migration changes a column these views use, drop and recreate the views in that migration.
-
----
-
-# Online orders, stock, accounting (how the website and the ERP fit together)
-
-## One stock, one set of books
-There is no separate online stock. A phone or accessory in any shop can be sold online. The moment a website order arrives its stock is **reserved** (phones become *Reserved*, so the shop's POS cannot sell them; accessory units are held back). When the order is **dispatched**, one ordinary sales invoice is posted in each shop that supplied stock, tagged **Online**. So:
-* a phone sold online is **Sold in the shop** that held it, and its cost, revenue and receivable are in that shop's books;
-* a phone sold in a shop disappears from the website at once;
-* the same phone held in several shops is **one variant with the total quantity**; the order is supplied from one shop when one shop holds everything, otherwise split (one invoice per shop). The order screen shows which shop and which phone.
-
-## Pages and variants
-A page on the website = products with the same **page title** (Online Store → product → *Website page*). By default phones use their model (for example "Apple iPhone 18 Pro Max"), so Red 256GB in shop 1 and Blue 256GB in shop 2 are two variants of one page. Variants are phone + condition + PTA status + type + price. The page description is shared by all variants; photos are per colour/storage product.
-
-## Website views (read-only database login)
-| View | Rows |
-| --- | --- |
-| `web_families` | one per page: title, brand, category, description, price range, total stock, variant count, cover |
-| `web_listings` | one per published product (colour/storage): page_title, family_slug, price range, stock |
-| `web_variants` | one per sellable variant: product_id, condition, pta_status, device_type, price, quantity, grade, battery_health, warranty_days |
-| `web_variant_stock` | the same variants split by shop: shop_id, shop_name, quantity |
-| `web_stock`, `web_phone_units`, `web_images` | per product per shop; per phone (no IMEI); photos |
-
-Grant the website's read-only role `SELECT` on **all** of these views (see the SQL above, add `web_families, web_variants, web_variant_stock`). Quantities never include phones that are reserved, sold, in transit, or accessory units held by a new order.
-
-## Order API (website → ERP)
-Set the environment variable `ONLINE_API_KEY` in Vercel to a long random secret. Without it the API is off.
+## 4. Order API (website → ERP)
+Set `ONLINE_API_KEY` in Vercel to a long random secret (without it the API is off).
 
 `POST /api/online/orders/` with header `X-API-Key: <the secret>` and JSON:
 ```json
 { "external_ref": "WEB-1001",
   "customer": {"name": "Sara", "phone": "03211234567", "email": "", "address": "Street 1", "city": "Karachi"},
-  "payment_method": "Cash on Delivery",          // or Bank Transfer, Easypaisa, JazzCash, Card
-  "payment_status": "Paid",                      // only for a prepaid method the website has verified
-  "payment_reference": "TRX-77", "delivery_fee": "300", "notes": "",
-  "expected_total": "100300",
+  "payment_method": "Cash on Delivery",
+  "payment_status": "Paid",
+  "payment_reference": "TRX-77", "delivery_fee": "300", "notes": "", "expected_total": "100300",
   "items": [ {"product_id": "<web_variants.product_id>", "condition": "New", "pta_status": "PTA", "device_type": "New", "price": "100000", "quantity": 1} ] }
 ```
-* Prices are always taken from the ERP; the price you send must match the variant's current price or the order is refused (**409**, "price changed / no longer available") so the website can refresh. `expected_total` is checked the same way.
-* Sending the same `external_ref` again returns the same order (**200**, `created: false`): safe to retry.
-* `GET /api/online/orders/<external_ref>/` returns status (`New`, `Dispatched`, `Delivered`, `Cancelled`), courier, tracking.
+`payment_method`: Cash on Delivery, Bank Transfer, Easypaisa, JazzCash or Card (`payment_status: Paid` only for a prepaid method the website verified). Prices always come from the ERP; the price sent must match the variant's current price (the discounted price) or the order is refused with **409**. Re-sending the same `external_ref` returns the same order (safe to retry). `GET /api/online/orders/<external_ref>/` returns status, courier and tracking.
 
-## Who does what
-* **Online login** (Settings → Shop accounts → *Online store logins*): sees only Online Dashboard, Orders, Online Stock, Products & Photos, online refunds. It cannot open shop money, customers, reports, settings or the POS.
-* **Order flow:** New (stock reserved) → *Confirm payment* (prepaid) → **Dispatch** (invoices posted, courier/tracking) → **Delivered** (cash on delivery is received into the shop account chosen). A New order can be cancelled (stock released) or moved to another shop that holds everything.
-* **Refund / exchange:** open the order → *Return / exchange* on the invoice → the normal Returns & Exchanges screen (refund, credit, or exchange). The phone returns to *Holding* in the shop that sold it. An exchange creates a replacement order that is paid by the credit and must come from the same shop.
-* **Accounting:** Online Accounts shows sales, returns, money received by method, cash on delivery still to collect, cost of goods, online expenses and net profit. Tick **online-store expense** in Money Out for ads, courier, packaging and gateway fees. Everything is also in each shop's own books, so the totals always agree.
+## 5. Read-only database views for the website
+| View | Rows |
+| --- | --- |
+| `web_families` | one per page: title, brand, category, description, price range, discount_percent, total stock, variant count, cover |
+| `web_listings` | one per colour/storage: page_title, family_slug, price range, stock |
+| `web_variants` | one per sellable variant: product_id, condition, pta_status, device_type, **price**, **compare_price**, quantity, grade, battery_health, warranty_days |
+| `web_variant_stock` | the same variants split by shop |
+| `web_stock`, `web_phone_units`, `web_images` | per product per shop; per phone (no IMEI); photos (page-wide, or `variant_product_id` for one variant) |
+
+They contain no cost, IMEI, supplier or customer data. Quantities exclude phones that are reserved, sold or in transit. Give the website a read-only role (run once in the Supabase SQL editor, with your own password):
+```sql
+create role web_reader login password 'CHANGE-ME';
+grant usage on schema public to web_reader;
+grant select on web_families, web_listings, web_variants, web_variant_stock, web_stock, web_phone_units, web_images to web_reader;
+```
+Never give the website the ERP's own database login. If a later migration changes a column these views use, drop and recreate the views in that migration.

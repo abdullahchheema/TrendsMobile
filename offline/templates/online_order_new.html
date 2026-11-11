@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% block content %}
 <div class="page-head"><div><h1>New online order</h1><p>For an order taken by phone or WhatsApp{% if credit %} — a replacement paid by return credit {{ credit.code }}{% endif %}. Prices come from the ERP. The stock is reserved as soon as you save.</p></div><a href="{% url 'online_orders' %}">All orders</a></div>
-{% if credit %}<div class="notice">Replacement for <strong>{{ credit.customer.name }}</strong>. Only items from <strong>{{ credit.branch.name }}</strong> are listed, because the credit belongs to that shop. It is used automatically when the order is dispatched.</div>{% endif %}
+{% if credit %}<div class="notice">Replacement for <strong>{{ credit.customer.name }}</strong>. The credit is used automatically when the order is dispatched.</div>{% endif %}
 <form method="get" class="search-bar">{% if credit %}<input type="hidden" name="credit" value="{{ credit.pk }}">{% endif %}<input type="search" name="q" value="{{ q }}" placeholder="Find a model, colour or condition" aria-label="Find an item"><button>Find</button></form>
 <form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}">{% if credit %}<input type="hidden" name="credit" value="{{ credit.pk }}">{% endif %}
 <h2 style="margin-top:0">Customer</h2>

@@ -166,7 +166,7 @@ def copy_lines(source,target):
 def stock(doc,line,qty,cost,warehouse=None):
     place=warehouse or line.warehouse or doc.warehouse
     if not place or not place.enabled:raise ValidationError('Select an active warehouse.')
-    if place.branch_id!=doc.branch_id:raise ValidationError('Warehouse belongs to another shop.')
+    if place.branch_id!=doc.branch_id and not (doc.branch.is_online and not place.branch.is_online):raise ValidationError('Warehouse belongs to another shop.')       # the Online Store's sales take stock from the shops
     return StockMovement.objects.create(document=doc,posting_date=doc.posting_date,product=line.product,device=line.device,
         warehouse=place,quantity=qty,value=money(qty*cost))
 
@@ -388,7 +388,7 @@ def _sale(doc):
         if not shift or not shift.till_id:raise ValidationError('Start a reconciled POS shift first. Ask a manager to review any legacy open shift.')
         if shift.posting_date!=doc.posting_date:raise ValidationError('The POS invoice must use the shift date.')
         doc.pos_shift=shift;doc.till=shift.till
-    seen=set();total=ZERO;total_cost=ZERO
+    seen=set();total=ZERO;total_cost=ZERO;supplied={}          # supplied: cost of the stock taken from each shop (Online Store sales only)
     from . import pricing
     invoice_totals,allocations=pricing.calculate(doc)
     from . import overrides
@@ -411,16 +411,40 @@ def _sale(doc):
         elif line.product.stock_item:
             available,value=on_hand(line.product,line.warehouse or doc.warehouse)
             from .online_orders import reserved_qty
-            if qty>available-reserved_qty(line.product,doc.branch):raise ValidationError('Insufficient accessory or spare-part stock (some units are held for online orders).')
+            if qty>available-reserved_qty(line.product,(line.warehouse or doc.warehouse).branch):raise ValidationError('Insufficient accessory or spare-part stock (some units are held for online orders).')
             cost=money(value/available)
-        if line.product.stock_item:stock(doc,line,-qty,cost)
+        if line.product.stock_item:
+            stock(doc,line,-qty,cost)
+            if doc.branch.is_online:
+                where=(line.warehouse or doc.warehouse)
+                if where is None or where.branch_id==doc.branch_id or where.branch.is_online:raise ValidationError('An online sale must take its stock from a shop.')
+                supplied[where.branch_id]=supplied.get(where.branch_id,ZERO)+money(qty*cost)
         line.snapshot['pricing']=allocations[line.pk]
         line.cost=cost;line.save();total+=money(qty*line.rate);total_cost+=money(qty*cost)
     doc.data['pricing']=invoice_totals
     doc.total=money(invoice_totals['grand_total']);doc.outstanding=doc.total
     entry(doc,'receivable',debit=doc.total,party=doc.customer,reference=doc);entry(doc,'sales',credit=invoice_totals['net_total'])
     if money(invoice_totals['tax_total']):entry(doc,pricing.tax_account(doc),credit=invoice_totals['tax_total'])
-    entry(doc,'cogs',debit=total_cost);entry(doc,'inventory',credit=total_cost)
+    entry(doc,'cogs',debit=total_cost)
+    if doc.branch.is_online:post_supply(doc,supplied,total_cost,+1)
+    else:entry(doc,'inventory',credit=total_cost)
+
+def post_supply(doc,by_shop,total,direction):
+    """Inter-company bookkeeping for the Online Store, at cost, so each set of books stays complete and the two sides always cancel out:
+    direction +1 (online sale): the shop gives up stock (Dr inter-shop clearing, Cr inventory) and the Online Store owes it (Cr clearing);
+    direction -1 (online return): the shop that takes the stock back gets it (Dr inventory, Cr clearing) and the Online Store's claim falls (Dr clearing)."""
+    from .setup import transfer_accounts
+    _,online_clearing=transfer_accounts(doc.branch)
+    if direction>0:LedgerEntry.objects.create(document=doc,branch=doc.branch,posting_date=doc.posting_date,account=online_clearing,credit=total)
+    else:LedgerEntry.objects.create(document=doc,branch=doc.branch,posting_date=doc.posting_date,account=online_clearing,debit=total)
+    for branch_id,amount in by_shop.items():
+        if not amount:continue
+        shop=Branch.objects.get(pk=branch_id);open_date(Document(branch=shop,posting_date=doc.posting_date))
+        inventory,clearing=transfer_accounts(shop)
+        if direction>0:debit,credit=clearing,inventory
+        else:debit,credit=inventory,clearing
+        LedgerEntry.objects.create(document=doc,branch=shop,posting_date=doc.posting_date,account=debit,debit=amount)
+        LedgerEntry.objects.create(document=doc,branch=shop,posting_date=doc.posting_date,account=credit,credit=amount)
 
 def _bill(doc):
     assigned(doc,'buyer','can_buy')

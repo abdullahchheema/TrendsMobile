@@ -1,10 +1,13 @@
-"""Online Store (owner only): decide what the website shows, with photos, a description and an optional online price.
+"""Online catalogue (the owner and the online-store login): every product of every shop, one page per phone model, with its variants.
 
-The website reads the read-only views `web_listings`, `web_stock`, `web_phone_units` and `web_images` (migration 0022). Nothing here changes
-stock, prices in the shops or the books: the shop price (what the POS uses) and the online price are separate. A product appears on the
-website only when it is Published, has at least one photo and a price."""
+* A website page is one phone model (or one accessory) with its variants (storage, colour, condition) and the stock of every shop.
+* Photos are added here, for the page (shared by all variants) or for one variant. As soon as a page has a photo it is LIVE on the website;
+  until then it only exists here as a draft. The owner can also hide a page.
+* Prices: the shop price (set when stock is bought, used by the POS) is never changed here. Online price, percentage off and the crossed-out
+  "compare" price are set here per variant.
+The website reads the read-only views (migration 0026)."""
 import json
-from decimal import Decimal,InvalidOperation
+from decimal import ROUND_HALF_UP,Decimal,InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied,ValidationError
@@ -15,9 +18,11 @@ from django.shortcuts import get_object_or_404,redirect,render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from .models import Branch,Device,Product,ProductImage,StockMovement
-from . import product_media as media,online_access
+from . import product_media as media,online_access,online_orders as oo
 
 ZERO=Decimal('0.00')
+MAX_SHARED=12
+MAX_PER_VARIANT=6
 
 
 def _owner(request):
@@ -29,6 +34,10 @@ def title_of(product):
     if product.web_title.strip():return product.web_title.strip()
     if product.model_id:return f'{product.model.brand} {product.model.name}'.strip()
     return product.name
+
+
+def brand_of(product):
+    return (product.model.brand if product.model_id else product.brand) or 'Other'
 
 
 def family_of(product):
@@ -44,92 +53,142 @@ def make_slug(product):
     return slug
 
 
-def facts(products):
-    """{product id: dict(stock, low, high, photos, cover)}: shop stock and shop-price range, plus photos, for the given products."""
-    ids=[p.pk for p in products];out={p.pk:dict(stock=0,low=None,high=None,photos=0,cover='') for p in products}
-    shops=Branch.objects.filter(enabled=True)
-    for r in Device.objects.filter(product_id__in=ids,status='Available',branch__in=shops).values('product_id').annotate(n=Count('id'),lo=Min('asking_price'),hi=Max('asking_price')):
-        out[r['product_id']].update(stock=r['n'],low=r['lo'],high=r['hi'])
-    for r in StockMovement.objects.filter(product_id__in=ids,product__serialized=False,warehouse__branch__in=shops).values('product_id').annotate(q=Sum('quantity')):
-        out[r['product_id']]['stock']=r['q'] or 0
-    for img in ProductImage.objects.filter(product_id__in=ids).order_by('position','created'):
-        f=out[img.product_id];f['photos']+=1
-        if not f['cover']:f['cover']=img.url
+def refresh_live(product):
+    """A page is live exactly when it has a photo and is not hidden. Called whenever photos or the page change, and when a new variant is added
+    to a page that already has photos, so nothing needs publishing by hand."""
+    product=Product.objects.select_related('model').get(pk=product.pk)
+    family=list(family_of(product).select_related('model'))
+    has=ProductImage.objects.filter(product__in=[p.pk for p in family]).exists()
+    page=slugify(title_of(product))[:150] or (product.slug or 'product')
+    for p in family:
+        want=bool(has and p.enabled and not p.online_hidden);changes={}
+        if want and not p.slug:changes['slug']=make_slug(p)
+        if p.family_slug!=page:changes['family_slug']=page
+        if p.online_visible!=want:changes['online_visible']=want
+        if changes:Product.objects.filter(pk=p.pk).update(**changes)
+
+
+def sync_all():
+    """Safety net for the catalogue screens: bring every page's live/draft state in line with its photos."""
+    seen=set()
+    for p in Product.objects.filter(enabled=True).filter(Q(serialized=True)|Q(stock_item=True)).select_related('model'):
+        if p.pk in seen or p.code==oo.DELIVERY_CODE:continue
+        fam=list(family_of(p).values_list('pk',flat=True));seen.update(fam);refresh_live(p)
+
+
+def catalog(q=''):
+    """Brand -> models -> variants, with stock per shop. Pages that never had stock, photos or a live flag are left out as noise."""
+    products=list(Product.objects.filter(enabled=True).filter(Q(serialized=True)|Q(stock_item=True)).exclude(code=oo.DELIVERY_CODE).select_related('model'))
+    by_product={p.pk:[] for p in products}
+    for v in oo.variants(published_only=False):by_product[v['product'].pk].append(v)
+    images=ProductImage.objects.filter(product_id__in=list(by_product))
+    img_by_product={}
+    for i in images:img_by_product.setdefault(i.product_id,[]).append(i)
+    names={b.pk:b.name for b in oo.shops()}
+    families={}
     for p in products:
-        if not p.serialized:out[p.pk]['low']=out[p.pk]['high']=p.selling_price
-    return out
-
-
-def status_of(product,info):
-    if product.online_visible:return 'Published'
-    return 'Draft' if info['photos'] else 'Needs photo'
-
-
-def problems(product,photos,price):
-    """Why a product cannot be published yet (empty list = fine)."""
-    found=[]
-    if not photos:found.append('add at least one photo')
-    if not (price and price>0):found.append('set a price (the shop price or an online price)')
-    return found
+        key=title_of(p).casefold();fam=families.setdefault(key,dict(title=title_of(p),brand=brand_of(p),products=[],rows=[],photos=0,cover='',live=False,hidden=False))
+        fam['products'].append(p);fam['rows']+=by_product[p.pk]
+        mine=sorted(img_by_product.get(p.pk,[]),key=lambda i:(i.variant_only,i.position))
+        fam['photos']+=len(mine);fam['live']=fam['live'] or p.online_visible;fam['hidden']=fam['hidden'] or p.online_hidden
+        if mine and not fam['cover']:fam['cover']=mine[0].url
+    rows=[]
+    for fam in families.values():
+        fam['rows'].sort(key=lambda r:(r['product'].storage,r['product'].colour,r['condition'],r['price']))
+        fam['stock']=sum(r['quantity'] for r in fam['rows'])
+        for r in fam['rows']:r['shops']=sorted((names.get(b,'?'),n) for b,n in r['per_shop'].items())
+        if not fam['stock'] and not fam['photos'] and not fam['live']:continue
+        per={}
+        for r in fam['rows']:
+            for b,n in r['per_shop'].items():per[names.get(b,'?')]=per.get(names.get(b,'?'),0)+n
+        fam['per_shop']=sorted(per.items());prices=[r['price'] for r in fam['rows']]
+        fam['low']=min(prices) if prices else None;fam['high']=max(prices) if prices else None
+        fam['anchor']=sorted(fam['products'],key=lambda p:(p.storage,p.colour,p.name))[0]
+        fam['status']='Hidden' if fam['hidden'] else 'Live' if fam['live'] else 'Draft'
+        fam['sale']=any((r['compare'] or 0)>r['price'] for r in fam['rows'])
+        if q and q.lower() not in (fam['title']+' '+fam['brand']+' '+' '.join(p.name for p in fam['products'])).lower():continue
+        rows.append(fam)
+    rows.sort(key=lambda f:(f['brand'].casefold(),f['title'].casefold()))
+    return rows
 
 
 @login_required
 def store(request):
-    _owner(request)
+    _owner(request);sync_all()
     q=request.GET.get('q','').strip();flt=request.GET.get('show','')
-    products=Product.objects.filter(enabled=True).filter(Q(serialized=True)|Q(stock_item=True)).select_related('model').order_by('group','name')
-    if q:products=products.filter(Q(name__icontains=q)|Q(brand__icontains=q)|Q(model__name__icontains=q)|Q(code__icontains=q))
-    products=list(products);info=facts(products);rows=[]
-    for p in products:
-        i=info[p.pk]
-        if p.serialized and not i['stock'] and not p.online_visible and not i['photos'] and not flt=='all':continue     # variants that never had stock are noise
-        rows.append(dict(p=p,i=i,status=status_of(p,i),online=p.online_price if p.online_price is not None else None))
-    counts={'Published':sum(1 for r in rows if r['status']=='Published'),'Draft':sum(1 for r in rows if r['status']=='Draft'),'needs':sum(1 for r in rows if r['status']=='Needs photo')}
-    if flt in ('Published','Draft','Needs photo'):rows=[r for r in rows if r['status']==flt]
-    from .views import paginate
-    page,pager=paginate(request,rows,40)
-    return render(request,'online_store.html',dict(title='Online Store',rows=page.object_list,page_obj=page,pager_query=pager,q=q,show=flt,counts=counts))
+    rows=catalog(q)
+    counts={n:sum(1 for r in rows if r['status']==n) for n in ('Live','Draft','Hidden')}
+    if flt in counts:rows=[r for r in rows if r['status']==flt]
+    brands=[];
+    for r in rows:
+        if not brands or brands[-1]['brand']!=r['brand']:brands.append(dict(brand=r['brand'],models=[]))
+        brands[-1]['models'].append(r)
+    return render(request,'online_store.html',dict(title='Products & Photos',brands=brands,q=q,show=flt,counts=counts,total=len(rows)))
 
 
-def _payload(product):
-    return [dict(id=str(i.pk),url=i.url,alt=i.alt) for i in product.images.all()]
+def _payload(images):
+    return [dict(id=str(i.pk),url=i.url,alt=i.alt) for i in images]
+
+
+def _money(text,label,allow_empty=True):
+    text=(text or '').strip().replace(',','')
+    if not text:
+        if allow_empty:return None
+        raise ValidationError(f'Enter {label}.')
+    try:value=Decimal(text)
+    except InvalidOperation:raise ValidationError(f'{label} must be a number.')
+    return value
 
 
 @login_required
 def edit(request,pk):
-    _owner(request);product=get_object_or_404(Product.objects.select_related('model'),pk=pk)
-    info=facts([product])[product.pk]
+    _owner(request);anchor=get_object_or_404(Product.objects.select_related('model'),pk=pk)
+    family=list(family_of(anchor).select_related('model').order_by('storage','colour','name'))
+    rows_by_product={p.pk:[] for p in family}
+    names={b.pk:b.name for b in oo.shops()}
+    for v in oo.variants(published_only=False):
+        if v['product'].pk in rows_by_product:rows_by_product[v['product'].pk].append(v)
     if request.method=='POST':
         try:
-            price_text=request.POST.get('online_price','').strip().replace(',','')
-            try:price=Decimal(price_text) if price_text else None
-            except InvalidOperation:raise ValidationError('Enter the online price as a number, or leave it empty to use the shop price.')
-            if price is not None and price<=0:raise ValidationError('The online price must be more than zero, or empty to use the shop price.')
-            publish=request.POST.get('online_visible')=='on'
-            if publish:
-                effective=price if price is not None else (info['low'] if product.serialized else product.selling_price)
-                missing=problems(product,info['photos'],effective)
-                if missing:raise ValidationError('Before publishing: '+' and '.join(missing)+'.')
             with transaction.atomic():
-                product=Product.objects.select_for_update().select_related('model').get(pk=pk)
-                product.web_title=' '.join(request.POST.get('web_title','').split())[:200]
-                product.description=request.POST.get('description','').strip()[:5000];product.online_price=price;product.online_visible=publish
-                if publish and not product.slug:product.slug=make_slug(product)
-                product.save(update_fields=['web_title','description','online_price','online_visible','slug','modified'])
-                page=slugify(title_of(product))[:150] or product.slug or 'product'
-                for sibling in family_of(product).select_related('model'):
-                    changes=[]
-                    if sibling.description!=product.description:sibling.description=product.description;changes.append('description')     # the page text is shared by every variant
-                    if sibling.family_slug!=page:sibling.family_slug=page;changes.append('family_slug')
-                    if changes:sibling.save(update_fields=changes+['modified'])
-            messages.success(request,'Saved. '+('This product is live on the website.' if publish else 'It is not shown on the website.'));return redirect('online_edit',pk=pk)
+                locked={p.pk:p for p in Product.objects.select_for_update().select_related('model').filter(pk__in=[p.pk for p in family])}
+                title=' '.join(request.POST.get('web_title','').split())[:200];desc=request.POST.get('description','').strip()[:5000];hidden=request.POST.get('online_hidden')=='on'
+                all_pct=_money(request.POST.get('discount_all'),'the percentage off')
+                for p in family:
+                    p=locked[p.pk]
+                    price=_money(request.POST.get(f'online_price_{p.pk}'),'the online price')
+                    pct=all_pct if all_pct is not None else _money(request.POST.get(f'discount_{p.pk}'),'the percentage off')
+                    compare=_money(request.POST.get(f'compare_{p.pk}'),'the compare price')
+                    if price is not None and price<=0:raise ValidationError(f'{p.name}: the online price must be more than zero, or empty to use the shop price.')
+                    if pct is not None and not (0<=pct<=90):raise ValidationError(f'{p.name}: the percentage off must be between 0 and 90.')
+                    if compare is not None and compare<=0:raise ValidationError(f'{p.name}: the compare price must be more than zero, or empty.')
+                    p.online_price=price;p.discount_percent=(pct if pct else None);p.compare_price=compare
+                    p.description=desc;p.online_hidden=hidden;p.web_title=title
+                    p.save(update_fields=['online_price','discount_percent','compare_price','description','online_hidden','web_title','modified'])
+                for p in family:
+                    fresh=Product.objects.select_related('model').get(pk=p.pk)
+                    for v in oo.variants(published_only=False):
+                        if v['product'].pk==fresh.pk and v['compare'] is not None and v['compare']<=v['price']:
+                            raise ValidationError(f'{fresh.name}: the compare price ({v["compare"]:,.2f}) must be higher than the selling price ({v["price"]:,.2f}).')
+                refresh_live(anchor)
+            messages.success(request,'Saved.');return redirect('online_edit',pk=pk)
         except ValidationError as error:
             from .views import error_text
             messages.error(request,error_text(error))
-    units=list(Device.objects.filter(product=product,status='Available',branch__enabled=True).select_related('branch').order_by('branch__name','code')[:200]) if product.serialized else []
-    siblings=[p for p in family_of(product).order_by('storage','colour','name') if p.pk!=product.pk]
-    return render(request,'online_edit.html',dict(title=product.name,page_title=title_of(product),siblings=siblings,product=product,info=info,status=status_of(product,info),images=json.dumps(_payload(product)),units=units,
-                                                 max_photos=media.MAX_PER_PRODUCT,max_mb=media.MAX_BYTES//1048576))
+            family=list(family_of(anchor).select_related('model').order_by('storage','colour','name'))
+    anchor=Product.objects.select_related('model').get(pk=pk)
+    ids=[p.pk for p in family]
+    shared=list(ProductImage.objects.filter(product_id__in=ids,variant_only=False).order_by('position','created'))
+    own={}
+    for i in ProductImage.objects.filter(product_id__in=ids,variant_only=True).order_by('position','created'):own.setdefault(i.product_id,[]).append(i)
+    variants=[dict(p=p,rows=[dict(r,shops=sorted((names.get(b,'?'),n) for b,n in r['per_shop'].items())) for r in rows_by_product[p.pk]],photos=own.get(p.pk,[])) for p in family]
+    live=any(p.online_visible for p in family)
+    return render(request,'online_edit.html',dict(title=title_of(anchor),page_title=title_of(anchor),anchor=anchor,product=anchor,variants=variants,images=json.dumps(_payload(shared)),
+        status='Hidden' if anchor.online_hidden else 'Live' if live else 'Draft',live=live,max_photos=MAX_SHARED,max_mb=media.MAX_BYTES//1048576,
+        stock=sum(r['quantity'] for rows in rows_by_product.values() for r in rows)))
+
+
+def _family_ids(product):return list(family_of(Product.objects.select_related('model').get(pk=product.pk)).values_list('pk',flat=True))
 
 
 @login_required
@@ -139,13 +198,20 @@ def photo_upload(request,pk):
     try:
         upload=request.FILES.get('file')
         if not upload:raise ValidationError('Choose a photo.')
-        raw=upload.read(media.MAX_BYTES+1)
+        raw=upload.read(media.MAX_BYTES+1);ids=_family_ids(product);variant=None
+        if request.POST.get('variant'):
+            variant=get_object_or_404(Product,pk=request.POST['variant'])
+            if variant.pk not in ids:raise ValidationError('That variant is not on this page.')
         with transaction.atomic():
-            Product.objects.select_for_update().get(pk=pk)
-            count=ProductImage.objects.filter(product=product).count()
-            if count>=media.MAX_PER_PRODUCT:raise ValidationError(f'A product can have at most {media.MAX_PER_PRODUCT} photos.')
-            path,url,size=media.save(product.pk,raw)
-            image=ProductImage.objects.create(product=product,path=path,url=url,size=size,position=(ProductImage.objects.filter(product=product).aggregate(m=Max('position'))['m'] or 0)+1 if count else 0,alt=product.name[:200])
+            list(Product.objects.select_for_update().filter(pk__in=ids).order_by('pk'))
+            scope=ProductImage.objects.filter(product=variant,variant_only=True) if variant else ProductImage.objects.filter(product_id__in=ids,variant_only=False)
+            count=scope.count();limit=MAX_PER_VARIANT if variant else MAX_SHARED
+            if count>=limit:raise ValidationError(f'At most {limit} photos {"for this variant" if variant else "on a page"}.')
+            owner=variant or product
+            path,url,size=media.save(owner.pk,raw)
+            nxt=(scope.aggregate(m=Max('position'))['m'] or 0)+1 if count else 0
+            image=ProductImage.objects.create(product=owner,path=path,url=url,size=size,position=nxt,alt=title_of(product)[:200],variant_only=bool(variant))
+            refresh_live(product)
         return JsonResponse(dict(id=str(image.pk),url=image.url,alt=image.alt))
     except ValidationError as error:
         from .views import error_text
@@ -159,7 +225,7 @@ def photo_order(request,pk):
     try:ids=[str(i) for i in json.loads(request.body)['order']]
     except (ValueError,KeyError,TypeError):return JsonResponse({'error':'Invalid order.'},status=400)
     with transaction.atomic():
-        mine={str(i.pk):i for i in ProductImage.objects.select_for_update().filter(product=product)}
+        mine={str(i.pk):i for i in ProductImage.objects.select_for_update().filter(product_id__in=_family_ids(product),variant_only=False)}
         if set(ids)!=set(mine):return JsonResponse({'error':'The photo list changed. Reload the page.'},status=409)
         for position,key in enumerate(ids):
             if mine[key].position!=position:ProductImage.objects.filter(pk=key).update(position=position)
@@ -180,13 +246,15 @@ def photo_update(request,pk):
 def photo_delete(request,pk):
     _owner(request);image=get_object_or_404(ProductImage,pk=pk);product=image.product
     with transaction.atomic():
-        Product.objects.select_for_update().get(pk=product.pk)
-        path=image.path;image.delete()
-        for position,i in enumerate(ProductImage.objects.filter(product=product).order_by('position','created')):
-            if i.position!=position:ProductImage.objects.filter(pk=i.pk).update(position=position)
-        if not ProductImage.objects.filter(product=product).exists() and product.online_visible:
-            Product.objects.filter(pk=product.pk).update(online_visible=False)       # a live product always has a photo
-    media.delete(path);return JsonResponse({'ok':True,'unpublished':not ProductImage.objects.filter(product=product).exists()})
+        list(Product.objects.select_for_update().filter(pk__in=_family_ids(product)).order_by('pk'))
+        path=image.path;shared=not image.variant_only;image.delete()
+        if shared:
+            for position,i in enumerate(ProductImage.objects.filter(product_id__in=_family_ids(product),variant_only=False).order_by('position','created')):
+                if i.position!=position:ProductImage.objects.filter(pk=i.pk).update(position=position)
+        refresh_live(product)                                         # no photo left = back to a draft
+    media.delete(path)
+    live=Product.objects.filter(pk=product.pk,online_visible=True).exists()
+    return JsonResponse({'ok':True,'unpublished':not live})
 
 
 def image_file(request,path):
@@ -201,16 +269,15 @@ def image_file(request,path):
 @login_required
 def dashboard(request):
     """What the website is selling right now and what needs attention: live stock and value, per shop, margin, slow stock, and fix-it lists."""
-    _owner(request)
+    _owner(request);sync_all()
     from datetime import date
-    today=date.today();shops=list(Branch.objects.filter(enabled=True))
+    today=date.today();shops=oo.shops()
     live=list(Product.objects.filter(online_visible=True,enabled=True).select_related('model'));live_ids={p.pk for p in live}
-    photos={r['product_id']:r['n'] for r in ProductImage.objects.values('product_id').annotate(n=Count('id'))}
     per_shop={b.pk:dict(shop=b.name,units=0,value=ZERO,cost=ZERO) for b in shops}
     by_product={p.pk:dict(p=p,units=0,value=ZERO,cost=ZERO,low=None,high=None,price_gap=False) for p in live}
     slow=[];below_cost=[]
     for d in Device.objects.filter(product_id__in=live_ids,status='Available',branch__in=shops).select_related('product','branch'):
-        price=d.online_price if d.online_price is not None else d.product.online_price if d.product.online_price is not None else d.asking_price
+        price=oo.device_price(d,d.product)
         row=by_product[d.product_id];row['units']+=1;row['value']+=price;row['cost']+=d.purchase_cost
         row['low']=price if row['low'] is None else min(row['low'],price);row['high']=price if row['high'] is None else max(row['high'],price)
         if price!=d.asking_price:row['price_gap']=True
@@ -220,7 +287,7 @@ def dashboard(request):
         if price<=d.purchase_cost:below_cost.append(dict(device=d,price=price))
     for r in StockMovement.objects.filter(product_id__in=live_ids,product__serialized=False,warehouse__branch__in=shops).values('product_id','warehouse__branch_id').annotate(q=Sum('quantity'),v=Sum('value')):
         if (r['q'] or 0)<=0:continue
-        p=by_product[r['product_id']]['p'];price=p.online_price if p.online_price is not None else p.selling_price
+        p=by_product[r['product_id']]['p'];price=oo.product_price(p)
         row=by_product[r['product_id']];row['units']+=r['q'];row['value']+=price*r['q'];row['cost']+=r['v'] or ZERO;row['low']=row['high']=price
         if price!=p.selling_price:row['price_gap']=True
         s=per_shop[r['warehouse__branch_id']];s['units']+=r['q'];s['value']+=price*r['q'];s['cost']+=r['v'] or ZERO
@@ -230,15 +297,15 @@ def dashboard(request):
     out_of_stock=[r for r in products if r['units']<=0]
     low_stock=[r for r in products if 0<r['units']<=2]
     gaps=[r for r in products if r['price_gap']]
-    # stock in the shops that customers cannot see yet: the biggest opportunity to sell more online
+    # stock in the shops that is not live yet (no photo): the biggest opportunity to sell more online
     hidden=[]
     candidates=Device.objects.filter(status='Available',branch__in=shops).exclude(product_id__in=live_ids).values('product_id','product__name').annotate(n=Count('id'),lo=Min('asking_price')).order_by('-n')[:15]
-    for r in candidates:hidden.append(dict(pk=r['product_id'],name=r['product__name'],units=r['n'],price=r['lo'],photos=photos.get(r['product_id'],0)))
+    for r in candidates:hidden.append(dict(pk=r['product_id'],name=r['product__name'],units=r['n'],price=r['lo'],photos=0))
     hidden_total=Device.objects.filter(status='Available',branch__in=shops).exclude(product_id__in=live_ids).count()
     from . import online_accounts
     month=today.replace(day=1);acct=online_accounts.summary(month,today)
     see_cost=request.user.is_superuser
-    if not see_cost:totals=dict(totals,cost=None,margin=None)
+    if not see_cost:totals=dict(totals,cost=None,margin=None);below_cost=[]
     return render(request,'online_dashboard.html',dict(title='Online Dashboard',acct=acct,see_cost=see_cost,live=len(live),totals=totals,shops=sorted(per_shop.values(),key=lambda s:-s['units']),
         top=sorted(products,key=lambda r:-r['value'])[:10],out_of_stock=out_of_stock,low_stock=low_stock,gaps=gaps,slow=sorted(slow,key=lambda r:-r['days'])[:10],below_cost=below_cost,
-        hidden=hidden,hidden_total=hidden_total,no_photo=sum(1 for h in hidden if not h['photos'])))
+        hidden=hidden,hidden_total=hidden_total,no_photo=len(hidden)))

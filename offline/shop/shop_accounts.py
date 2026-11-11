@@ -90,7 +90,7 @@ def reset_password(account,password):
 class CreateForm(forms.Form):
     def __init__(self,*a,**k):
         super().__init__(*a,**k)
-        waiting=Branch.objects.filter(enabled=True).exclude(pk__in=Staff.objects.filter(user__isnull=False,enabled=True).values('branch_id')).order_by('name')
+        waiting=Branch.objects.filter(enabled=True,is_online=False).exclude(pk__in=Staff.objects.filter(user__isnull=False,enabled=True).values('branch_id')).order_by('name')
         self.fields['branch']=forms.ModelChoiceField(label='Shop',queryset=waiting,empty_label='Choose a shop without a login')
         self.fields['username']=forms.EmailField(label='Sign-in email') if settings.SUPABASE_AUTH_ENABLED else forms.CharField(label='Username',max_length=150)
         self.fields['password']=forms.CharField(label='Password',widget=forms.PasswordInput(attrs={'autocomplete':'new-password'}),min_length=8)
@@ -107,7 +107,7 @@ class ResetForm(forms.Form):
 class EditForm(forms.Form):
     def __init__(self,*a,**k):
         super().__init__(*a,**k)
-        self.fields['edit_branch']=forms.ModelChoiceField(label='Shop',queryset=Branch.objects.order_by('name'),empty_label='Choose a shop')
+        self.fields['edit_branch']=forms.ModelChoiceField(label='Shop',queryset=Branch.objects.filter(is_online=False).order_by('name'),empty_label='Choose a shop')
         self.fields['name']=forms.CharField(label='Shop name',max_length=180)
         self.fields['shop_phone']=forms.CharField(label='Contact phone',max_length=180,required=False)
         self.fields['shop_address']=forms.CharField(label='Address',required=False,widget=forms.Textarea(attrs={'rows':2}))
@@ -156,7 +156,7 @@ def accounts(request):
         except ValidationError as error:
             (online_form if action=='online_create' else create if action=='create' else edit if action=='edit' else reset).add_error(None,'; '.join(error.messages))
     rows=[]
-    for branch in Branch.objects.filter(enabled=True).order_by('name'):
+    for branch in Branch.objects.filter(enabled=True,is_online=False).order_by('name'):
         person=Staff.objects.filter(branch=branch,user__isnull=False,enabled=True).select_related('user').first()
         rows.append(dict(branch=branch,person=person,login=(person.user.email or person.user.get_username()) if person else '',active=person.user.is_active if person else None))
     return render(request,'shop_accounts.html',dict(title='Shop accounts',rows=rows,create=create,reset=reset,edit=edit,online_form=online_form,online_rows=OnlineStaff.objects.select_related('user').order_by('name')))

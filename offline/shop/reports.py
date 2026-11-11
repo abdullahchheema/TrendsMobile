@@ -18,7 +18,7 @@ def authorize(name,user):
 
 def run(name,user,params):
     authorize(name,user)
-    shops=branches(user)
+    shops=branches(user,include_online=user.is_superuser)      # the owner's reports include the Online Store's books
     if params.get('branch'):shops=shops.filter(pk=params['branch'])
     try:
         start=date.fromisoformat(params.get('from_date') or '2000-01-01')
