@@ -94,17 +94,17 @@ class OwnerChoosesTheShop(PosBase):
         IMEI.objects.create(number=imei(7000+n),device=device,slot=1);return device
     def test_adding_stock_asks_which_shop_first_for_the_owner_only(self):
         self.login(self.user)
-        for name,args in (('easy_entry',['purchase']),('bulk_purchase',[]),('stock_adjust',[]),('exchange',[])):
+        for name,args in (('bulk_purchase',[]),('stock_adjust',[]),('exchange',[])):
             page=self.client.get(reverse(name,args=args));self.assertContains(page,'Which shop?',msg_prefix=name);self.assertContains(page,self.branch.name);self.assertContains(page,self.other.name)
             self.assertContains(page,'?branch='+str(self.other.pk))
             form=self.client.get(reverse(name,args=args),{'branch':str(self.other.pk)});self.assertNotContains(form,'Which shop?');self.assertContains(form,'Shop: <strong>'+self.other.name+'</strong>');self.assertContains(form,'Change shop')
         self.login(self.a)
-        for name,args in (('easy_entry',['purchase']),('bulk_purchase',[]),('stock_adjust',[])):self.assertNotContains(self.client.get(reverse(name,args=args)),'Which shop?')
+        for name,args in (('bulk_purchase',[]),('stock_adjust',[])):self.assertNotContains(self.client.get(reverse(name,args=args)),'Which shop?')
     def test_a_purchase_by_the_owner_lands_in_the_chosen_shop(self):
         self.login(self.user);post=self.client.post(reverse('easy_entry',args=['purchase']),dict(branch=str(self.other.pk),request_key='00000000-0000-4000-8000-0000000000aa',party_name='Owner Supplier',brand='Oppo',model='A5',storage='64GB',colour='Blue',quantity='1',price='20000',asking_price='25000',pta_status='PTA',device_type='Used',condition='Good',payment_status='unpaid',posting_date=str(self.today),imeis=imei(7100)))
         self.assertEqual(post.status_code,302);device=Device.objects.get(imeis__number=imei(7100));self.assertEqual((device.branch_id,device.warehouse.branch_id),(self.other.pk,self.other.pk))
     def test_a_single_shop_owner_is_not_asked(self):
-        Branch.objects.filter(pk=self.other.pk).update(enabled=False);self.login(self.user);self.assertNotContains(self.client.get(reverse('easy_entry',args=['purchase'])),'Which shop?')
+        Branch.objects.filter(pk=self.other.pk).update(enabled=False);self.login(self.user);self.assertNotContains(self.client.get(reverse('bulk_purchase')),'Which shop?')
     def test_owner_pos_shows_every_shops_phones_with_the_shop_name_and_a_shop_login_only_its_own(self):
         a=self.stock_in(self.branch,1);b=self.stock_in(self.other,2);self.login(self.user);page=self.client.get(reverse('pos'));self.assertTrue(page.context['all_shops'])
         items={i['device']:i for i in page.context['items'] if i.get('serialized')};self.assertEqual({items[str(a.pk)]['shop'],items[str(b.pk)]['shop']},{self.branch.name,self.other.name});self.assertContains(page,'pos-shop')

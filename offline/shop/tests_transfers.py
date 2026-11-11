@@ -135,6 +135,16 @@ class Transfers(TestCase):
         self.assertIn('inter_shop',PostingAccountsForm(settings=settings).fields)
         self.assertIn(('Current Asset','Current Asset'),AccountSetupForm().fields['account_type'].choices)
 
+    def test_identical_phones_are_one_row_and_a_quantity_moves_that_many(self):
+        from . import transfers as tr
+        for n in (1,2,3):self.phone(n)
+        groups=tr.stock_groups(self.branch);self.assertEqual(len(groups),1);self.assertEqual(groups[0]['count'],3)
+        self.client.force_login(self.user)
+        page=self.client.get(reverse('stock_transfer')+f'?branch={self.branch.pk}');self.assertContains(page,'Quantity to transfer')
+        post=lambda q:self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),target=str(self.other.pk),request_key=str(uuid.uuid4()),group=groups[0]['key'],qty=q,mode='pending'))
+        post('9');self.assertEqual(Device.objects.filter(status='Reserved').count(),0)      # more than the stock: refused
+        post('2');self.assertEqual(Device.objects.filter(status='Reserved').count(),2);self.assertEqual(Device.objects.filter(status='Available').count(),1)
+
 
 class TransferConcurrency(TransactionTestCase):
     def test_opposite_direction_transfers_complete_without_deadlock(self):

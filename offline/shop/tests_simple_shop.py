@@ -38,11 +38,10 @@ class Accounts(Base):
 
 
 class NoStaffNoWarehouse(Base):
-    def buy_page(self):return self.client.get(reverse('easy_entry',args=['purchase'])).content.decode()
+    def buy_page(self):return self.client.get(reverse('bulk_purchase')).content.decode()
     def test_buy_and_sell_screens_do_not_ask_for_staff_warehouse_or_selling_price(self):
         self.login(self.shop_a);buy=self.buy_page()
         for text in ('Bought by','Payment handled by','Keep stock at','Expected selling price','Sold by'):self.assertNotIn(text,buy,text)
-        self.assertIn('name="warehouse"',buy)        # carried silently as a hidden value
         self.assertNotIn('Sold by',self.client.get(reverse('easy_entry',args=['sale'])).content.decode())
         self.assertNotIn('Sold by',self.client.get(reverse('pos')).content.decode())
         for name in ('bulk_purchase','exchange'):

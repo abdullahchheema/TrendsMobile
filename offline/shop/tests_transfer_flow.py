@@ -114,7 +114,7 @@ class OwnerOnly(Base):
 class Screens(Base):
     def test_owner_creates_dispatches_receives_through_the_screens(self):
         phone=self.phone();self.login(self.user)
-        page=self.client.get(reverse('stock_transfer'),{'branch':str(self.branch.pk)});self.assertContains(page,phone.code);self.assertContains(page,'Stock Transfers')
+        page=self.client.get(reverse('stock_transfer'),{'branch':str(self.branch.pk)});self.assertContains(page,phone.product.name);self.assertContains(page,'Quantity to transfer')
         post=self.client.post(reverse('stock_transfer'),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000d1',target=str(self.other.pk),phone=[str(phone.pk)],mode='pending'),follow=True)
         doc=Document.objects.get(kind='Stock Entry');self.assertContains(post,'created (pending)');self.assertEqual(tr.status_of(doc),'Pending')
         for n,(action,text) in enumerate((('dispatch','dispatched'),('receive','Receipt recorded')),2):

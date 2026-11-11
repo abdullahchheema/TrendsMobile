@@ -1,5 +1,5 @@
 {% extends 'base.html' %}{% load static %}{% block content %}
-<div class="page-head"><div><h1>Buy many phones</h1><p>Shop: <strong>{{ branch.name }}</strong> {% if user.is_superuser and shops|length > 1 %}· <a href="{{ request.path }}">Change shop</a>{% endif %} · one supplier, one saved purchase. All prices in PKR.</p></div><a href="{% url 'easy_entry' 'purchase' %}">Buy one kind of phone</a></div>
+<div class="page-head"><div><h1>Buy phones</h1><p>Shop: <strong>{{ branch.name }}</strong> {% if user.is_superuser and shops|length > 1 %}· <a href="{{ request.path }}">Change shop</a>{% endif %} · one phone or many, one supplier, one saved purchase. All prices in PKR.</p></div></div>
 <form method="post" class="panel" data-bulk>{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.rows_json }}{{ form.non_field_errors }}
 <h2 style="margin-top:0">1. Supplier</h2>
 <div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_head %}</div>

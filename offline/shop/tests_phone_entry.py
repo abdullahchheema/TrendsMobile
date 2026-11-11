@@ -47,9 +47,7 @@ class Screens(TestCase):
     def test_second_purchase_reuses_the_variant(self):
         self.single();self.single(imeis=[[imei(702)]]);self.assertEqual(Product.objects.filter(model__name='12 Pro Max').count(),1)
     def test_screen_offers_typed_fields_not_a_forced_variant_list_and_validates_them(self):
-        page=self.client.get(reverse('easy_entry',args=['purchase']))
-        for text in ('name="brand"','name="model"','name="storage"','name="colour"','phone_notes','PTA approved','phone-brands','512GB','1TB'):self.assertContains(page,text)
-        self.assertNotContains(page,'Choose phone variant')
+        old=self.client.get(reverse('easy_entry',args=['purchase']));self.assertRedirects(old,reverse('bulk_purchase'))       # one purchase screen now
         post=self.client.post(reverse('easy_entry',args=['purchase']),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-000000000001',party_name='X',quantity='1',price='1',asking_price='2',pta_status='PTA',device_type='Used',condition='Good',payment_status='unpaid',warehouse=str(self.warehouse.pk),staff=str(self.buyer.pk),posting_date=str(self.today)))
         self.assertContains(post,'Enter the brand');self.assertContains(post,'Enter the model')
     def test_screen_posts_typed_details_end_to_end(self):

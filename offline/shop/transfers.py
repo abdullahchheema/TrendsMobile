@@ -217,6 +217,37 @@ def _imei_devices(text,source):
     return found
 
 
+def group_key(d):return f'{d.product_id}~{d.condition}~{d.pta_status}~{d.device_type}'
+
+
+def stock_groups(source,q=''):
+    """Available phones of a shop, identical ones (same model, condition, PTA status and type) in one row with a total quantity."""
+    phones=Device.objects.filter(branch=source,status='Available').select_related('product').order_by('product__name','code')
+    if q:phones=phones.filter(Q(code__icontains=q)|Q(product__name__icontains=q)|Q(imeis__number__icontains=q)).distinct()
+    groups={}
+    for d in phones:
+        g=groups.setdefault(group_key(d),dict(key=group_key(d),name=d.product.name,condition=d.condition,pta=d.pta_status,kind=d.device_type,count=0,low=d.purchase_cost,high=d.purchase_cost))
+        g['count']+=1;g['low']=min(g['low'],d.purchase_cost);g['high']=max(g['high'],d.purchase_cost)
+    return list(groups.values())
+
+
+def pick_by_quantity(source,keys,quantities):
+    """The first N available phones of each chosen group (oldest first). Refuses a quantity larger than the stock."""
+    chosen=[]
+    for key,qty in zip(keys,quantities):
+        qty=str(qty).strip()
+        if not qty or qty=='0':continue
+        try:n=int(qty)
+        except ValueError:raise ValidationError('Quantity to transfer must be a whole number.')
+        if n<0:raise ValidationError('Quantity to transfer cannot be negative.')
+        try:product,condition,pta,kind=key.split('~',3)
+        except ValueError:raise ValidationError('Unknown stock group.')
+        rows=list(Device.objects.select_for_update().filter(branch=source,status='Available',product_id=product,condition=condition,pta_status=pta,device_type=kind).select_related('product').order_by('received_on','code'))
+        if n>len(rows):raise ValidationError(f'Only {len(rows)} of {rows[0].product.name if rows else "that phone"} are available in {source.name}, not {n}.')
+        chosen+=rows[:n]
+    return chosen
+
+
 def _run(request,make,done_message):
     from .views import error_text
     key=uuid.UUID(request.POST.get('request_key',''))
@@ -239,6 +270,7 @@ def transfer(request):
                 target=targets.get(pk=request.POST.get('target'))
                 ids=request.POST.getlist('phone');phones=list(Device.objects.select_for_update().filter(pk__in=ids,branch=source,status='Available').select_related('product'))
                 if len(phones)!=len(set(ids)):raise ValidationError('One of the phones is no longer available here. Reload and try again.')
+                phones+=[d for d in pick_by_quantity(source,request.POST.getlist('group'),request.POST.getlist('qty')) if d.pk not in {p.pk for p in phones}]
                 phones+= [d for d in _imei_devices(request.POST.get('imeis',''),source) if d.pk not in {p.pk for p in phones}]
                 doc=create(request.user,source,target,phones,request.POST.get('notes','').strip())
                 return dispatch(request.user,doc) if request.POST.get('mode')=='dispatch' else doc
@@ -253,10 +285,9 @@ def transfer(request):
     if state:rows=[r for r in rows if r['status']==state or (state=='Open' and r['status'] in OPEN_STATES)]
     counts={name:sum(1 for d in transfers().exclude(status='Cancelled') if status_of(d)==name) for name in (PENDING,DISPATCHED,DISCREPANCY)}
     q=request.GET.get('q','').strip()
-    phones=Device.objects.filter(branch=source,status='Available').select_related('product__model').prefetch_related('imeis').order_by('product__name','code')
-    if q:phones=phones.filter(Q(code__icontains=q)|Q(product__name__icontains=q)|Q(imeis__number__icontains=q)).distinct()
+    groups=stock_groups(source,q);want=request.GET.get('want','')
     in_transit=Device.objects.filter(status='In transit').count()
-    return render(request,'stock_transfer.html',dict(title='Stock Transfers',branch=source,targets=targets,phones=phones[:300],q=q,request_key=uuid.uuid4(),rows=rows,state=state,states=STATES,counts=counts,in_transit=in_transit,show_costs=access.costs(request.user)))
+    return render(request,'stock_transfer.html',dict(title='Stock Transfers',branch=source,targets=targets,groups=groups,want=want,q=q,request_key=uuid.uuid4(),rows=rows,state=state,states=STATES,counts=counts,in_transit=in_transit,show_costs=access.costs(request.user)))
 
 
 @login_required

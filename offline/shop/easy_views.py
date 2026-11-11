@@ -19,6 +19,9 @@ class InvalidEntry(Exception):pass
 def entry(request,kind):
     if kind not in ('sale','purchase'):raise Http404('Choose a sale or purchase.')
     from .views import selected_branch,scoped_devices,error_text,ask_which_shop
+    if kind=='purchase' and request.method=='GET':       # one purchase screen for one phone or many
+        from django.urls import reverse
+        return redirect(reverse('bulk_purchase')+('?branch='+request.GET['branch'] if request.GET.get('branch') else ''))
     if kind=='purchase':
         gate=ask_which_shop(request,'Buy a phone','Choose the shop that will receive these phones.')
         if gate:return gate
