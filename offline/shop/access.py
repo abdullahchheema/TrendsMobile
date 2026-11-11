@@ -1,6 +1,6 @@
 from django.core.exceptions import PermissionDenied
 from .models import Branch,Staff
-from . import permissions
+from . import permissions,online_access
 
 REPORTS=['Mobile Inventory','Mobile Stock Ageing','Device Profit','Mobile Device Economics','Staff Activity','Staff Summary',
          'Purchase Register','Sales Register','Payment Ledger','Accounts Receivable','Accounts Payable','General Ledger','Stock Balance','Stock Ledger','Profit and Loss Statement','Balance Sheet','Trial Balance','Unadjusted Trial Balance','Adjusted Trial Balance','Cash Flow Statement',
@@ -16,6 +16,7 @@ NAV=[('Phones',[('Find by IMEI','IMEI Lookup'),('Phone Inventory','Mobile Device
 def staff(user):
     if not user.is_authenticated:raise PermissionDenied
     if user.is_superuser:return None
+    if online_access.active() and online_access.is_online(user):return None      # inside the fixed online screens only (see online_access)
     try:person=user.staff
     except Staff.DoesNotExist:raise PermissionDenied('Your login needs an active Staff assignment.')
     if not person.enabled or not person.branch.enabled:raise PermissionDenied('Your staff or shop account is inactive.')
@@ -92,7 +93,7 @@ def menu_for(user,visible,path=''):
     inventory+=[('Accessories',r('accessories')),('Stock in All Shops',r('stock_everywhere')),('IMEI Management',r('imei_lookup')),('Stock Adjustments',r('stock_adjust'))]
     sections.append(('Inventory','stock',coll('Mobile Device'),inventory))
     sections.append(('Purchases','buy',r('bulk_purchase'),[('Buy Phones (one or many)',r('bulk_purchase')),('Buy Accessories',r('accessory_buy')),('Purchase History',coll('Purchase Invoice'))]))
-    if owner:sections.append(('Online Store','sell-pos',r('online_dashboard'),[('Online Dashboard',r('online_dashboard')),('Products & Photos',r('online_store')),('Published on Website',r('online_store')+'?show=Published'),('Needs a Photo',r('online_store')+'?show=Needs%20photo')]))
+    if owner:sections.append(('Online Store','sell-pos',r('online_dashboard'),[('Online Dashboard',r('online_dashboard')),('Online Orders',r('online_orders')),('New Online Order',r('online_order_new')),('Online Stock',r('online_stock')),('Online Accounts',r('online_accounts')),('Products & Photos',r('online_store')),('Needs a Photo',r('online_store')+'?show=Needs%20photo')]))
     if owner:sections.append(('Stock Transfers','exchanges',r('stock_transfer'),[('All Transfers',r('stock_transfer')),('Pending Transfers',r('stock_transfer')+'?state=Open'),('Transfer History',r('stock_transfer')+'?state=Received')]))
     sections.append(('Customers','customers-suppliers',coll('Customer'),[('Customer Directory',coll('Customer')),('Customer Dues & Advances',r('customer_dues')),('Customer Payment History',r('customer_payments'))]))
     sections.append(('Suppliers','buy',coll('Supplier'),[('Supplier Directory',coll('Supplier')),('Supplier Dues & Advances',r('supplier_dues')),('Supplier Payment History',r('supplier_payments'))]))
@@ -121,6 +122,8 @@ def menu_for(user,visible,path=''):
 
 def navigation(request):
     if not request.user.is_authenticated:return {}
+    if online_access.is_online(request.user):
+        return dict(who_name=request.user.get_full_name().strip() or request.user.get_username(),who_shop='Online Store',menu=online_access.menu(request.get_full_path()),owner_company='')
     try:
         person=staff(request.user);is_manager=manager(request.user);can_costs=costs(request.user);can_statements=statements(request.user)
         can_buy=is_manager or person.can_buy

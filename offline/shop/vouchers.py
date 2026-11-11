@@ -35,7 +35,7 @@ class VoucherForm(forms.Form):
 def post(data,user):
     branch=Branch.objects.select_for_update(no_key=True).get(pk=data['branch'].pk)
     access.require(user,branch)
-    doc=s.new_doc('Voucher',branch,posting_date=data['posting_date'],notes=data['description'],data=dict(type=data['type'],amount=str(data['amount']),account=data['account'],mode=data['mode'],reference=data.get('reference',''),description=data['description']))
+    doc=s.new_doc('Voucher',branch,posting_date=data['posting_date'],notes=data['description'],data=dict(type=data['type'],amount=str(data['amount']),account=data['account'],mode=data['mode'],reference=data.get('reference',''),description=data['description']),channel=data.get('channel','Shop'))
     return s.submit(doc,user)
 
 

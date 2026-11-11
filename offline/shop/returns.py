@@ -150,7 +150,7 @@ def create(original,user,device_ids,condition,reason,quantities=None,warehouse=N
     if not selected:raise ValidationError('Select at least one phone or accessory quantity.')
     target=warehouse or (original.warehouse if original.warehouse_id and original.warehouse.enabled else None) or Warehouse.objects.filter(branch=original.branch,enabled=True).order_by('code').first()
     if not target or not target.enabled or target.branch_id!=original.branch_id:raise ValidationError('Select an active receiving warehouse in this shop.')
-    doc=s.new_doc('Sales Invoice',original.branch,customer=original.customer,seller=original.seller,is_return=True,reference=original,
+    doc=s.new_doc('Sales Invoice',original.branch,customer=original.customer,seller=original.seller,is_return=True,reference=original,channel=original.channel,online_order=original.online_order,
         warehouse=target,notes=condition.strip()+'\n'+reason.strip(),demo_batch=original.demo_batch,
         data=dict(receipt=original.data.get('receipt',{}),returned_condition=condition.strip(),return_reason=reason.strip(),return_created_by=user.get_username()))
     for key,qty in selected.items():

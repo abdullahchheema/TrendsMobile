@@ -14,7 +14,8 @@ class SupabaseBackend:
             identity=SupabaseIdentity.objects.select_related('user').get(auth_id=result['user']['id'],user__is_active=True)
             if not identity.user.is_superuser:
                 person=getattr(identity.user,'staff',None)
-                if not person or not person.enabled or not person.branch.enabled:
+                from .online_access import is_online
+                if not is_online(identity.user) and (not person or not person.enabled or not person.branch.enabled):
                     supabase.sign_out(result['access_token']);return None
             supabase.tokens(request,result)
             return identity.user

@@ -15,13 +15,27 @@ from django.shortcuts import get_object_or_404,redirect,render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from .models import Branch,Device,Product,ProductImage,StockMovement
-from . import product_media as media
+from . import product_media as media,online_access
 
 ZERO=Decimal('0.00')
 
 
 def _owner(request):
-    if not request.user.is_superuser:raise PermissionDenied('Only the owner manages the online store.')
+    if not online_access.can_use_online(request.user):raise PermissionDenied('Only the owner and the online-store login manage the online store.')
+
+
+def title_of(product):
+    """The website page a product belongs to: its own page title, else the model (phones), else its name. Variants share a page."""
+    if product.web_title.strip():return product.web_title.strip()
+    if product.model_id:return f'{product.model.brand} {product.model.name}'.strip()
+    return product.name
+
+
+def family_of(product):
+    """Every product on the same page (the product itself included)."""
+    if product.web_title.strip():return Product.objects.filter(web_title__iexact=product.web_title.strip())
+    if product.model_id:return Product.objects.filter(model_id=product.model_id,web_title='')
+    return Product.objects.filter(pk=product.pk)
 
 
 def make_slug(product):
@@ -97,16 +111,24 @@ def edit(request,pk):
                 missing=problems(product,info['photos'],effective)
                 if missing:raise ValidationError('Before publishing: '+' and '.join(missing)+'.')
             with transaction.atomic():
-                product=Product.objects.select_for_update().get(pk=pk)
+                product=Product.objects.select_for_update().select_related('model').get(pk=pk)
+                product.web_title=' '.join(request.POST.get('web_title','').split())[:200]
                 product.description=request.POST.get('description','').strip()[:5000];product.online_price=price;product.online_visible=publish
                 if publish and not product.slug:product.slug=make_slug(product)
-                product.save(update_fields=['description','online_price','online_visible','slug','modified'])
+                product.save(update_fields=['web_title','description','online_price','online_visible','slug','modified'])
+                page=slugify(title_of(product))[:150] or product.slug or 'product'
+                for sibling in family_of(product).select_related('model'):
+                    changes=[]
+                    if sibling.description!=product.description:sibling.description=product.description;changes.append('description')     # the page text is shared by every variant
+                    if sibling.family_slug!=page:sibling.family_slug=page;changes.append('family_slug')
+                    if changes:sibling.save(update_fields=changes+['modified'])
             messages.success(request,'Saved. '+('This product is live on the website.' if publish else 'It is not shown on the website.'));return redirect('online_edit',pk=pk)
         except ValidationError as error:
             from .views import error_text
             messages.error(request,error_text(error))
     units=list(Device.objects.filter(product=product,status='Available',branch__enabled=True).select_related('branch').order_by('branch__name','code')[:200]) if product.serialized else []
-    return render(request,'online_edit.html',dict(title=product.name,product=product,info=info,status=status_of(product,info),images=json.dumps(_payload(product)),units=units,
+    siblings=[p for p in family_of(product).order_by('storage','colour','name') if p.pk!=product.pk]
+    return render(request,'online_edit.html',dict(title=product.name,page_title=title_of(product),siblings=siblings,product=product,info=info,status=status_of(product,info),images=json.dumps(_payload(product)),units=units,
                                                  max_photos=media.MAX_PER_PRODUCT,max_mb=media.MAX_BYTES//1048576))
 
 
@@ -213,6 +235,10 @@ def dashboard(request):
     candidates=Device.objects.filter(status='Available',branch__in=shops).exclude(product_id__in=live_ids).values('product_id','product__name').annotate(n=Count('id'),lo=Min('asking_price')).order_by('-n')[:15]
     for r in candidates:hidden.append(dict(pk=r['product_id'],name=r['product__name'],units=r['n'],price=r['lo'],photos=photos.get(r['product_id'],0)))
     hidden_total=Device.objects.filter(status='Available',branch__in=shops).exclude(product_id__in=live_ids).count()
-    return render(request,'online_dashboard.html',dict(title='Online Dashboard',live=len(live),totals=totals,shops=sorted(per_shop.values(),key=lambda s:-s['units']),
+    from . import online_accounts
+    month=today.replace(day=1);acct=online_accounts.summary(month,today)
+    see_cost=request.user.is_superuser
+    if not see_cost:totals=dict(totals,cost=None,margin=None)
+    return render(request,'online_dashboard.html',dict(title='Online Dashboard',acct=acct,see_cost=see_cost,live=len(live),totals=totals,shops=sorted(per_shop.values(),key=lambda s:-s['units']),
         top=sorted(products,key=lambda r:-r['value'])[:10],out_of_stock=out_of_stock,low_stock=low_stock,gaps=gaps,slow=sorted(slow,key=lambda r:-r['days'])[:10],below_cost=below_cost,
         hidden=hidden,hidden_total=hidden_total,no_photo=sum(1 for h in hidden if not h['photos'])))

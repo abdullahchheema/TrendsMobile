@@ -10,7 +10,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied,ValidationError
 from django.db import IntegrityError,transaction
 from django.shortcuts import redirect,render
-from .models import Branch,ShopSettings,Staff,SupabaseIdentity
+from .models import Branch,OnlineStaff,ShopSettings,Staff,SupabaseIdentity
 from . import shopdefaults,supabase
 
 
@@ -40,6 +40,35 @@ def create_login(branch,username,password):
         if external:_forget(external['id'])
         raise ValidationError(error.messages if hasattr(error,'messages') else str(error))
     return account
+
+
+def create_online_login(name,username,password):
+    """The online-store login: runs online orders, online stock, products and photos and online refunds, and has no shop of its own."""
+    User=get_user_model();validate_password(password);external=None
+    try:
+        with transaction.atomic():
+            if settings.SUPABASE_AUTH_ENABLED:external=supabase.create_user(username,password,{'online':True})
+            account=User(username=username[:150],is_active=True)
+            if external:account.email=username;account.set_unusable_password()
+            else:account.set_password(password)
+            account.save()
+            if external:SupabaseIdentity.objects.create(auth_id=external['id'],user=account)
+            OnlineStaff.objects.create(user=account,name=name[:180],enabled=True)
+    except IntegrityError:
+        if external:_forget(external['id'])
+        raise ValidationError('That username is already taken. Choose another.')
+    except (ValidationError,supabase.ProviderUnavailable) as error:
+        if external:_forget(external['id'])
+        raise ValidationError(error.messages if hasattr(error,'messages') else str(error))
+    return account
+
+
+class OnlineCreateForm(forms.Form):
+    def __init__(self,*a,**k):
+        super().__init__(*a,**k)
+        self.fields['online_name']=forms.CharField(label='Name of the person',max_length=180)
+        self.fields['online_username']=forms.EmailField(label='Sign-in email') if settings.SUPABASE_AUTH_ENABLED else forms.CharField(label='Username',max_length=150)
+        self.fields['online_password']=forms.CharField(label='Password',widget=forms.PasswordInput(attrs={'autocomplete':'new-password'}),min_length=8)
 
 
 def _forget(uid):
@@ -97,6 +126,7 @@ def edit_shop(branch,name,phone,address):
 @login_required
 def accounts(request):
     _owner(request.user)
+    online_form=OnlineCreateForm(request.POST if request.POST.get('action')=='online_create' else None)
     create=CreateForm(request.POST if request.POST.get('action')=='create' else None);reset=ResetForm(request.POST if request.POST.get('action')=='reset' else None);edit=EditForm(request.POST if request.POST.get('action')=='edit' else None)
     if request.method=='POST':
         action=request.POST.get('action')
@@ -109,14 +139,24 @@ def accounts(request):
                 reset_password(person.user,d['new_password']);messages.success(request,f'Password changed for {d["reset_branch"].name}.');return redirect('users')
             if action=='edit' and edit.is_valid():
                 d=edit.cleaned_data;edit_shop(d['edit_branch'],d['name'],d['shop_phone'],d['shop_address']);messages.success(request,'Shop details saved.');return redirect('users')
+            if action=='online_create' and online_form.is_valid():
+                d=online_form.cleaned_data;create_online_login(d['online_name'],d['online_username'],d['online_password'])
+                messages.success(request,'Online-store login created. It can only open the online store screens.');return redirect('users')
+            if action=='online_toggle':
+                who=OnlineStaff.objects.select_related('user').get(pk=request.POST['online'])
+                who.enabled=not who.enabled;who.save(update_fields=['enabled']);who.user.is_active=who.enabled;who.user.save(update_fields=['is_active'])
+                messages.success(request,f'{who.name} {"enabled" if who.enabled else "disabled"}.');return redirect('users')
+            if action=='online_reset':
+                who=OnlineStaff.objects.select_related('user').get(pk=request.POST['online']);reset_password(who.user,request.POST.get('new_password',''))
+                messages.success(request,f'Password changed for {who.name}.');return redirect('users')
             if action=='toggle':
                 person=Staff.objects.select_related('user').get(pk=request.POST['person'],user__isnull=False)
                 person.user.is_active=not person.user.is_active;person.user.save(update_fields=['is_active'])
                 messages.success(request,f'{person.branch.name} login {"enabled" if person.user.is_active else "disabled"}.');return redirect('users')
         except ValidationError as error:
-            (create if action=='create' else edit if action=='edit' else reset).add_error(None,'; '.join(error.messages))
+            (online_form if action=='online_create' else create if action=='create' else edit if action=='edit' else reset).add_error(None,'; '.join(error.messages))
     rows=[]
     for branch in Branch.objects.filter(enabled=True).order_by('name'):
         person=Staff.objects.filter(branch=branch,user__isnull=False,enabled=True).select_related('user').first()
         rows.append(dict(branch=branch,person=person,login=(person.user.email or person.user.get_username()) if person else '',active=person.user.is_active if person else None))
-    return render(request,'shop_accounts.html',dict(title='Shop accounts',rows=rows,create=create,reset=reset,edit=edit))
+    return render(request,'shop_accounts.html',dict(title='Shop accounts',rows=rows,create=create,reset=reset,edit=edit,online_form=online_form,online_rows=OnlineStaff.objects.select_related('user').order_by('name')))

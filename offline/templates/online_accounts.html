@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Online Accounts</h1><p>The online part of every shop's books. Each online sale, payment and refund is posted in the shop that supplied the stock, so these figures always agree with the shops.</p></div></div>
+<form method="get" class="search-bar"><label>From<input type="date" name="from" value="{{ start }}"></label><label>To<input type="date" name="to" value="{{ end }}"></label><button>Show</button></form>
+<div class="statement-cards">
+<div class="panel"><h2>Online sales</h2><strong>PKR {{ data.sales|floatformat:"0g" }}</strong><small>{{ data.invoices }} invoice{{ data.invoices|pluralize }}, including delivery charges</small></div>
+<div class="panel"><h2>Returned</h2><strong>PKR {{ data.returned|floatformat:"0g" }}</strong><small>Refunds, credits and exchanges</small></div>
+<div class="panel"><h2>Net online sales</h2><strong>PKR {{ data.net_sales|floatformat:"0g" }}</strong></div>
+<div class="panel"><h2>Money received</h2><strong>PKR {{ data.net_received|floatformat:"0g" }}</strong><small>{{ data.received|floatformat:"0g" }} in, {{ data.refunded|floatformat:"0g" }} refunded</small></div>
+<div class="panel"><h2>Cash on delivery to collect</h2><strong>PKR {{ data.pending|floatformat:"0g" }}</strong><small>Dispatched, not yet paid</small></div>
+<div class="panel"><h2>Owed to customers</h2><strong>PKR {{ data.credit_owed|floatformat:"0g" }}</strong><small>Return credit not yet refunded or used</small></div>
+</div>
+{% if profit %}<div class="statement-cards"><div class="panel"><h2>Cost of goods sold</h2><strong>PKR {{ data.cogs|floatformat:"0g" }}</strong></div><div class="panel"><h2>Gross profit</h2><strong>PKR {{ data.gross_profit|floatformat:"0g" }}</strong></div><div class="panel"><h2>Online expenses</h2><strong>PKR {{ data.expenses|floatformat:"0g" }}</strong><small>Ads, courier, packaging — tick “online-store expense” in Money Out</small></div><div class="panel"><h2>Net online profit</h2><strong>PKR {{ data.net_profit|floatformat:"0g" }}</strong></div></div>{% endif %}
+<div class="online-dash-grid">
+<section class="panel table-scroll"><h2 style="margin-top:0">Money by payment method</h2><table><thead><tr><th>Method</th><th class="num">Received</th><th class="num">Refunded</th></tr></thead><tbody>{% for m in data.methods %}<tr><td>{{ m.method }}</td><td class="num">{{ m.received|floatformat:"2g" }}</td><td class="num">{{ m.refunded|floatformat:"2g" }}</td></tr>{% empty %}<tr><td colspan="3" class="empty-state">No online payments yet.</td></tr>{% endfor %}</tbody></table></section>
+<section class="panel table-scroll"><h2 style="margin-top:0">By supplying shop</h2><table><thead><tr><th>Shop</th><th class="num">Invoices</th><th class="num">Sales</th><th class="num">To collect</th></tr></thead><tbody>{% for s in data.shops %}<tr><td>{{ s.shop }}</td><td class="num">{{ s.invoices }}</td><td class="num">{{ s.sales|floatformat:"0g" }}</td><td class="num">{{ s.pending|floatformat:"0g" }}</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">No online sales yet.</td></tr>{% endfor %}</tbody></table></section>
+</div>
+{% endblock %}

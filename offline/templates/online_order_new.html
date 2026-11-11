@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>New online order</h1><p>For an order taken by phone or WhatsApp{% if credit %} — a replacement paid by return credit {{ credit.code }}{% endif %}. Prices come from the ERP. The stock is reserved as soon as you save.</p></div><a href="{% url 'online_orders' %}">All orders</a></div>
+{% if credit %}<div class="notice">Replacement for <strong>{{ credit.customer.name }}</strong>. Only items from <strong>{{ credit.branch.name }}</strong> are listed, because the credit belongs to that shop. It is used automatically when the order is dispatched.</div>{% endif %}
+<form method="get" class="search-bar">{% if credit %}<input type="hidden" name="credit" value="{{ credit.pk }}">{% endif %}<input type="search" name="q" value="{{ q }}" placeholder="Find a model, colour or condition" aria-label="Find an item"><button>Find</button></form>
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}">{% if credit %}<input type="hidden" name="credit" value="{{ credit.pk }}">{% endif %}
+<h2 style="margin-top:0">Customer</h2>
+<div class="form-grid"><div class="field"><label for="name">Name</label><input id="name" name="name" required maxlength="180" value="{{ request.POST.name|default:prefill.name }}"></div><div class="field"><label for="phone">Phone</label><input id="phone" name="phone" required maxlength="40" value="{{ request.POST.phone|default:prefill.phone }}"></div>
+<div class="field"><label for="city">City</label><input id="city" name="city" maxlength="100" value="{{ request.POST.city }}"></div><div class="field"><label for="address">Delivery address</label><input id="address" name="address" maxlength="500" value="{{ request.POST.address }}"></div></div>
+<h2>Items</h2>
+<div class="table-scroll"><table><thead><tr><th>Item</th><th>Condition</th><th class="num">Price</th><th class="num">Available</th><th>In shops</th><th class="num">Quantity</th></tr></thead><tbody>
+{% for r in rows %}<tr><td>{{ r.product.name }}</td><td>{% if r.condition %}{{ r.condition }} · {{ r.pta_status }} · {{ r.device_type }}{% else %}—{% endif %}</td><td class="num">{{ r.price|floatformat:"0g" }}</td><td class="num"><strong>{{ r.quantity }}</strong></td><td><small>{{ r.shops }}</small></td><td class="num"><input type="hidden" name="variant" value="{{ r.key }}"><input type="number" name="qty" min="0" max="{{ r.quantity }}" step="1" style="width:80px" aria-label="Quantity of {{ r.product.name }}"></td></tr>
+{% empty %}<tr><td colspan="6" class="empty-state">Nothing is available to sell{% if q %} matching your search{% endif %}.</td></tr>{% endfor %}</tbody></table></div>
+<h2>Payment and delivery</h2>
+<div class="form-grid"><div class="field"><label for="payment_method">Payment method</label><select id="payment_method" name="payment_method">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
+<div class="field"><label for="payment_reference">Payment reference (if paid)</label><input id="payment_reference" name="payment_reference" maxlength="180"></div>
+<div class="field"><label for="delivery_fee">Delivery charge (PKR)</label><input id="delivery_fee" name="delivery_fee" type="number" min="0" step="0.01" value="0" inputmode="decimal"></div>
+<div class="field"><label for="notes">Note</label><input id="notes" name="notes" maxlength="500"></div></div>
+<label class="check"><input type="checkbox" name="paid"> The customer has already paid (bank transfer, Easypaisa, JazzCash or card)</label>
+<div class="form-actions"><button class="primary" type="submit">Create order and reserve stock</button></div></form>
+{% endblock %}

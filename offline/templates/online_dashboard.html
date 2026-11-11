@@ -1,12 +1,19 @@
 {% extends 'base.html' %}{% block content %}
-<div class="page-head"><div><h1>Online Dashboard</h1><p>What the website is selling right now, from the live stock of every shop. Orders and online sales will appear here once the website sends orders to the ERP.</p></div><a class="button primary" href="{% url 'online_store' %}">Products &amp; Photos</a></div>
+<div class="page-head"><div><h1>Online Dashboard</h1><p>What the website is selling right now, from the live stock of every shop. Orders from the website arrive in Online Orders; every online sale, payment and refund is also in the books of the shop that supplied the stock.</p></div><a class="button primary" href="{% url 'online_store' %}">Products &amp; Photos</a></div>
 
+<div class="statement-cards">
+  <a class="panel" href="{% url 'online_orders' %}?status=New"><h2>New orders</h2><strong>{{ acct.orders.New|default:0 }}</strong><small>Waiting to be dispatched</small></a>
+  <a class="panel" href="{% url 'online_orders' %}?status=Dispatched"><h2>On the way</h2><strong>{{ acct.orders.Dispatched|default:0 }}</strong><small>Dispatched, not delivered</small></a>
+  <a class="panel" href="{% url 'online_accounts' %}"><h2>Online sales this month</h2><strong>PKR {{ acct.net_sales|floatformat:"0g" }}</strong><small>After returns</small></a>
+  <a class="panel" href="{% url 'online_accounts' %}"><h2>Cash on delivery to collect</h2><strong>PKR {{ acct.pending|floatformat:"0g" }}</strong><small>Dispatched, not yet paid</small></a>
+  {% if see_cost %}<a class="panel" href="{% url 'online_accounts' %}"><h2>Net online profit this month</h2><strong>PKR {{ acct.net_profit|floatformat:"0g" }}</strong><small>After cost of goods and online expenses</small></a>{% endif %}
+</div>
 <div class="statement-cards">
   <div class="panel"><h2>Live products</h2><strong>{{ live }}</strong><small>Published on the website</small></div>
   <div class="panel"><h2>Units for sale online</h2><strong>{{ totals.units|floatformat:"-0" }}</strong><small>Across all shops</small></div>
   <div class="panel"><h2>Online stock value</h2><strong>PKR {{ totals.value|floatformat:"0g" }}</strong><small>At the online prices</small></div>
-  <div class="panel"><h2>Stock cost</h2><strong>PKR {{ totals.cost|floatformat:"0g" }}</strong><small>What it was bought for</small></div>
-  <div class="panel"><h2>Expected margin</h2><strong>PKR {{ totals.margin|floatformat:"0g" }}</strong><small>If all of it sells at the online price</small></div>
+  {% if see_cost %}<div class="panel"><h2>Stock cost</h2><strong>PKR {{ totals.cost|floatformat:"0g" }}</strong><small>What it was bought for</small></div>
+  <div class="panel"><h2>Expected margin</h2><strong>PKR {{ totals.margin|floatformat:"0g" }}</strong><small>If all of it sells at the online price</small></div>{% endif %}
 </div>
 
 {% if out_of_stock or low_stock or below_cost or hidden_total %}

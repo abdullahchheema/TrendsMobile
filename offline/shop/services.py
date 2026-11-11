@@ -410,7 +410,8 @@ def _sale(doc):
             device.sold_price=money(allocations[line.pk]['net']);device.sold_on=doc.posting_date;device.save()
         elif line.product.stock_item:
             available,value=on_hand(line.product,line.warehouse or doc.warehouse)
-            if qty>available:raise ValidationError('Insufficient accessory or spare-part stock.')
+            from .online_orders import reserved_qty
+            if qty>available-reserved_qty(line.product,doc.branch):raise ValidationError('Insufficient accessory or spare-part stock (some units are held for online orders).')
             cost=money(value/available)
         if line.product.stock_item:stock(doc,line,-qty,cost)
         line.snapshot['pricing']=allocations[line.pk]
@@ -748,6 +749,7 @@ def cancel(doc,user):
     if not manager(user):raise PermissionDenied('A manager must cancel a posted transaction.')
     if doc.status!='Submitted':raise ValidationError('Select a submitted transaction.')
     if doc.source:raise ValidationError('Imported historical transactions are preserved read-only. Use reviewed correcting transactions.')
+    if doc.online_order_id and doc.kind in SELL|{'Payment Entry'}:raise ValidationError('This belongs to an online order. Use Return / exchange on the online order so the order, the stock and the money stay in step.')
     if doc.kind=='Payment Entry' and doc.data.get('direction')=='Internal Transfer':raise ValidationError('Record a new reverse internal transfer instead of cancelling a completed movement.')
     open_date(doc)
     if doc.is_return:raise ValidationError('Posted returns require a stock and credit review rather than cancellation.')

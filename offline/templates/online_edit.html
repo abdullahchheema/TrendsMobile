@@ -10,7 +10,10 @@
 <p class="error" id="media-error" role="alert"></p>
 </section>
 <form method="post" class="panel">{% csrf_token %}
-<h2 style="margin-top:0">Description</h2>
+<h2 style="margin-top:0">Website page</h2>
+<div class="field"><label for="web_title">Page title</label><input id="web_title" name="web_title" maxlength="200" value="{{ product.web_title }}" placeholder="{{ page_title }}"><small class="muted">Products with the same page title are variants (colour, storage) of one page on the website. Leave empty to use “{{ page_title }}”.</small></div>
+{% if siblings %}<p class="muted">Other variants on this page: {% for p in siblings %}<a href="{% url 'online_edit' p.pk %}">{{ p.storage }} {{ p.colour }}{% if not p.storage and not p.colour %}{{ p.name }}{% endif %}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+<h2>Description</h2><p class="muted">The description is shared by every variant on this page.</p>
 <div class="field"><label for="description">What customers read on the website</label><textarea id="description" name="description" rows="7" maxlength="5000" placeholder="Condition, what is in the box, warranty, anything a buyer should know.">{{ product.description }}</textarea></div>
 <h2>Price</h2>
 <div class="form-grid"><div class="field"><label>Shop price (what the shop sells it for)</label><p class="static-value">{% if info.low is None %}—{% elif info.low == info.high %}PKR {{ info.low|floatformat:"0g" }}{% else %}PKR {{ info.low|floatformat:"0g" }} – {{ info.high|floatformat:"0g" }}{% endif %}</p><small class="muted">Set when the stock is bought, and used by the POS. Not changed here.</small></div>

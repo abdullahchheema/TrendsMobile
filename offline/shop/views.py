@@ -19,7 +19,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from .models import *
-from . import access,services,reports as reporting,pricing,shopdefaults
+from . import access,services,reports as reporting,pricing,shopdefaults,online_orders
 from .forms import DeviceForm,DocumentForm,LineSet,ReturnLineSet,MASTER_MODELS,DETAIL_FIELDS
 from .report_filters import ReportFilters,defaults as report_defaults
 from . import report_catalog,report_presentation
@@ -131,7 +131,7 @@ def collection(request,kind):
         if kind=='Payment Entry' and not funds.allowed(request.user):objects=objects.filter(Q(data__direction__isnull=True)|~Q(data__direction='Internal Transfer'))
         if kind=='Journal Entry' and not request.user.is_superuser:objects=objects.filter(Q(data__manual_journal__isnull=True)|~Q(data__manual_journal__version=1))
         show_dues=kind in ('Sales Invoice','Purchase Invoice')
-        rows=[dict(id=o.pk,code=o.code,name=str(o.customer or o.supplier or ''),state=o.status+(' · '+o.state if o.state else ''),amount=o.total,currency=o.currency,party=o.posting_date,
+        rows=[dict(id=o.pk,code=o.code,name=str(o.customer or o.supplier or ''),state=o.status+(' · '+o.state if o.state else '')+(' · Online' if o.channel=='Online' else ''),amount=o.total,currency=o.currency,party=o.posting_date,
                    **(dict(paid=o.total-o.outstanding if o.status=='Submitted' else o.total*0,pending=o.outstanding if o.status=='Submitted' and o.outstanding>0 else None) if show_dues else {})) for o in objects]
         if kind in ('POS Opening Entry','POS Closing Entry'):
             rows=[]
@@ -612,6 +612,7 @@ def pos(request):
         warehouse=shopdefaults.warehouse(place)
         for p in Product.objects.filter(enabled=True,serialized=False):
             qty,_=services.on_hand(p,warehouse)
+            if p.stock_item:qty-=online_orders.reserved_qty(p,place)
             if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),branch=str(place.pk),shop=place.name,code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False,brand=p.brand,model=p.name,storage='',colour=p.colour,condition='',kind='Accessory',category=p.group,
                 cost=(str(services.on_hand(p,warehouse)[1]/qty) if see_cost and qty>0 else None),notes=''))
     shift=services.active_shift(branch,request.user) if not all_shops else None

@@ -141,6 +141,8 @@ class Product(Record):
     online_price=models.DecimalField(max_digits=18,decimal_places=2,null=True,blank=True,help_text='Price on the website. Leave empty to use the shop price.')
     description=models.TextField(blank=True)
     slug=models.SlugField(max_length=200,unique=True,null=True,blank=True)
+    web_title=models.CharField(max_length=200,blank=True,help_text='The page this product is shown on in the website. Products with the same page title are variants of one page. Empty = the model name (phones) or the product name.')
+    family_slug=models.SlugField(max_length=200,blank=True,db_index=True)
     def clean(self):
         if not self.serialized and self.stock_item and self.selling_price<=0:raise ValidationError('Enter the selling price: every item needs one.')
         if self.online_price is not None and self.online_price<=0:raise ValidationError('The online price must be more than zero, or empty to use the shop price.')
@@ -246,6 +248,8 @@ class Document(Record):
     notes=models.TextField(blank=True)
     data=models.JSONField(default=dict,blank=True)
     posted_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.PROTECT,null=True,blank=True)
+    channel=models.CharField(max_length=10,default='Shop',db_default='Shop',db_index=True,choices=[('Shop','Shop'),('Online','Online')])
+    online_order=models.ForeignKey('OnlineOrder',on_delete=models.PROTECT,null=True,blank=True,related_name='documents')
     class Meta:
         ordering=['-posting_date','-created']
         constraints=[models.UniqueConstraint(fields=['branch','posting_date'],condition=Q(kind='Mobile Daily Closing',status='Submitted'),name='one_daily_closing'),
@@ -442,3 +446,63 @@ class Loan(Record):
         constraints=[models.CheckConstraint(condition=Q(principal__gt=0,principal_paid__gte=0,principal_paid__lte=models.F('principal')),name='loan_sane_values')]
     @property
     def outstanding(self):return self.principal-self.principal_paid
+
+
+class OnlineStaff(models.Model):
+    """A login that runs the online store only: orders, online stock, products and photos, online refunds. It never sees shop money screens."""
+    user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='online_staff')
+    name=models.CharField(max_length=180)
+    enabled=models.BooleanField(default=True)
+    def __str__(self):return self.name
+
+
+class OnlineOrder(Record):
+    """A customer order from the website (or typed in by the online team). Stock is reserved from whichever shops hold it; when the order is
+    dispatched one sales invoice is posted in each shop that supplied stock, so every shop's stock and books stay right."""
+    NEW,DISPATCHED,DELIVERED,CANCELLED='New','Dispatched','Delivered','Cancelled'
+    status=models.CharField(max_length=12,default='New',db_index=True,choices=[(s,s) for s in ('New','Dispatched','Delivered','Cancelled')])
+    source=models.CharField(max_length=12,default='Website',choices=[('Website','Website'),('Manual','Manual')])
+    external_ref=models.CharField(max_length=80,unique=True,null=True,blank=True)
+    customer_name=models.CharField(max_length=180)
+    customer_phone=models.CharField(max_length=40)
+    customer_email=models.CharField(max_length=180,blank=True)
+    address=models.TextField(blank=True)
+    city=models.CharField(max_length=100,blank=True)
+    payment_method=models.CharField(max_length=30,default='Cash on Delivery')
+    payment_status=models.CharField(max_length=10,default='Unpaid',choices=[('Unpaid','Unpaid'),('Paid','Paid')])
+    payment_reference=models.CharField(max_length=180,blank=True)
+    delivery_fee=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    subtotal=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    total=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    courier=models.CharField(max_length=100,blank=True)
+    tracking=models.CharField(max_length=100,blank=True)
+    notes=models.TextField(blank=True)
+    placed_on=models.DateField(default=timezone.localdate,db_index=True)
+    dispatched_on=models.DateField(null=True,blank=True)
+    delivered_on=models.DateField(null=True,blank=True)
+    cancel_reason=models.CharField(max_length=240,blank=True)
+    created_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True)
+    exchange_credit=models.ForeignKey(Document,on_delete=models.PROTECT,null=True,blank=True,related_name='+',help_text='A return credit from an earlier online sale that pays for this replacement order.')
+    class Meta:ordering=['-created']
+
+
+class OnlineOrderLine(models.Model):
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    order=models.ForeignKey(OnlineOrder,on_delete=models.CASCADE,related_name='lines')
+    product=models.ForeignKey(Product,on_delete=models.PROTECT)
+    condition=models.CharField(max_length=40,blank=True)
+    pta_status=models.CharField(max_length=20,blank=True)
+    device_type=models.CharField(max_length=30,blank=True)
+    quantity=models.PositiveIntegerField()
+    unit_price=models.DecimalField(max_digits=18,decimal_places=2)
+    class Meta:ordering=['id']
+
+
+class OnlineAllocation(models.Model):
+    """Which shop (and which exact phone) supplies a line. While the order is New this stock is reserved; the shop cannot sell it elsewhere."""
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    line=models.ForeignKey(OnlineOrderLine,on_delete=models.CASCADE,related_name='allocations')
+    product=models.ForeignKey(Product,on_delete=models.PROTECT)
+    branch=models.ForeignKey(Branch,on_delete=models.PROTECT)
+    device=models.ForeignKey(Device,on_delete=models.PROTECT,null=True,blank=True)
+    quantity=models.DecimalField(max_digits=18,decimal_places=3,default=1)

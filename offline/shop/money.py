@@ -248,9 +248,9 @@ def record_party_cash_back(user,party,amount,method,when,reference='',notes=''):
 
 
 @transaction.atomic
-def record_voucher(user,branch,kind,account,amount,method,when,description,reference=''):
+def record_voucher(user,branch,kind,account,amount,method,when,description,reference='',channel='Shop'):
     branch=Branch.objects.select_for_update(no_key=True).get(pk=branch.pk);access.require(user,branch)
-    return vouchers.post(dict(branch=branch,type=kind,posting_date=when,amount=amount,account=str(account.pk),mode=method,reference=reference,description=description),user)
+    return vouchers.post(dict(branch=branch,type=kind,posting_date=when,amount=amount,account=str(account.pk),mode=method,reference=reference,description=description,channel=channel),user)
 
 
 @transaction.atomic

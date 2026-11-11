@@ -9,7 +9,7 @@ INSTALLED_APPS=['django.contrib.auth','django.contrib.contenttypes','django.cont
 MIDDLEWARE=['django.middleware.security.SecurityMiddleware','whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware',
-    'shop.requestctx.RequestContextMiddleware','shop.supabase_auth.SupabaseSessionMiddleware',
+    'shop.requestctx.RequestContextMiddleware','shop.supabase_auth.SupabaseSessionMiddleware','shop.online_access.OnlineAccessMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware','shop.csrf_pages.NoStaleHtmlMiddleware','shop.turbo.TurboFormMiddleware']
 CSRF_FAILURE_VIEW='shop.csrf_pages.csrf_failed'
 ROOT_URLCONF='config.urls'
@@ -38,6 +38,7 @@ STATICFILES_DIRS=[BASE_DIR/'static']
 STORAGES={'default':{'BACKEND':'django.core.files.storage.FileSystemStorage'},
     'staticfiles':{'BACKEND':'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
 if SUPABASE_AUTH_ENABLED:STORAGES['default']={'BACKEND':'shop.supabase_storage.SupabasePrivateStorage'}
+ONLINE_API_KEY=os.environ.get('ONLINE_API_KEY','')      # the website's secret for POST /api/online/orders/ ; empty = the order API is switched off
 MEDIA_ROOT='/data/uploads'
 MEDIA_URL='/media/'
 LOGIN_URL='/login/'
