@@ -42,3 +42,14 @@ class ExpiredForm(World):
         self.assertEqual(r.status_code,302);self.assertEqual(r['Location'],'http://testserver/desk/mobile-shop')
     def test_pages_are_not_replayed_from_the_browser_cache(self):
         c=Client();c.force_login(self.owner);r=c.get('/desk/mobile-shop');self.assertIn('no-store',r['Cache-Control'])
+
+
+class MenuHighlight(World):
+    def current(self,path):
+        from . import access
+        sections=access.menu_for(self.owner,[],path)
+        return [row['label'] for s in sections for row in s['items'] if row['current'] and s['title']=='Stock Transfers']
+    def test_only_the_matching_transfer_link_is_highlighted(self):
+        self.assertEqual(self.current('/stock/transfer/'),['All Transfers'])
+        self.assertEqual(self.current('/stock/transfer/?state=Open'),['Pending Transfers'])
+        self.assertEqual(self.current('/stock/transfer/?state=Received'),['Transfer History'])

@@ -15,7 +15,7 @@ from django.utils import timezone
 from .models import Branch,Device,IMEI,Product,Staff,ShopSettings,Warehouse
 from . import access,catalog_entry,easy_retail,customer_names,shopdefaults,services as s
 
-MAX_ROWS=40
+MAX_ROWS=200
 MAX_PHONES=200
 CONDITIONS=('Excellent','Very Good','Good','Fair','For Parts')
 TYPES=('Used','New','Refurbished','Repaired')
@@ -27,12 +27,13 @@ def split_cost(total,quantity):
     return [Decimal(base+(1 if i<extra else 0))/100 for i in range(quantity)]
 
 
-def parse_rows(raw,require_imei=True):
-    """Validate the JSON rows. Returns clean rows sorted the way the receipt will process them (by product), with per-phone lists."""
+def parse_rows(raw,require_imei=True,bulk_total=None):
+    """Validate the JSON rows. Returns clean rows sorted the way the receipt will process them (by product), with per-phone lists.
+    With `bulk_total` the whole purchase has one price: it is shared equally over every phone (to the paisa) and rows need no price of their own."""
     try:rows=json.loads(raw or '[]')
     except (TypeError,ValueError):raise ValidationError('The phone list could not be read. Reload the page and try again.')
     if not isinstance(rows,list) or not rows:raise ValidationError('Add at least one phone to the purchase.')
-    if len(rows)>MAX_ROWS:raise ValidationError(f'A purchase can have up to {MAX_ROWS} lines.')
+    if len(rows)>MAX_ROWS:raise ValidationError(f'A purchase can have up to {MAX_ROWS} phones.')
     clean=[];seen={}
     for position,row in enumerate(rows,1):
         if not isinstance(row,dict):raise ValidationError(f'Line {position} is not valid.')
@@ -49,12 +50,14 @@ def parse_rows(raw,require_imei=True):
         try:qty=int(row.get('quantity'))
         except (TypeError,ValueError):raise ValidationError(f'Line {position}: enter how many phones.')
         if not 1<=qty<=100:raise ValidationError(f'Line {position}: quantity must be between 1 and 100.')
-        try:cost=s.payment_money(row.get('cost'))
-        except Exception:raise ValidationError(f'Line {position}: enter the buying price.')
-        if cost<=0:raise ValidationError(f'Line {position}: the buying price must be more than zero.')
-        mode=row.get('cost_mode','each')
-        if mode not in ('each','total'):raise ValidationError(f'Line {position}: choose whether the price is each or the line total.')
-        costs=split_cost(cost,qty) if mode=='total' else [cost]*qty
+        if bulk_total is not None:costs=[]
+        else:
+            try:cost=s.payment_money(row.get('cost'))
+            except Exception:raise ValidationError(f'Line {position}: enter the buying price.')
+            if cost<=0:raise ValidationError(f'Line {position}: the buying price must be more than zero.')
+            mode=row.get('cost_mode','each')
+            if mode not in ('each','total'):raise ValidationError(f'Line {position}: choose whether the price is each or the line total.')
+            costs=split_cost(cost,qty) if mode=='total' else [cost]*qty
         condition=row.get('condition','Good');kind=row.get('device_type','Used')
         if condition not in CONDITIONS or kind not in TYPES:raise ValidationError(f'Line {position}: choose a valid condition and phone type.')
         grade=row.get('grade')
@@ -71,6 +74,9 @@ def parse_rows(raw,require_imei=True):
                 if number in seen:raise ValidationError(f'IMEI {number} is used twice (line {seen[number]} and line {position}).')
                 seen[number]=position
         clean.append(dict(product=product,variant=variant,notes=catalog_entry.tidy(row.get('notes')),qty=qty,costs=costs,condition=condition,device_type=kind,grade=grade,pta_status=row['pta_status'],asking=asking,imeis=imeis))
+    if bulk_total is not None:
+        shares=iter(split_cost(bulk_total,sum(r['qty'] for r in clean)))
+        for r in clean:r['costs']=[next(shares) for _ in range(r['qty'])]
     return sorted(clean,key=lambda r:str(r['product'].pk) if r['product'] else '')        # the receipt processes lines grouped by product; keep our per-phone lists in that order
 
 
@@ -80,8 +86,12 @@ def post(data,rows,user):
     if data['warehouse'].branch_id!=branch.pk or not data['warehouse'].enabled:raise ValidationError('Choose this shop’s active stock location.')
     if sum(r['qty'] for r in rows)>MAX_PHONES:raise ValidationError(f'A single purchase can hold up to {MAX_PHONES} phones.')
     supplier=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=branch.demo_batch,branch=branch)
+    found={}
     for r in rows:
-        if not r['product']:r['product']=catalog_entry.resolve_variant(r['variant'])
+        if not r['product']:
+            key=tuple(str(r['variant'][k]).casefold() for k in ('brand','model','storage','colour'))
+            if key not in found:found[key]=catalog_entry.resolve_variant(r['variant'])
+            r['product']=found[key]
     rows=sorted(rows,key=lambda r:str(r['product'].pk))     # receipt lines are processed grouped by product
     line_attrs=[];line_imeis=[];has_imeis=all(r['imeis'] for r in rows)
     receipt=s.new_doc('Purchase Receipt',branch,supplier=supplier,warehouse=data['warehouse'],buyer=data['staff'],posting_date=data['posting_date'],demo_batch=branch.demo_batch,notes=data.get('notes',''))
@@ -126,6 +136,8 @@ class BulkForm(forms.Form):
         self.fields['handler']=forms.ModelChoiceField(queryset=handlers,required=False,initial=me.pk,widget=forms.HiddenInput())
         self.user=user
         self.fields['notes']=forms.CharField(label='Note (optional)',required=False,widget=forms.Textarea(attrs={'rows':2}))
+        self.fields['price_mode']=forms.ChoiceField(label='How is the price given?',choices=[('each','Each phone has its own price'),('bulk','One price for all the phones')],initial='each',required=False,widget=forms.RadioSelect)
+        self.fields['bulk_total']=forms.DecimalField(label='Total price for all phones (PKR)',min_value=0,max_digits=15,decimal_places=2,required=False)
         self.fields['later']=forms.BooleanField(label='I will add IMEIs later (not recommended)',required=False)
         self.fields['rows_json']=forms.CharField(widget=forms.HiddenInput(),required=False)
 
@@ -141,6 +153,7 @@ class BulkForm(forms.Form):
             me=shopdefaults.person(self.user,branch)
             for name,default in (('warehouse',shopdefaults.warehouse(branch)),('staff',me),('handler',me)):
                 if not data.get(name) or data[name].branch_id!=branch.pk:data[name]=default
+        if data.get('price_mode')=='bulk' and not (data.get('bulk_total') or 0)>0 and 'bulk_total' not in self.errors:self.add_error('bulk_total','Enter the total price for all the phones.')
         if data.get('payment_status') in ('full','part'):
             if not data.get('method'):self.add_error('method','Choose a payment method.')
         return data
@@ -160,7 +173,8 @@ def bulk_purchase(request):
             key=uuid.UUID(request.POST.get('request_key',''))
             def perform():
                 if not form.is_valid():raise _Invalid()
-                rows=parse_rows(form.cleaned_data.get('rows_json'),require_imei=not form.cleaned_data.get('later'))
+                bulk=form.cleaned_data.get('bulk_total') if form.cleaned_data.get('price_mode')=='bulk' else None
+                rows=parse_rows(form.cleaned_data.get('rows_json'),require_imei=not form.cleaned_data.get('later'),bulk_total=bulk)
                 return post(form.cleaned_data,rows,request.user)
             payload={k:request.POST.getlist(k) for k in request.POST if k not in ('csrfmiddlewaretoken','request_key')}
             bill=s.once(key,request.user,{'bulk_purchase':payload},perform)

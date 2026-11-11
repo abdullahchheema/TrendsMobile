@@ -79,7 +79,7 @@ class Screen(BulkBase):
         rows=[self.row(self.product,2,50000,[imei(371),imei(372)],condition='Good',grade='8')]
         return dict(request_key=key,branch=str(self.branch.pk),party_name='Screen Supplier',warehouse=str(self.warehouse.pk),posting_date=str(self.today),staff=str(self.buyer.pk),payment_status='unpaid',rows_json=json.dumps(rows))
     def test_page_renders_with_the_scanner_and_catalogue_data(self):
-        page=self.client.get(reverse('bulk_purchase'));self.assertContains(page,'Scan IMEIs continuously');self.assertContains(page,'Samsung S21 256GB');self.assertContains(page,'data-bulk')
+        page=self.client.get(reverse('bulk_purchase'));self.assertContains(page,'Add phone');self.assertContains(page,'One price for all the phones');self.assertContains(page,'Samsung S21 256GB');self.assertContains(page,'data-bulk')
     def test_posting_twice_creates_one_purchase_and_shows_the_confirmation(self):
         first=self.client.post(reverse('bulk_purchase'),self.payload(),follow=True);self.client.post(reverse('bulk_purchase'),self.payload())
         self.assertEqual(Document.objects.filter(kind='Purchase Receipt').count(),1);self.assertEqual(Device.objects.count(),2);self.assertContains(first,'Purchase saved')
@@ -87,3 +87,11 @@ class Screen(BulkBase):
         data=self.payload();data['rows_json']=json.dumps([self.row(self.product,2,50000,[imei(373)])])
         page=self.client.post(reverse('bulk_purchase'),data);self.assertContains(page,'one line per phone');self.assertContains(page,'&quot;quantity&quot;: 2')
         self.assertEqual(Device.objects.count(),0)
+
+class OneBulkPrice(BulkBase):
+    def test_one_total_is_shared_equally_over_every_phone_to_the_paisa(self):
+        rows=bulk.parse_rows(json.dumps([dict(self.row(self.product,1,0,[imei(381)]),cost=''),dict(self.row(self.s21,2,0,[imei(382),imei(383)]),cost='')]),bulk_total=Decimal('100000.01'))
+        shares=[c for r in rows for c in r['costs']];self.assertEqual(sum(shares),Decimal('100000.01'));self.assertEqual(len(shares),3);self.assertLessEqual(max(shares)-min(shares),Decimal('0.01'))
+    def test_saving_with_one_total_posts_that_total(self):
+        rows=bulk.parse_rows(json.dumps([dict(self.row(self.product,1,0,[imei(391)]),cost=''),dict(self.row(self.product,1,0,[imei(392)]),cost='')]),bulk_total=Decimal('90000'))
+        self.assertEqual(bulk.post(self.data(),rows,self.user).total,Decimal('90000.00'))

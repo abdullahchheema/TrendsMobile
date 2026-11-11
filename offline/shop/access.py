@@ -103,9 +103,17 @@ def menu_for(user,visible,path=''):
         settings=[('My Shop Information',r('settings')),('Personal Account Settings',r('password')),('PC, Scanner & Printer Check',r('device_check'))]
     sections.append(('Settings','settings',settings[0][1],settings))
     out=[]
+    from urllib.parse import parse_qsl
+    here,_,query=(path or '').partition('?');asked=set(parse_qsl(query))
+    def specificity(x):
+        # Links that share a page and differ only by ?filter (All / Pending / History) must not all light up at once.
+        base,_,q=x.partition('?')
+        if not here or base!=here:return -1
+        wanted=set(parse_qsl(q));return len(wanted) if wanted<=asked else -1
     for title,icon,url,items in sections:
-        rows=[dict(label=l,url=x,current=bool(path) and path==x.split('?')[0]) for l,x in items]
-        out.append(dict(title=title,icon=icon,url=url,items=rows,open=any(row['current'] for row in rows) or (bool(path) and path==url.split('?')[0])))
+        best=max([specificity(x) for _,x in items]+[-1])
+        rows=[dict(label=l,url=x,current=best>=0 and specificity(x)==best) for l,x in items]
+        out.append(dict(title=title,icon=icon,url=url,items=rows,open=any(row['current'] for row in rows) or (bool(path) and path.partition('?')[0]==url.split('?')[0])))
     return out
 
 
@@ -121,5 +129,5 @@ def navigation(request):
         from .report_catalog import label as _label
         quick=[dict(name=n,label=_label(n)) for n in ('Daily Sales','Profit and Loss Statement','Expense Report','Mobile Inventory','Accounts Receivable','Accounts Payable','Branch Comparison') if n in visible]
         company=branches(request.user).exclude(company='').values_list('company',flat=True).first() or ''
-        return dict(menu=menu_for(request.user,visible,request.path),owner_company=company,navigation=sections,reports=visible,report_navigation=[dict(name=name,label=label(name)) for name in visible],quick_reports=quick,staff_report_navigation=[dict(name=name,label=label(name)) for name in visible if name.startswith('Staff ')],can_costs=can_costs,can_buy=can_buy,can_statements=can_statements,can_audit=permissions.can(request.user,'view_audit'),can_accounting=permissions.can(request.user,'accounting'),can_roles=request.user.is_superuser or permissions.can(request.user,'manage_roles'),can_sell=can_sell,is_manager=is_manager,can_fund_transfers=is_manager or person.can_handle_payments,shops=branches(request.user))
+        return dict(menu=menu_for(request.user,visible,request.get_full_path()),owner_company=company,navigation=sections,reports=visible,report_navigation=[dict(name=name,label=label(name)) for name in visible],quick_reports=quick,staff_report_navigation=[dict(name=name,label=label(name)) for name in visible if name.startswith('Staff ')],can_costs=can_costs,can_buy=can_buy,can_statements=can_statements,can_audit=permissions.can(request.user,'view_audit'),can_accounting=permissions.can(request.user,'accounting'),can_roles=request.user.is_superuser or permissions.can(request.user,'manage_roles'),can_sell=can_sell,is_manager=is_manager,can_fund_transfers=is_manager or person.can_handle_payments,shops=branches(request.user))
     except PermissionDenied:return {}

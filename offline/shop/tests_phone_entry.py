@@ -76,4 +76,4 @@ class Bulk(TestCase):
         for key,text in (('brand','Line 1: Enter the phone brand'),('model','Line 1: Enter the phone model'),('storage','Line 1: Choose the storage'),('colour','Line 1: Enter the phone colour')):
             with self.assertRaisesMessage(ValidationError,text):bulk.parse_rows(self.rows(self.row(**{key:''})),require_imei=False)
     def test_page_renders_the_catalogue_lists(self):
-        page=self.client.get(reverse('bulk_purchase'));self.assertContains(page,'phone-brands');self.assertContains(page,'phone_entry.');self.assertContains(page,'Phone details')
+        page=self.client.get(reverse('bulk_purchase'));self.assertContains(page,'phone-brands');self.assertContains(page,'phone_entry.');self.assertContains(page,'Add phone')

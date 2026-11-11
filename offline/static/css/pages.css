@@ -60,7 +60,7 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 /* POS */
 .pos-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:var(--s5)}.pos-grid>*{min-width:0}
 .pos-products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3);margin-top:var(--s4);max-height:65vh;overflow:auto;align-content:start}
-.pos-products button{min-height:112px;min-width:0;text-align:left;flex-direction:column;align-items:flex-start;justify-content:flex-start;white-space:normal;overflow-wrap:anywhere;padding:var(--s3)}
+.pos-products button{min-height:max-content;min-width:0;text-align:left;flex-direction:column;align-items:flex-start;justify-content:flex-start;white-space:normal;overflow-wrap:anywhere;padding:var(--s3)}
 .pos-products button strong{display:block;margin:var(--s2) 0}
 #pos-search{width:100%}
 .cart-row{padding:var(--s3) 0;border-bottom:1px solid var(--line)}.cart-row input{width:88px}.cart-row strong{display:block;margin-bottom:var(--s2)}.cart-row button{margin-left:var(--s2)}
@@ -113,8 +113,8 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 .phone-cell input,.phone-cell select{width:100%}
 
 /* Dashboard 6-month trend bars */
-.trend td{white-space:nowrap}
-.trend .bar{display:inline-block;height:8px;width:calc(var(--w) * 1.4);max-width:140px;border-radius:4px;background:var(--accent);margin-right:8px;vertical-align:middle}
+.trend td{white-space:nowrap;min-width:96px}
+.trend .bar{display:block;height:8px;width:var(--w);min-width:2px;max-width:100%;border-radius:4px;background:var(--accent);margin:0 0 4px}
 .trend .bar.alt{background:var(--ink-3)}.trend .bar.ok{background:#3fb97a}.trend .bar.neg{background:#e5655a}
 
 /* ---------- POS terminal: catalogue on the left, order on the right ---------- */
@@ -123,8 +123,8 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 .pos-catalog{display:flex;flex-direction:column;gap:var(--s3)}
 .pos-filters #pos-search{width:100%;font-size:16px;padding:12px 14px}
 .pos-filter-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:var(--s2);margin-top:var(--s2)}
-.pos-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--s3);max-height:calc(100vh - 290px);min-height:260px;overflow:auto;align-content:start;margin-top:0}
-.pos-card{display:flex;flex-direction:column;align-items:stretch;gap:var(--s2);text-align:left;padding:var(--s3);border:1px solid var(--line-2);border-radius:var(--r-md,12px);background:var(--surface-2);color:var(--ink);cursor:pointer;min-height:0;white-space:normal}
+.pos-cards{display:grid;grid-auto-rows:max-content;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:var(--s3);max-height:calc(100vh - 290px);min-height:260px;overflow:auto;align-content:start;margin-top:0}
+.pos-card{height:auto;min-height:max-content;overflow:visible;display:flex;flex-direction:column;align-items:stretch;gap:var(--s2);text-align:left;padding:var(--s3);border:1px solid var(--line-2);border-radius:var(--r-md,12px);background:var(--surface-2);color:var(--ink);cursor:pointer;min-height:0;white-space:normal}
 .pos-card:hover{border-color:var(--accent);background:var(--surface-3)}.pos-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pos-avatar{width:40px;height:40px;border-radius:10px;background:var(--accent-soft);color:var(--accent-text);display:grid;place-items:center;font-weight:650}
 .pos-card-body{display:flex;flex-direction:column;gap:2px;min-width:0}.pos-card-body strong{font-size:14px;overflow-wrap:anywhere}.pos-card-body small{color:var(--ink-3);margin:0;overflow-wrap:anywhere}
@@ -161,3 +161,22 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 .pay-summary{margin:0;font-size:13px;color:var(--ink-2)}.pay-note{margin:0;font-size:12px}
 .cart-warranty{display:flex;flex-direction:column;gap:6px;margin-top:var(--s2);font-size:13px}.cart-warranty select{width:100%}
 @media (max-width:420px){.pay-line{grid-template-columns:1fr}}
+
+/* Buy many phones: one card per phone */
+.phone-cards{display:grid;gap:var(--s4);margin:var(--s3) 0}
+.phone-card{padding:var(--s4);border:1px solid var(--line-2);border-radius:var(--r-md);background:rgba(255,255,255,.03)}
+.phone-card:focus-within{border-color:var(--accent-text)}
+.phone-card>header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s2);margin-bottom:var(--s3)}
+.bulk-card-actions{display:flex;gap:var(--s2)}
+.bulk-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3)}
+.bf{display:flex;flex-direction:column;gap:4px;min-width:0}.bf>span{font-size:12px;color:var(--ink-3)}
+.bf input,.bf select{width:100%;min-width:0}
+.bf-imei input{font-size:16px;letter-spacing:.02em}.bf-wide{grid-column:1/-1}
+.bulk-warn{display:block;min-height:0;margin-top:var(--s2);color:var(--warn)}
+.bulk-price-mode{display:grid;gap:var(--s2);margin:0 0 var(--s4);padding:var(--s3) var(--s4);border:1px solid var(--line-2);border-radius:var(--r-md)}
+.bulk-price-mode label{display:flex;align-items:center;gap:var(--s2)}.bulk-price-mode input[type=radio]{width:auto}
+.bulk-total-field{max-width:360px}
+.bulk-actions{margin:var(--s3) 0}.bulk-actions button{min-height:44px}
+@media(max-width:1000px){.bulk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.bulk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bulk-grid>.bf:nth-child(-n+2),.bf-imei,.bf-price{grid-column:1/-1}.bulk-card-actions button{min-height:40px}.bf input,.bf select{min-height:44px}}
+@media(max-width:650px){.trend th,.trend td{padding:8px 4px;font-size:12px}.trend td{min-width:0}.trend td:first-child,.trend th:first-child{padding-left:0}}

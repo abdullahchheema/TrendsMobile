@@ -1,67 +1,114 @@
-/* Bulk purchase builder: rows of phone variants, continuous IMEI scanning, live totals. Server re-validates everything. */
+/* Buy many phones: one card per phone (details, price, IMEI 1 and optional IMEI 2), scanner friendly, live totals.
+   Each phone is sent to the server as a row of quantity 1; the server re-validates everything. */
 (function(){
   'use strict';
   var form=document.querySelector('[data-bulk]');if(!form)return;
-  var products=JSON.parse(document.getElementById('bulk-products').textContent);
   var conditions=JSON.parse(document.getElementById('bulk-conditions').textContent),types=JSON.parse(document.getElementById('bulk-types').textContent);
-  var body=form.querySelector('[data-rows]'),hidden=form.elements.rows_json,scan=form.querySelector('[data-scan]'),status=form.querySelector('[data-scan-status]'),totalEl=form.querySelector('[data-total]'),countEl=form.querySelector('[data-count]');
-  var rows=[],active=0;
+  var body=form.querySelector('[data-rows]'),hidden=form.elements.rows_json,status=form.querySelector('[data-status]'),totalEl=form.querySelector('[data-total]'),countEl=form.querySelector('[data-count]');
+  var totalBox=form.querySelector('[data-bulk-total]'),shareEl=form.querySelector('[data-share]'),bulkInput=form.elements.bulk_total;
+  var rows=[],lastFocus=null;
   function luhn(n){if(!/^\d{15}$/.test(n))return false;var s=0;for(var i=0;i<15;i++){var d=+n[i];if(i%2){d*=2;if(d>9)d-=9}s+=d}return s%10===0}
-  function blank(src){return {brand:src?src.brand:'',model:src?src.model:'',storage:src?src.storage:'',colour:src?src.colour:'',notes:src?src.notes:'',product:src?src.product:'',quantity:src?src.quantity:1,condition:src?src.condition:'Good',device_type:src?src.device_type:'Used',grade:src?src.grade:'',pta_status:src?src.pta_status:'PTA',cost:src?src.cost:'',cost_mode:src?src.cost_mode:'each',asking_price:src?src.asking_price:'',imeis:''}}
-  function opts(list,sel,labelOf){return list.map(function(v){var val=typeof v==='string'?v:v.id,label=labelOf?labelOf(v):v;return '<option value="'+val+'"'+(val===sel?' selected':'')+'>'+label.replace(/</g,'&lt;')+'</option>'}).join('')}
-  function lines(r){return (r.imeis||'').split(/\n/).map(function(x){return x.trim()}).filter(Boolean)}
-  function numbers(line){return line.replace(/,/g,' ').split(/\s+/).filter(Boolean)}
-  function render(){
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+  function money(v){return 'PKR '+v.toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2})}
+  function bulkMode(){var r=form.querySelector('input[name=price_mode]:checked');return !!r&&r.value==='bulk'}
+  function blank(src){return {brand:src?src.brand:'',model:src?src.model:'',storage:src?src.storage:'',colour:src?src.colour:'',notes:src?src.notes:'',quantity:1,condition:src?src.condition:'Good',device_type:src?src.device_type:'Used',grade:src?src.grade:'',pta_status:src?src.pta_status:'PTA',cost:src?src.cost:'',cost_mode:'each',asking_price:'',imei1:'',imei2:''}}
+  function opts(list,sel){return list.map(function(v){return '<option'+(v===sel?' selected':'')+'>'+esc(v)+'</option>'}).join('')}
+  function field(label,html,cls){return '<label class="bf '+(cls||'')+'"><span>'+label+'</span>'+html+'</label>'}
+  function cardHtml(r,i){
+    var cat=window.PhoneCatalog||{models:function(){return []},storage:[]};
+    return '<header><strong>Phone '+(i+1)+'</strong><span class="bulk-card-actions"><button type="button" data-dup title="Add another phone with the same details">Copy</button><button type="button" data-del aria-label="Remove phone '+(i+1)+'" title="Remove this phone">&#10005; Remove</button></span></header>'+
+      '<div class="bulk-grid">'+
+      field('Brand','<input data-f="brand" list="phone-brands" value="'+esc(r.brand)+'" placeholder="e.g. Samsung" autocomplete="off">')+
+      field('Model','<input data-f="model" list="models-'+i+'" value="'+esc(r.model)+'" placeholder="e.g. Galaxy S21" autocomplete="off"><datalist id="models-'+i+'">'+cat.models(r.brand).map(function(m){return '<option value="'+esc(m)+'">'}).join('')+'</datalist>')+
+      field('Storage','<select data-f="storage"><option value="">Choose</option>'+opts(cat.storage,r.storage)+'</select>')+
+      field('Colour','<input data-f="colour" list="phone-colours" value="'+esc(r.colour)+'" placeholder="e.g. Black" autocomplete="off">')+
+      field('PTA status','<select data-f="pta_status"><option'+(r.pta_status==='PTA'?' selected':'')+'>PTA</option><option'+(r.pta_status==='Non-PTA'?' selected':'')+'>Non-PTA</option></select>')+
+      field('Condition','<select data-f="condition">'+opts(conditions,r.condition)+'</select>')+
+      field('Type','<select data-f="device_type">'+opts(types,r.device_type)+'</select>')+
+      field('Grade (1-10, optional)','<input data-f="grade" type="number" inputmode="numeric" min="1" max="10" value="'+esc(r.grade)+'">')+
+      (bulkMode()?'':field('Buying price (PKR)','<input data-f="cost" type="number" inputmode="decimal" min="0" step="0.01" value="'+esc(r.cost)+'" placeholder="0.00">','bf-price'))+
+      field('IMEI 1 &mdash; scan here','<input data-f="imei1" inputmode="numeric" autocomplete="off" maxlength="17" value="'+esc(r.imei1)+'" placeholder="15 digits">','bf-imei')+
+      field('IMEI 2 (dual SIM, optional)','<input data-f="imei2" inputmode="numeric" autocomplete="off" maxlength="17" value="'+esc(r.imei2)+'" placeholder="15 digits">','bf-imei')+
+      field('Note (optional)','<input data-f="notes" maxlength="400" value="'+esc(r.notes)+'" placeholder="battery changed, display replaced…" autocomplete="off">','bf-wide')+
+      '</div><small class="bulk-warn" data-warn role="alert"></small>';
+  }
+  function render(focusIndex,focusField){
     body.innerHTML='';
-    rows.forEach(function(r,i){
-      var tr=document.createElement('tr');tr.dataset.i=i;if(i===active)tr.classList.add('active-row');
-      var cat=window.PhoneCatalog||{models:function(){return []},storage:[]},esc=function(v){return String(v||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')};
-      tr.innerHTML='<td class="phone-cell"><input data-f="brand" list="phone-brands" value="'+esc(r.brand)+'" placeholder="Brand (choose or type)" autocomplete="off" aria-label="Brand">'+
-        '<input data-f="model" list="models-'+i+'" value="'+esc(r.model)+'" placeholder="Model (choose or type)" autocomplete="off" aria-label="Model"><datalist id="models-'+i+'">'+cat.models(r.brand).map(function(m){return '<option value="'+esc(m)+'">'}).join('')+'</datalist>'+
-        '<select data-f="storage" aria-label="Storage"><option value="">Storage</option>'+opts(cat.storage,r.storage)+'</select>'+
-        '<input data-f="colour" list="phone-colours" value="'+esc(r.colour)+'" placeholder="Colour" autocomplete="off" aria-label="Colour">'+
-        '<input data-f="notes" value="'+esc(r.notes)+'" maxlength="400" placeholder="Notes: battery changed, display replaced…" autocomplete="off" aria-label="Notes about this phone"></td>'+
-        '<td><input data-f="quantity" type="number" min="1" max="100" value="'+r.quantity+'" aria-label="Quantity"></td>'+
-        '<td><select data-f="condition" aria-label="Condition">'+opts(conditions,r.condition)+'</select><select data-f="device_type" aria-label="Phone type">'+opts(types,r.device_type)+'</select></td>'+
-        '<td><input data-f="grade" type="number" min="1" max="10" placeholder="1-10" value="'+(r.grade||'')+'" aria-label="Grade out of 10"><select data-f="pta_status" aria-label="PTA"><option'+(r.pta_status==='PTA'?' selected':'')+'>PTA</option><option'+(r.pta_status==='Non-PTA'?' selected':'')+'>Non-PTA</option></select></td>'+
-        '<td><input data-f="cost" type="number" min="0" step="0.01" value="'+(r.cost||'')+'" aria-label="Buying price"><select data-f="cost_mode" aria-label="Price is"><option value="each"'+(r.cost_mode==='each'?' selected':'')+'>each</option><option value="total"'+(r.cost_mode==='total'?' selected':'')+'>line total</option></select></td>'+
-        '<td><textarea data-f="imeis" rows="3" placeholder="One IMEI per line. Dual-SIM: both on one line." aria-label="IMEIs">'+(r.imeis||'').replace(/</g,'&lt;')+'</textarea><small data-imei-note></small></td>'+
-        '<td><button type="button" data-dup title="Copy this line">Copy</button> <button type="button" data-del title="Remove this line" aria-label="Remove line">&#10005;</button></td>';
-      body.appendChild(tr);
-    });
+    rows.forEach(function(r,i){var card=document.createElement('section');card.className='phone-card';card.dataset.i=i;card.innerHTML=cardHtml(r,i);body.appendChild(card)});
     summarise();
+    if(focusIndex!=null){var el=body.querySelector('.phone-card[data-i="'+focusIndex+'"] [data-f="'+(focusField||'imei1')+'"]');if(el){el.focus();if(el.scrollIntoView)el.scrollIntoView({block:'center'})}}
   }
   function summarise(){
-    var total=0,phones=0,all={},dup=false;
+    var all={},dup=false,bad=false,total=0,bulk=bulkMode(),n=rows.length;
     rows.forEach(function(r,i){
-      var q=+r.quantity||0,c=+r.cost||0;phones+=q;total+=r.cost_mode==='total'?c:c*q;
-      var ls=lines(r),bad=[];ls.forEach(function(l){numbers(l).forEach(function(n){if(!luhn(n))bad.push(n);if(all[n]){dup=true;bad.push(n)}all[n]=1})});
-      var note=body.children[i]&&body.children[i].querySelector('[data-imei-note]');
-      if(note){note.textContent=ls.length+' of '+q+' phones scanned'+(bad.length?' · check: '+bad.slice(0,2).join(', '):'');note.style.color=bad.length||(ls.length&&ls.length!==q)?'var(--warn)':'var(--ink-3)'}
+      var msgs=[];
+      ['imei1','imei2'].forEach(function(k){
+        var v=String(r[k]||'').replace(/\D/g,'');if(!v)return;
+        if(!luhn(v))msgs.push('IMEI '+(k==='imei1'?'1':'2')+' is not a valid 15-digit IMEI');
+        else if(all[v]){msgs.push('IMEI '+v+' is entered twice');dup=true}
+        all[v]=1;
+      });
+      if(msgs.length)bad=true;
+      var card=body.children[i],w=card&&card.querySelector('[data-warn]');if(w)w.textContent=msgs.join(' · ');
+      total+=bulk?0:(+r.cost||0);
     });
-    totalEl.textContent='PKR '+total.toLocaleString('en-PK',{minimumFractionDigits:2,maximumFractionDigits:2});countEl.textContent=phones+' phone'+(phones===1?'':'s')+' on '+rows.length+' line'+(rows.length===1?'':'s');
-    hidden.value=JSON.stringify(rows);return !dup;
+    if(bulk){total=+(bulkInput&&bulkInput.value)||0;if(shareEl)shareEl.textContent=n&&total?'Shared equally: about '+money(total/n)+' per phone.':''}
+    totalEl.textContent=money(total);countEl.textContent=n+' phone'+(n===1?'':'s');
+    hidden.value=JSON.stringify(rows.map(function(r){
+      var imeis=[r.imei1,r.imei2].map(function(v){return String(v||'').replace(/\D/g,'')}).filter(Boolean).join(' ');
+      return {brand:r.brand,model:r.model,storage:r.storage,colour:r.colour,notes:r.notes,quantity:1,condition:r.condition,device_type:r.device_type,grade:r.grade,pta_status:r.pta_status,cost:r.cost,cost_mode:'each',asking_price:'',imeis:imeis};
+    }));
+    return {dup:dup,bad:bad};
   }
-  body.addEventListener('input',function(e){var tr=e.target.closest('tr'),f=e.target.dataset.f;if(!tr||!f)return;rows[+tr.dataset.i][f]=e.target.value;if(f==='brand'){var dl=tr.querySelector('datalist'),cat=window.PhoneCatalog;if(dl&&cat){dl.innerHTML=cat.models(e.target.value).map(function(m){return '<option value="'+String(m).replace(/"/g,'&quot;')+'">'}).join('')}}summarise()});
-  body.addEventListener('focusin',function(e){var tr=e.target.closest('tr');if(tr){active=+tr.dataset.i;Array.prototype.forEach.call(body.children,function(x,i){x.classList.toggle('active-row',i===active)})}});
-  body.addEventListener('click',function(e){var tr=e.target.closest('tr');if(!tr)return;var i=+tr.dataset.i;
-    if(e.target.closest('[data-del]')){rows.splice(i,1);if(!rows.length)rows.push(blank());active=Math.min(active,rows.length-1);render()}
-    else if(e.target.closest('[data-dup]')){rows.splice(i+1,0,blank(rows[i]));active=i+1;render()}});
-  form.querySelector('[data-add]').addEventListener('click',function(){rows.push(blank(rows[rows.length-1]));active=rows.length-1;render()});
-  /* scanner: every Enter sends one IMEI to the active line; when that line is full it moves to the next incomplete one */
-  scan.addEventListener('keydown',function(e){
-    if(e.key!=='Enter')return;e.preventDefault();var n=scan.value.replace(/\D/g,'');scan.value='';
-    if(!n)return;if(!luhn(n)){status.textContent='“'+n+'” is not a valid IMEI. Scan again.';status.className='error';return}
-    var seen=rows.some(function(r){return lines(r).some(function(l){return numbers(l).indexOf(n)>-1})});if(seen){status.textContent='Already scanned: '+n;status.className='error';return}
-    var r=rows[active];if(!r||lines(r).length>=(+r.quantity||0)){var next=rows.findIndex(function(x){return lines(x).length<(+x.quantity||0)});if(next>-1){active=next;r=rows[next]}}
-    r.imeis=(r.imeis?r.imeis.replace(/\n+$/,'')+'\n':'')+n;status.textContent='Added '+n+' to line '+(active+1)+' ('+lines(r).length+' of '+(+r.quantity||0)+')';status.className='muted';
-    render();scan.focus();
+  body.addEventListener('input',function(e){
+    var card=e.target.closest('.phone-card'),f=e.target.dataset.f;if(!card||!f)return;
+    rows[+card.dataset.i][f]=e.target.value;
+    if(f==='brand'){var dl=card.querySelector('datalist'),cat=window.PhoneCatalog;if(dl&&cat)dl.innerHTML=cat.models(e.target.value).map(function(m){return '<option value="'+esc(m)+'">'}).join('')}
+    summarise();
   });
+  /* scanners send the digits and then Enter: IMEI 1 -> IMEI 2 -> next phone (a new copy is added after the last one) */
+  body.addEventListener('keydown',function(e){
+    if(e.key!=='Enter')return;var f=e.target.dataset&&e.target.dataset.f;if(!f)return;
+    var card=e.target.closest('.phone-card');if(!card)return;var i=+card.dataset.i;
+    if(f==='imei1'||f==='imei2'){
+      e.preventDefault();var v=String(e.target.value||'').replace(/\D/g,'');
+      if(v&&!luhn(v)){status.textContent='“'+v+'” is not a valid IMEI. Check the number or scan again.';status.className='error';return}
+      status.textContent='';status.className='muted';
+      if(f==='imei1'&&v){var next=card.querySelector('[data-f="imei2"]');if(next)next.focus();return}
+      if(f==='imei1'&&!v)return;
+      if(i===rows.length-1){rows.push(blank(rows[i]));render(rows.length-1,'imei1')}
+      else{var nx=body.querySelector('.phone-card[data-i="'+(i+1)+'"] [data-f="imei1"]');if(nx)nx.focus()}
+    }else if(e.target.tagName==='INPUT'){e.preventDefault()}      /* Enter in a detail box must not submit the whole purchase */
+  });
+  body.addEventListener('click',function(e){
+    var card=e.target.closest('.phone-card');if(!card)return;var i=+card.dataset.i;
+    if(e.target.closest('[data-del]')){rows.splice(i,1);if(!rows.length)rows.push(blank());render(Math.min(i,rows.length-1),'brand')}
+    else if(e.target.closest('[data-dup]')){rows.splice(i+1,0,blank(rows[i]));render(i+1,'imei1')}
+  });
+  form.querySelector('[data-add]').addEventListener('click',function(){rows.push(blank(rows[rows.length-1]));render(rows.length-1,rows.length>1?'imei1':'brand')});
+  form.addEventListener('change',function(e){
+    if(e.target.name==='price_mode'){var b=bulkMode();if(totalBox)totalBox.hidden=!b;render()}
+  });
+  if(bulkInput)bulkInput.addEventListener('input',summarise);
   form.addEventListener('submit',function(e){
-    var ok=summarise();var empty=rows.some(function(r){return !(r.product||(r.brand&&r.model&&r.storage&&r.colour))||!(+r.quantity)||!(+r.cost)});
-    if(!ok){e.preventDefault();status.textContent='Fix the duplicate IMEIs before saving.';status.className='error';return}
-    if(empty){e.preventDefault();status.textContent='Every line needs a brand, model, storage, colour, quantity and buying price.';status.className='error'}
+    var res=summarise();var later=form.elements.later&&form.elements.later.checked;
+    function stop(msg){e.preventDefault();status.textContent=msg;status.className='error';var c=body.querySelector('.phone-card.has-problem');}
+    for(var i=0;i<rows.length;i++){
+      var r=rows[i],miss=!(r.brand&&r.model&&r.storage&&r.colour);
+      if(miss){stop('Phone '+(i+1)+': enter the brand, model, storage and colour.');render(i,'brand');return}
+      if(!bulkMode()&&!(+r.cost>0)){stop('Phone '+(i+1)+': enter the buying price.');render(i,'cost');return}
+      if(!later&&!String(r.imei1||'').replace(/\D/g,'')){stop('Phone '+(i+1)+': scan or type its IMEI (or tick “I will add IMEIs later”).');render(i,'imei1');return}
+    }
+    if(res.dup||res.bad){stop('Fix the IMEI problems shown on the phones before saving.')}
   },true);
-  try{var saved=JSON.parse(hidden.value||'[]');rows=Array.isArray(saved)&&saved.length?saved.map(function(r){return Object.assign(blank(),r)}):[blank()]}catch(e){rows=[blank()]}
+  try{var saved=JSON.parse(hidden.value||'[]');
+    if(Array.isArray(saved)&&saved.length){
+      /* a rejected save comes back with its phones: one card per phone, quantities above 1 become several cards */
+      saved.forEach(function(r){var n=Math.max(1,Math.min(100,+r.quantity||1)),lines=String(r.imeis||'').split(/\n/).map(function(x){return x.trim()}).filter(Boolean);
+        for(var k=0;k<n;k++){var parts=(lines[k]||'').split(/[\s,]+/).filter(Boolean),b=blank(r);b.cost=r.cost_mode==='total'&&r.cost?String((+r.cost/n).toFixed(2)):r.cost;b.imei1=parts[0]||'';b.imei2=parts[1]||'';rows.push(b)}});
+    }
+  }catch(err){}
+  if(!rows.length)rows=[blank()];
+  if(totalBox)totalBox.hidden=!bulkMode();
   render();
 })();
