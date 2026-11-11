@@ -64,3 +64,7 @@ html.shell-seen .sidebar *{animation:none}
   body::before{display:none}.app-header,.sidebar,.app-footer,.toast-region{display:none!important}
   .app-main{margin:0;padding:0;max-width:none}body{background:#fff;color:#000}
 }
+
+/* Page-to-page progress line (Turbo) */
+.turbo-progress-bar{height:3px;background:var(--accent,#6aa7ff);z-index:1000}
+.app-main:focus{outline:none}

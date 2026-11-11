@@ -4,7 +4,7 @@
   {% if book %}<input type="hidden" name="book" value="{{ book }}">{% else %}<label>Account<select name="account"><option value="">Choose an account</option>{% for a in accounts %}<option value="{{ a.pk }}" {% if account and account.pk == a.pk %}selected{% endif %}>{{ a.code }} · {{ a.name }}</option>{% endfor %}</select></label>{% endif %}
   <label>Shop<select name="branch"><option value="">All permitted shops</option>{% for sh in shops %}<option value="{{ sh.pk }}" {% if branch and branch.pk == sh.pk %}selected{% endif %}>{{ sh.name }}</option>{% endfor %}</select></label>
   <label>From<input type="date" name="from_date" value="{{ start|date:'Y-m-d' }}"></label><label>To<input type="date" name="to_date" value="{{ end|date:'Y-m-d' }}"></label>
-  <button class="primary">Show</button><a class="button" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}format=csv">Export CSV</a><button type="button" data-print>Print</button>
+  <button class="primary">Show</button><a class="button" data-turbo="false" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}format=csv">Export CSV</a><button type="button" data-print>Print</button>
 </form>
 {% if not book and not account %}<p class="empty-state">Choose an account to see its ledger, or open the Cash book or Bank book from the Reports menu.</p>{% else %}
 <div class="panel table-scroll report-table"><table><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Account</th><th>Party</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead><tbody>

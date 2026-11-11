@@ -105,6 +105,11 @@
  });
  document.addEventListener('covison-server-status',updateButton);
  const guard=event=>{if(pending){event.preventDefault();event.returnValue='';}};window.addEventListener('beforeunload',guard);
+ /* Pages now swap in place: ask before leaving mid-sale, and detach our document/window listeners when we do leave. */
+ if(window.covison?.page){
+  window.covison.page.guard=()=>pending?window.confirm('A sale is still being posted. If you leave now you will not see its result. Leave anyway?'):true;
+  window.covison.page.leave(()=>{document.removeEventListener('covison-server-status',updateButton);window.removeEventListener('beforeunload',guard);});
+ }
 
  /* ---------- finishing the sale ---------- */
  function whatsapp(result){

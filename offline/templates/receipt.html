@@ -1,4 +1,4 @@
-{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ doc.code }} · Receipt</title><link rel="stylesheet" href="{% static 'offline.css' %}"><link rel="stylesheet" href="{% static 'receipt.css' %}"></head>
+{% load static %}<!doctype html><html lang="en"><head><meta name="turbo-visit-control" content="reload"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ doc.code }} · Receipt</title><link rel="stylesheet" href="{% static 'offline.css' %}"><link rel="stylesheet" href="{% static 'receipt.css' %}"></head>
 <body class="receipt receipt-{{ receipt_format }}"><nav class="receipt-toolbar"><a href="?paper=58">58 mm layout</a> · <a href="?paper=thermal">80 mm layout</a> · <a href="?paper=a4">A4 layout</a> · <button data-print>Print receipt</button></nav>
 <main class="easy-receipt">
   <h1>{{ doc.branch.name }}</h1>

@@ -10,7 +10,7 @@ MIDDLEWARE=['django.middleware.security.SecurityMiddleware','whitenoise.middlewa
     'django.contrib.sessions.middleware.SessionMiddleware','django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware','django.contrib.auth.middleware.AuthenticationMiddleware',
     'shop.requestctx.RequestContextMiddleware','shop.supabase_auth.SupabaseSessionMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware','shop.csrf_pages.NoStaleHtmlMiddleware']
+    'django.contrib.messages.middleware.MessageMiddleware','django.middleware.clickjacking.XFrameOptionsMiddleware','shop.csrf_pages.NoStaleHtmlMiddleware','shop.turbo.TurboFormMiddleware']
 CSRF_FAILURE_VIEW='shop.csrf_pages.csrf_failed'
 ROOT_URLCONF='config.urls'
 TEMPLATES=[dict(BACKEND='django.template.backends.django.DjangoTemplates',DIRS=[BASE_DIR/'templates'],APP_DIRS=True,

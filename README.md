@@ -21,6 +21,14 @@ python3 supabase/control.py ps
 
 Two kinds of user: the **Owner** (sees and controls every shop) and one **Shop Accountant** login per shop (runs that shop only and can never see another shop). One two-panel **POS** (New Sale) with IMEI scanning, split payments, credit, receipts and WhatsApp sharing; returns, refunds and exchanges from the sale page; IMEI-tracked stock per shop (no warehouses); bulk purchasing with typed brand/model/storage/colour; **Owner-only stock transfers** with Pending, Dispatched, Received, Discrepancy and Cancelled statuses; simple **Accounts & Finance** (Money In, Money Out, Expenses, Customer Dues, Supplier Dues, Cash and Bank, one Transaction History); separate Owner and Shop dashboards; reports; and the Owner's advanced accounting (chart of accounts, adjustments, month lock, year-end, fixed assets, prepaids/accruals, loans).
 
+## Page navigation (no full reloads)
+
+Clicking a link or saving a form swaps the page content in place ([Turbo](https://turbo.hotwired.dev), vendored in `offline/static/vendor/`); the menu, header and search stay put. The server pages, forms and business rules are unchanged. For anyone adding a screen:
+
+- A form that saves must redirect (as now); a form shown again with errors is answered with status 422 automatically (`shop/turbo.py`).
+- Page scripts that attach listeners to `document` or `window` must remove them with `covison.page.leave(fn)`; one-off setup that must run on every page uses `covison.page.ready(fn)` (`static/page.js`).
+- Downloads (CSV and the like) need `data-turbo="false"`; pages that are not built on `base.html` (login, receipts, slips) carry `<meta name="turbo-visit-control" content="reload">`.
+
 ## Guides
 
 - **[Fresh deployment on Supabase + Vercel](DEPLOYMENT.md)**

@@ -13,8 +13,17 @@
   document.dispatchEvent(new CustomEvent('covison-server-status',{detail:{reachable:online}}));
  }
  window.covisonConnection={check,get reachable(){return reachable;}};
- document.querySelector('[data-check-server]')?.addEventListener('click',check);
+ const button=document.querySelector('[data-check-server]');
+ const onVisible=()=>{if(!document.hidden)check();};
+ button?.addEventListener('click',check);
  window.addEventListener('online',check);window.addEventListener('offline',check);
- document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
- setInterval(()=>{if(!document.hidden)check();},20000);check();
+ document.addEventListener('visibilitychange',onVisible);
+ const timer=setInterval(()=>{if(!document.hidden)check();},20000);check();
+ /* The page is swapped in place now, so stop polling and detach when it is left. */
+ window.covison?.page?.leave(()=>{
+  sequence++;clearInterval(timer);
+  window.removeEventListener('online',check);window.removeEventListener('offline',check);
+  document.removeEventListener('visibilitychange',onVisible);
+  delete window.covisonConnection;
+ });
 })();
