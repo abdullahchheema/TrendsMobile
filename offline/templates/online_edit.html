@@ -1,0 +1,30 @@
+{% extends 'base.html' %}{% load static %}{% block content %}
+<div class="page-head"><div><small>{{ product.group }}</small><h1>{{ product.name }}</h1><p><span class="badge {% if status == 'Published' %}ok{% elif status == 'Needs photo' %}warn{% endif %}">{{ status }}</span> {% if product.slug %}· website handle <code>{{ product.slug }}</code>{% endif %}</p></div><a href="{% url 'online_store' %}">All products</a></div>
+<div class="online-grid">
+<div class="online-main">
+<section class="panel" id="online-media" data-upload="{% url 'online_photo_upload' product.pk %}" data-order="{% url 'online_photo_order' product.pk %}" data-update="{% url 'online_photo_update' product.pk %}" data-delete="{% url 'online_photo_delete' product.pk %}" data-max="{{ max_photos }}" data-max-mb="{{ max_mb }}">
+<h2 style="margin-top:0">Photos</h2>
+<p class="muted">The first photo is the cover shown in lists. Drag photos to reorder them. JPG, PNG or WebP, up to {{ max_mb }} MB each, {{ max_photos }} photos at most. Large photos are resized automatically.</p>
+<div class="media-drop" id="media-drop" tabindex="0" role="button" aria-label="Add photos"><strong>Add photos</strong><span>Drop photos here, or click to choose them</span><input type="file" id="media-input" accept="image/jpeg,image/png,image/webp" multiple hidden></div>
+<ul class="media-grid" id="media-grid" aria-label="Product photos"></ul>
+<p class="error" id="media-error" role="alert"></p>
+</section>
+<form method="post" class="panel">{% csrf_token %}
+<h2 style="margin-top:0">Description</h2>
+<div class="field"><label for="description">What customers read on the website</label><textarea id="description" name="description" rows="7" maxlength="5000" placeholder="Condition, what is in the box, warranty, anything a buyer should know.">{{ product.description }}</textarea></div>
+<h2>Price</h2>
+<div class="form-grid"><div class="field"><label>Shop price (what the shop sells it for)</label><p class="static-value">{% if info.low is None %}—{% elif info.low == info.high %}PKR {{ info.low|floatformat:"0g" }}{% else %}PKR {{ info.low|floatformat:"0g" }} – {{ info.high|floatformat:"0g" }}{% endif %}</p><small class="muted">Set when the stock is bought, and used by the POS. Not changed here.</small></div>
+<div class="field"><label for="online_price">Online price (PKR)</label><input id="online_price" name="online_price" type="number" min="0.01" step="0.01" inputmode="decimal" value="{% if product.online_price %}{{ product.online_price|stringformat:'.2f' }}{% endif %}" placeholder="Same as the shop price"><small class="muted">Leave empty to use the shop price. {% if product.serialized %}A single phone can have its own online price in its record.{% endif %}</small></div></div>
+<h2>Visibility</h2>
+<label class="check"><input type="checkbox" name="online_visible" {% if product.online_visible %}checked{% endif %}> Show this product on the website</label>
+<p class="muted">It needs at least one photo and a price. The website shows the live stock of every shop, and hides the product when nothing is left.</p>
+<div class="form-actions"><button class="primary" type="submit">Save</button></div>
+</form>
+</div>
+<aside class="online-side">
+<section class="panel"><h2 style="margin-top:0">Stock now</h2><p><strong>{{ info.stock|floatformat:"-0" }}</strong> available across all shops</p>
+{% if units %}<table><thead><tr><th>Shop</th><th>Condition</th><th class="num">Shop price</th></tr></thead><tbody>{% for d in units %}<tr><td>{{ d.branch.name }}</td><td>{{ d.condition }}</td><td class="num">{{ d.asking_price|floatformat:"0g" }}{% if d.online_price %}<small class="muted"> · online {{ d.online_price|floatformat:"0g" }}</small>{% endif %}</td></tr>{% endfor %}</tbody></table>{% endif %}</section>
+</aside>
+</div>
+<script type="application/json" id="online-images">{{ images|safe }}</script>
+{% endblock %}{% block scripts %}<script src="{% static 'online.js' %}" defer></script>{% endblock %}

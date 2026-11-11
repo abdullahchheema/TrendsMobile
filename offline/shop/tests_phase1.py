@@ -68,7 +68,7 @@ class ProductGuard(TestCase):
         p=Product.objects.create(code='NEW',name='Cable',stock_item=True);p.stock_item=False;p.full_clean()
     def test_tracking_is_locked_after_the_product_has_stock_history(self):
         StockMovement.objects.create(document=s.new_doc('Stock Entry',self.branch),product=self.product,warehouse=self.warehouse,quantity=1,value=1,posting_date=timezone.localdate())
-        self.product.serialized=False;self.product.stock_item=True
+        self.product.serialized=False;self.product.selling_price=100;self.product.stock_item=True
         with self.assertRaisesMessage(ValidationError,'cannot be changed'):self.product.full_clean()
 
 

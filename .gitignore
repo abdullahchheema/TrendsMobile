@@ -61,3 +61,4 @@ node_modules
 # VitePress
 **/.vitepress/dist
 **/.vitepress/cache
+offline/product_images_local/

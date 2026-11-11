@@ -32,7 +32,7 @@ def sections(form):
         ('Invoice discount and sales tax',['invoice_discount_type','invoice_discount_value','sales_tax_rule']),
         ('Phone details',['device_type','pta_status','manufacturer_serial','regional_version','market_description','imei_1','pta_status_1','verified_on_1','evidence_1','imei_2','pta_status_2','verified_on_2','evidence_2','pta_notes']),
         ('Condition and inspection',['condition','grade','inspection_status','inspection_date','battery_checked','battery',*DETAIL_CHOICES,'repair_history','included_accessories','inspection_notes','faults']),
-        ('Prices and checking warranty',['asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms']),
+        ('Prices and checking warranty',['asking_price','online_price','minimum_price','wholesale_price','warranty_days','warranty_terms']),
         ('Claim and notes',['device','claim_status','resolution','notes'])]
     if getattr(form,'kind',None)=='Stock Entry':groups=[('Source, destination and date',['branch','posting_date','warehouse','target_warehouse']),('Transfer reason',['notes'])]
     result=[];seen=set()
@@ -46,15 +46,21 @@ def sections(form):
 class DeviceForm(forms.ModelForm):
     class Meta:
         model=Device
-        fields=['device_type','pta_status','condition','grade','inspection_status','inspection_date','battery_checked','battery','asking_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
+        fields=['device_type','pta_status','condition','grade','inspection_status','inspection_date','battery_checked','battery','asking_price','online_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
         widgets={'inspection_date':DATE}
+        labels={'asking_price':'Shop price (PKR)','online_price':'Online price (PKR, optional)'}
     def __init__(self,*args,user,**kwargs):
         super().__init__(*args,**kwargs)
         if not costs(user):
             for key in ('minimum_price','wholesale_price'):self.fields.pop(key)
         for key in DETAIL_FIELDS:self.fields[key]=detail_field(key,self.instance.details.get(key,''))
         self.fields['pta_status'].choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA')]
+        self.fields['online_price'].help_text='Leave empty to use the product online price, then the shop price.'
         self.sections=sections(self)
+    def clean_asking_price(self):
+        value=self.cleaned_data['asking_price']
+        if value is None or value<=0:raise forms.ValidationError('Enter the shop selling price: every phone needs one.')
+        return value
 
 class DocumentForm(forms.ModelForm):
     class Meta:

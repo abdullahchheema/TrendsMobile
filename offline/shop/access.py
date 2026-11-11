@@ -92,6 +92,7 @@ def menu_for(user,visible,path=''):
     inventory+=[('Accessories',r('accessories')),('Stock in All Shops',r('stock_everywhere')),('IMEI Management',r('imei_lookup')),('Stock Adjustments',r('stock_adjust'))]
     sections.append(('Inventory','stock',coll('Mobile Device'),inventory))
     sections.append(('Purchases','buy',r('bulk_purchase'),[('Buy Phones (one or many)',r('bulk_purchase')),('Buy Accessories',r('accessory_buy')),('Purchase History',coll('Purchase Invoice'))]))
+    if owner:sections.append(('Online Store','sell-pos',r('online_dashboard'),[('Online Dashboard',r('online_dashboard')),('Products & Photos',r('online_store')),('Published on Website',r('online_store')+'?show=Published'),('Needs a Photo',r('online_store')+'?show=Needs%20photo')]))
     if owner:sections.append(('Stock Transfers','exchanges',r('stock_transfer'),[('All Transfers',r('stock_transfer')),('Pending Transfers',r('stock_transfer')+'?state=Open'),('Transfer History',r('stock_transfer')+'?state=Received')]))
     sections.append(('Customers','customers-suppliers',coll('Customer'),[('Customer Directory',coll('Customer')),('Customer Dues & Advances',r('customer_dues')),('Customer Payment History',r('customer_payments'))]))
     sections.append(('Suppliers','buy',coll('Supplier'),[('Supplier Directory',coll('Supplier')),('Supplier Dues & Advances',r('supplier_dues')),('Supplier Payment History',r('supplier_payments'))]))

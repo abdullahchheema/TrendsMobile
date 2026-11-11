@@ -1,0 +1,36 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Online Dashboard</h1><p>What the website is selling right now, from the live stock of every shop. Orders and online sales will appear here once the website sends orders to the ERP.</p></div><a class="button primary" href="{% url 'online_store' %}">Products &amp; Photos</a></div>
+
+<div class="statement-cards">
+  <div class="panel"><h2>Live products</h2><strong>{{ live }}</strong><small>Published on the website</small></div>
+  <div class="panel"><h2>Units for sale online</h2><strong>{{ totals.units|floatformat:"-0" }}</strong><small>Across all shops</small></div>
+  <div class="panel"><h2>Online stock value</h2><strong>PKR {{ totals.value|floatformat:"0g" }}</strong><small>At the online prices</small></div>
+  <div class="panel"><h2>Stock cost</h2><strong>PKR {{ totals.cost|floatformat:"0g" }}</strong><small>What it was bought for</small></div>
+  <div class="panel"><h2>Expected margin</h2><strong>PKR {{ totals.margin|floatformat:"0g" }}</strong><small>If all of it sells at the online price</small></div>
+</div>
+
+{% if out_of_stock or low_stock or below_cost or hidden_total %}
+<section class="panel"><h2 style="margin-top:0">Needs your attention</h2><ul class="attention">
+{% if out_of_stock %}<li><strong>{{ out_of_stock|length }}</strong> published product{{ out_of_stock|length|pluralize }} out of stock — customers see nothing to buy: {% for r in out_of_stock|slice:":5" %}<a href="{% url 'online_edit' r.p.pk %}">{{ r.p.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</li>{% endif %}
+{% if low_stock %}<li><strong>{{ low_stock|length }}</strong> product{{ low_stock|length|pluralize }} with 2 or fewer left: {% for r in low_stock|slice:":5" %}<a href="{% url 'online_edit' r.p.pk %}">{{ r.p.name }} ({{ r.units|floatformat:"-0" }})</a>{% if not forloop.last %}, {% endif %}{% endfor %}</li>{% endif %}
+{% if below_cost %}<li><strong>{{ below_cost|length }}</strong> phone{{ below_cost|length|pluralize }} listed at or below the price they were bought for — check the online price: {% for r in below_cost|slice:":5" %}<a href="{% url 'online_edit' r.device.product_id %}">{{ r.device.product.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</li>{% endif %}
+{% if hidden_total %}<li><strong>{{ hidden_total }}</strong> phone{{ hidden_total|pluralize }} in stock {% if hidden_total == 1 %}is{% else %}are{% endif %} not on the website yet ({{ no_photo }} of the top {{ hidden|length }} products still need a photo). See the list below.</li>{% endif %}
+</ul></section>{% endif %}
+
+<div class="online-dash-grid">
+<section class="panel table-scroll"><h2 style="margin-top:0">Online stock by shop</h2><table><thead><tr><th>Shop</th><th class="num">Units</th><th class="num">Online value</th><th class="num">Cost</th></tr></thead><tbody>
+{% for s in shops %}<tr><td>{{ s.shop }}</td><td class="num">{{ s.units|floatformat:"-0" }}</td><td class="num">{{ s.value|floatformat:"0g" }}</td><td class="num">{{ s.cost|floatformat:"0g" }}</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">No shops.</td></tr>{% endfor %}</tbody></table></section>
+
+<section class="panel table-scroll"><h2 style="margin-top:0">Biggest products online</h2><table><thead><tr><th>Product</th><th class="num">Units</th><th class="num">Online value</th></tr></thead><tbody>
+{% for r in top %}<tr><td><a href="{% url 'online_edit' r.p.pk %}">{{ r.p.name }}</a></td><td class="num">{{ r.units|floatformat:"-0" }}</td><td class="num">{{ r.value|floatformat:"0g" }}</td></tr>{% empty %}<tr><td colspan="3" class="empty-state">Nothing is published yet. Open Products &amp; Photos, add a photo and publish a product.</td></tr>{% endfor %}</tbody></table></section>
+</div>
+
+<section class="panel table-scroll"><h2 style="margin-top:0">Online price different from the shop price</h2><table><thead><tr><th>Product</th><th class="num">Online price</th></tr></thead><tbody>
+{% for r in gaps %}<tr><td><a href="{% url 'online_edit' r.p.pk %}">{{ r.p.name }}</a></td><td class="num">{% if r.low == r.high %}{{ r.low|floatformat:"0g" }}{% else %}{{ r.low|floatformat:"0g" }} – {{ r.high|floatformat:"0g" }}{% endif %}</td></tr>{% empty %}<tr><td colspan="2" class="empty-state">Every published product uses its shop price.</td></tr>{% endfor %}</tbody></table></section>
+
+<section class="panel table-scroll"><h2 style="margin-top:0">Slow online stock (30+ days in stock)</h2><table><thead><tr><th>Phone</th><th>Shop</th><th class="num">Days</th><th class="num">Online price</th></tr></thead><tbody>
+{% for r in slow %}<tr><td><a href="{% url 'online_edit' r.device.product_id %}">{{ r.device.product.name }}</a></td><td>{{ r.device.branch.name }}</td><td class="num">{{ r.days }}</td><td class="num">{{ r.price|floatformat:"0g" }}</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Nothing has been sitting for 30 days or more.</td></tr>{% endfor %}</tbody></table></section>
+
+<section class="panel table-scroll"><h2 style="margin-top:0">In stock but not on the website</h2><table><thead><tr><th>Product</th><th class="num">Units</th><th class="num">Shop price</th><th>Photos</th></tr></thead><tbody>
+{% for h in hidden %}<tr><td><a href="{% url 'online_edit' h.pk %}">{{ h.name }}</a></td><td class="num">{{ h.units }}</td><td class="num">{{ h.price|floatformat:"0g" }}</td><td>{% if h.photos %}{{ h.photos }}{% else %}<span class="badge warn">Needs photo</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">Everything in stock is on the website.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

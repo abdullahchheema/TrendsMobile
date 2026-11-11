@@ -136,13 +136,32 @@ class Product(Record):
     selling_price=models.DecimalField(max_digits=18,decimal_places=2,default=0)
     barcodes=models.JSONField(default=list,blank=True)
     enabled=models.BooleanField(default=True)
+    # Online store: the website shows a product only when it is published here; the price is optional (blank = the shop price).
+    online_visible=models.BooleanField(default=False)
+    online_price=models.DecimalField(max_digits=18,decimal_places=2,null=True,blank=True,help_text='Price on the website. Leave empty to use the shop price.')
+    description=models.TextField(blank=True)
+    slug=models.SlugField(max_length=200,unique=True,null=True,blank=True)
     def clean(self):
+        if not self.serialized and self.stock_item and self.selling_price<=0:raise ValidationError('Enter the selling price: every item needs one.')
+        if self.online_price is not None and self.online_price<=0:raise ValidationError('The online price must be more than zero, or empty to use the shop price.')
         if self.serialized and (not self.stock_item or not self.model_id or not self.storage):raise ValidationError('Phone variants require a model, storage and stock tracking.')
         if self.selling_price<0:raise ValidationError('Selling price cannot be negative.')
         before=Product.objects.filter(pk=self.pk).values('serialized','stock_item').first()
         if before and (before['serialized']!=self.serialized or before['stock_item']!=self.stock_item) and (StockMovement.objects.filter(product_id=self.pk).exists() or Line.objects.filter(product_id=self.pk).exists()):
             raise ValidationError('Stock tracking cannot be changed once this product has been bought or sold. Create a new product instead.')
     def __str__(self):return self.name if self.name==self.code else f'{self.name} ({self.code})'
+
+class ProductImage(models.Model):
+    """A photo of a product for the online store. Position 0 is the cover. Files live in a public storage bucket; `url` is what the website shows."""
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    product=models.ForeignKey(Product,on_delete=models.CASCADE,related_name='images')
+    path=models.CharField(max_length=300)
+    url=models.CharField(max_length=600)
+    alt=models.CharField(max_length=200,blank=True)
+    position=models.PositiveIntegerField(default=0)
+    size=models.PositiveIntegerField(default=0)
+    created=models.DateTimeField(default=timezone.now,editable=False)
+    class Meta:ordering=['position','created']
 
 class Device(Record):
     branch=models.ForeignKey(Branch,on_delete=models.PROTECT)
@@ -159,6 +178,7 @@ class Device(Record):
     battery=models.PositiveSmallIntegerField(default=0)
     purchase_cost=models.DecimalField(max_digits=18,decimal_places=2,default=0)
     asking_price=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    online_price=models.DecimalField(max_digits=18,decimal_places=2,null=True,blank=True,help_text='Price on the website for this phone. Leave empty to use the product online price, then the shop price.')
     minimum_price=models.DecimalField(max_digits=18,decimal_places=2,default=0)
     wholesale_price=models.DecimalField(max_digits=18,decimal_places=2,default=0)
     warranty_days=models.PositiveIntegerField(default=0)
