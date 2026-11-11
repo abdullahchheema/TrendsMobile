@@ -101,7 +101,7 @@ class OwnerChoosesTheShop(PosBase):
         self.login(self.a)
         for name,args in (('easy_entry',['purchase']),('bulk_purchase',[]),('stock_adjust',[])):self.assertNotContains(self.client.get(reverse(name,args=args)),'Which shop?')
     def test_a_purchase_by_the_owner_lands_in_the_chosen_shop(self):
-        self.login(self.user);post=self.client.post(reverse('easy_entry',args=['purchase']),dict(branch=str(self.other.pk),request_key='00000000-0000-4000-8000-0000000000aa',party_name='Owner Supplier',brand='Oppo',model='A5',storage='64GB',colour='Blue',quantity='1',price='20000',pta_status='PTA',device_type='Used',condition='Good',payment_status='unpaid',posting_date=str(self.today),imeis=imei(7100)))
+        self.login(self.user);post=self.client.post(reverse('easy_entry',args=['purchase']),dict(branch=str(self.other.pk),request_key='00000000-0000-4000-8000-0000000000aa',party_name='Owner Supplier',brand='Oppo',model='A5',storage='64GB',colour='Blue',quantity='1',price='20000',asking_price='25000',pta_status='PTA',device_type='Used',condition='Good',payment_status='unpaid',posting_date=str(self.today),imeis=imei(7100)))
         self.assertEqual(post.status_code,302);device=Device.objects.get(imeis__number=imei(7100));self.assertEqual((device.branch_id,device.warehouse.branch_id),(self.other.pk,self.other.pk))
     def test_a_single_shop_owner_is_not_asked(self):
         Branch.objects.filter(pk=self.other.pk).update(enabled=False);self.login(self.user);self.assertNotContains(self.client.get(reverse('easy_entry',args=['purchase'])),'Which shop?')
@@ -134,7 +134,7 @@ class SimpleSaleAndReceipt(PosBase):
         for text in ('Payment received','Amount received','Add another payment method','Leave the amount empty for a sale on credit'):self.assertIn(text,html,text)
         for text in ('Discount, tax and credit terms','payment_reference','Manager PIN','Settlement PKR','PTA status'):self.assertNotIn(text,html,text)
         js=self.client.get('/static/pos.js').content.decode() if False else open('static/pos.js',encoding='utf8').read()
-        self.assertIn('Choose warranty',js);self.assertNotIn('PTA status',js);self.assertNotIn('pta_status',js)
+        self.assertIn('Choose warranty',js);self.assertNotIn('Choose PTA',js)      # the cart never asks for PTA; the card and preview only display it
     def test_the_chosen_warranty_is_saved_on_the_phone_and_noted_on_the_sale(self):
         device,result=self.sale('90');self.assertEqual(result.status_code,200,result.content);sale=Document.objects.get(pk=result.json()['id'])
         device.refresh_from_db();self.assertEqual(device.warranty_days,90);self.assertEqual(sale.data['warranty'],[dict(phone=device.product.name,device=device.code,days=90)])
@@ -146,9 +146,9 @@ class SimpleSaleAndReceipt(PosBase):
         device,result=self.sale('90');page=self.client.get(result.json()['receipt']);html=page.content.decode();number=device.imeis.get().number
         for text in ('<h1>'+self.branch.name+'</h1>','Pos Customer','0300 1234567','IMEI '+number,'Warranty: 3 months (until','Total','Paid','Balance due','35000.00','25000.00','Received by Cash','Thank you'):self.assertIn(text,html,text)
         for text in ('Stock ref','Battery','Disclosed faults','Settlement','Rate PKR','Net sales before tax','No tax added','Sold by'):self.assertNotIn(text,html,text)
-    def test_receipt_says_no_warranty_when_none_was_given_and_paid_in_full_has_no_balance_line(self):
+    def test_receipt_shows_no_warranty_line_when_none_was_given_and_paid_in_full_has_no_balance_line(self):
         self.fund();device=self.stock();self.login(self.a);data=self.payload(device);data['items'][0].pop('pta_status',None);data['items'][0]['warranty_days']='0'
-        html=self.client.get(self.checkout(data).json()['receipt']).content.decode();self.assertIn('No warranty',html);self.assertNotIn('Balance due',html);self.assertIn('Paid',html)
+        html=self.client.get(self.checkout(data).json()['receipt']).content.decode();self.assertNotIn('No warranty',html);self.assertNotIn('Balance due',html);self.assertIn('Paid',html)
 
 
 class OtherShopsStock(PosBase):

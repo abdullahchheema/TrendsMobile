@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% load static %}{% block content %}
+<div class="page-head"><div><h1>Buy accessories</h1><p>Shop: <strong>{{ branch.name }}</strong> {% if user.is_superuser %}· <a href="{{ request.path }}">Change shop</a>{% endif %} · covers, protectors, chargers, adapters, headphones, AirPods… All prices in PKR.</p></div><a href="{% url 'accessories' %}?branch={{ branch.pk }}">Accessory stock</a></div>
+<form method="post" class="panel" data-accessories>{% csrf_token %}{{ form.request_key }}{{ form.branch }}{{ form.rows_json }}{{ form.non_field_errors }}
+<h2 style="margin-top:0">1. Supplier</h2>
+<div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_head %}</div>
+<h2>2. Items</h2>
+<p class="muted">One line per item. Type a new name to add a new accessory, or choose an existing one. Every item needs what it costs you and the price you will sell it at (the cashier can still change it at the sale).</p>
+<div class="table-scroll"><table class="acc-table"><thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Cost each</th><th>Selling price</th><th></th></tr></thead><tbody data-acc-rows></tbody></table></div>
+<div class="actions bulk-actions"><button type="button" class="primary" data-acc-add>+ Add item</button></div>
+<p data-status class="muted" role="status"></p>
+<section class="easy-total" aria-live="polite"><strong>Total: <span data-total>PKR 0.00</span></strong><span data-count></span></section>
+<h2>3. Payment</h2>
+<div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_tail %}</div>
+<p data-pay-hint class="muted" role="status"></p>
+<div class="form-actions"><button class="primary easy-save" type="submit">Save purchase &amp; add stock</button></div>
+</form>
+<datalist id="acc-names">{% for n in names %}<option value="{{ n.name }}">{% endfor %}</datalist>
+{{ balances|json_script:'pay-balances' }}{{ names|json_script:'acc-known' }}{{ categories|json_script:'acc-categories' }}
+{% endblock %}{% block scripts %}<script src="{% static 'accessories.js' %}" defer></script>{% endblock %}

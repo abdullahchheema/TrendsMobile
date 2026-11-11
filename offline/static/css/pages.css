@@ -180,3 +180,27 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 @media(max-width:1000px){.bulk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.bulk-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bulk-grid>.bf:nth-child(-n+2),.bf-imei,.bf-price{grid-column:1/-1}.bulk-card-actions button{min-height:40px}.bf input,.bf select{min-height:44px}}
 @media(max-width:650px){.trend th,.trend td{padding:8px 4px;font-size:12px}.trend td{min-width:0}.trend td:first-child,.trend th:first-child{padding-left:0}}
+
+/* Buy many phones: price step */
+.bulk-sameprice{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);margin:var(--s2) 0}.bulk-sameprice input{width:160px}
+.bulk-prices{width:100%;border-collapse:collapse;margin-top:var(--s2)}.bulk-prices td{padding:6px 8px;border-top:1px solid var(--line-2);vertical-align:top}.bulk-prices td:first-child{width:62%}.bulk-prices input{width:100%;min-width:0}
+@media(max-width:520px){.bulk-prices td:first-child{width:50%}}
+
+/* POS: bigger catalogue, card with an eye, clearer cart rows */
+.pos-terminal{grid-template-columns:minmax(0,2.4fr) minmax(360px,1fr)}
+.pos-cards{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));max-height:calc(100vh - 230px);min-height:420px}
+.pos-card{position:relative;padding:0;gap:0;cursor:default}
+.pos-cards .pos-card-pick{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:var(--s2);padding:var(--s3);padding-right:44px;cursor:pointer;width:100%;min-height:max-content;border-radius:inherit}
+.pos-cards .pos-card-pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.pos-card-pick:disabled{opacity:.5;cursor:not-allowed}
+.pos-cards .pos-eye{position:absolute;top:8px;right:8px;width:34px;height:34px;min-height:0;padding:0;display:grid;place-items:center;border-radius:999px;background:var(--surface-3);border:1px solid var(--line-2);color:var(--ink-2);cursor:pointer}
+.pos-cards .pos-eye:hover{color:var(--accent-text);border-color:var(--accent)}
+.pos-preview{max-width:min(520px,94vw);width:100%}.pos-facts{display:grid;grid-template-columns:max-content 1fr;gap:6px var(--s4);margin:var(--s3) 0 0}.pos-facts dt{color:var(--ink-3);font-size:13px}.pos-facts dd{margin:0;overflow-wrap:anywhere}
+.cart-controls input.cart-rate{width:150px;flex:1 1 150px}.cart-controls input.cart-qty{width:80px}.cart-qty-static{font-size:13px;color:var(--ink-3);padding:0 var(--s2)}
+.cart-discount{display:block;color:var(--accent-text);margin-top:4px}.cart-warn{display:block;margin-top:4px;padding:6px 8px;border-radius:8px;background:rgba(229,161,74,.12);color:#e5a14a;line-height:1.35}
+.pos-discount{display:grid;gap:var(--s2);margin-top:var(--s3)}.pos-discount label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--ink-3)}.pos-discount-row{display:flex;gap:var(--s2)}.pos-discount-row select{width:84px}.pos-discount-row input{flex:1;min-width:0}
+@media(max-width:1000px){.pos-terminal{grid-template-columns:1fr}}
+
+/* Accessories */
+.acc-table input,.acc-table select{width:100%;min-width:0}.acc-table td{padding:6px 8px;vertical-align:top}.acc-table td:first-child{min-width:220px}
+@media(max-width:700px){.acc-table{min-width:640px}}
+.acc-table select{min-width:150px}

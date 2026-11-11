@@ -50,15 +50,16 @@ class NoStaffNoWarehouse(Base):
             for text in ('Bought by','Money handled by','Keep old phones at','Selling price (each)','Receiving stock location'):self.assertNotIn(text,page,(name,text))
     def test_a_shop_login_buys_and_sells_without_choosing_anyone(self):
         self.login(self.shop_a)
-        post=self.client.post(reverse('easy_entry',args=['purchase']),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000a1',party_name='Seller One',brand='Samsung',model='A54',storage='128GB',colour='Black',quantity='1',price='40000',pta_status='PTA',device_type='Used',condition='Good',payment_status='unpaid',posting_date=str(self.today),imeis=imei(801)))
+        post=self.client.post(reverse('easy_entry',args=['purchase']),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000a1',party_name='Seller One',brand='Samsung',model='A54',storage='128GB',colour='Black',quantity='1',price='40000',asking_price='55000',pta_status='PTA',device_type='Used',condition='Good',payment_status='unpaid',posting_date=str(self.today),imeis=imei(801)))
         self.assertEqual(post.status_code,302,getattr(post,'context',None) and post.context['form'].errors)
         device=Device.objects.get(imeis__number=imei(801));me=Staff.objects.get(user=self.shop_a)
-        self.assertEqual((device.asking_price,device.branch_id,device.warehouse.branch_id),(0,self.branch.pk,self.branch.pk));self.assertEqual(Document.objects.filter(kind='Purchase Receipt',buyer=me).count(),1)
+        self.assertEqual((device.asking_price,device.branch_id,device.warehouse.branch_id),(55000,self.branch.pk,self.branch.pk));self.assertEqual(Document.objects.filter(kind='Purchase Receipt',buyer=me).count(),1)
         sale=self.client.post(reverse('easy_entry',args=['sale']),dict(branch=str(self.branch.pk),request_key='00000000-0000-4000-8000-0000000000a2',party_name='Buyer One',phone=str(device.pk),pta_status='PTA',price='55000',payment_status='unpaid',posting_date=str(self.today)))
         self.assertEqual(sale.status_code,302);self.assertEqual(Document.objects.get(kind='Sales Invoice').seller_id,me.pk)
-    def test_bulk_rows_need_no_selling_price(self):
-        rows=bulk.parse_rows(json.dumps([dict(brand='Samsung',model='A54',storage='128GB',colour='Black',quantity=1,condition='Good',device_type='Used',grade='',pta_status='PTA',cost='40000',cost_mode='each',imeis=imei(802),notes='')]))
-        self.assertEqual(rows[0]['asking'],0)
+    def test_bulk_rows_need_a_selling_price(self):
+        row=dict(brand='Samsung',model='A54',storage='128GB',colour='Black',quantity=1,condition='Good',device_type='Used',grade='',pta_status='PTA',cost='40000',cost_mode='each',imeis=imei(802),notes='')
+        with self.assertRaisesMessage(ValidationError,'selling price'):bulk.parse_rows(json.dumps([row]))
+        self.assertEqual(bulk.parse_rows(json.dumps([dict(row,asking_price='55000')]))[0]['asking'],55000)
     def test_pos_lists_a_phone_without_a_price_so_the_cashier_types_it(self):
         self.login(self.shop_a)
         data=dict(branch=self.branch,party_name='P',brand='Oppo',model='A5',storage='64GB',colour='Blue',variant=catalog_entry.check(dict(brand='Oppo',model='A5',storage='64GB',colour='Blue')),quantity=1,price=Decimal('20000'),pta_status='PTA',device_type='Used',condition='Good',

@@ -68,3 +68,5 @@ html.shell-seen .sidebar *{animation:none}
 /* Page-to-page progress line (Turbo) */
 .turbo-progress-bar{height:3px;background:var(--accent,#6aa7ff);z-index:1000}
 .app-main:focus{outline:none}
+/* slimmer footer */
+.app-footer{bottom:var(--s2);font-size:11.5px;border-radius:10px}.foot-credit img{width:14px;height:14px}.foot-credit{gap:6px}

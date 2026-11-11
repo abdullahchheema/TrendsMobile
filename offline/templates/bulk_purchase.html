@@ -4,20 +4,27 @@
 <h2 style="margin-top:0">1. Supplier</h2>
 <div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_head %}</div>
 <h2>2. Phones</h2>
-<p class="muted bulk-help">One card per phone. Fill the details, then scan its IMEI. Press <strong>Enter</strong> after the scan to go to the next phone. Use <strong>Copy</strong> to add another phone with the same details.</p>
-<fieldset class="bulk-price-mode"><legend>How is the price given?</legend>
-  <label><input type="radio" name="price_mode" value="each" {% if form.price_mode.value != 'bulk' %}checked{% endif %}> Each phone has its own price</label>
-  <label><input type="radio" name="price_mode" value="bulk" {% if form.price_mode.value == 'bulk' %}checked{% endif %}> One price for all the phones</label>
-  <div class="field bulk-total-field" data-bulk-total{% if form.price_mode.value != 'bulk' %} hidden{% endif %}><label for="id_bulk_total">Total price for all phones (PKR)</label>{{ form.bulk_total }}<small class="muted" data-share></small>{{ form.bulk_total.errors }}</div>
-</fieldset>
+<p class="muted bulk-help">One card per phone: details and IMEI only. Prices come in step 3. Fill the details, then scan its IMEI. Press <strong>Enter</strong> after the scan to go to the next phone. Use <strong>Copy</strong> to add another phone with the same details.</p>
+
 <div data-rows class="phone-cards"></div>
 <div class="actions bulk-actions"><button type="button" class="primary" data-add>+ Add phone</button></div>
 <p data-status class="muted" role="status"></p>
+<h2>3. Price</h2>
+<fieldset class="bulk-price-mode"><legend>How is the price given?</legend>
+  <label><input type="radio" name="price_mode" value="each" {% if form.price_mode.value != 'bulk' %}checked{% endif %}> Each phone has its own price</label>
+  <label><input type="radio" name="price_mode" value="bulk" {% if form.price_mode.value == 'bulk' %}checked{% endif %}> One price for all the phones (shared equally)</label>
+  <div data-price-each{% if form.price_mode.value == 'bulk' %} hidden{% endif %}>
+    <div class="bulk-sameprice"><label for="bulk-same">Same price for every phone</label><input id="bulk-same" data-same type="number" inputmode="decimal" min="0" step="0.01" placeholder="PKR"><button type="button" data-apply-same>Fill all</button></div>
+    <table class="bulk-prices"><tbody data-price-rows></tbody></table>
+  </div>
+  <div class="field bulk-total-field" data-bulk-total{% if form.price_mode.value != 'bulk' %} hidden{% endif %}><label for="id_bulk_total">Total price for all phones (PKR)</label>{{ form.bulk_total }}<small class="muted" data-share></small>{{ form.bulk_total.errors }}</div>
+</fieldset>
 <section class="easy-total" aria-live="polite"><strong>Total: <span data-total>PKR 0.00</span></strong><span data-count></span></section>
-<h2>3. Payment</h2>
+<h2>4. Payment</h2>
 <div class="form-grid">{% include 'form_fields.html' with fields=form.visible_fields_tail %}</div>
+<p data-pay-hint class="muted" role="status"></p>
 <p class="muted">Saving creates the stock receipt, the supplier bill and the payment together. Each phone keeps its own buying price, so profit per phone is exact.</p>
 <div class="form-actions"><button class="primary easy-save" type="submit">Save purchase &amp; add stock</button></div>
 </form>
-<datalist id="phone-brands">{% for b in catalog.brands %}<option value="{{ b }}">{% endfor %}</datalist><datalist id="phone-colours">{% for c in catalog.colours %}<option value="{{ c }}">{% endfor %}</datalist>{{ catalog|json_script:'phone-catalog' }}{{ products|json_script:"bulk-products" }}{{ conditions|json_script:"bulk-conditions" }}{{ types|json_script:"bulk-types" }}
+<datalist id="phone-brands">{% for b in catalog.brands %}<option value="{{ b }}">{% endfor %}</datalist><datalist id="phone-colours">{% for c in catalog.colours %}<option value="{{ c }}">{% endfor %}</datalist>{{ catalog|json_script:'phone-catalog' }}{{ products|json_script:"bulk-products" }}{{ balances|json_script:'pay-balances' }}{{ conditions|json_script:"bulk-conditions" }}{{ types|json_script:"bulk-types" }}
 {% endblock %}{% block scripts %}<script src="{% static 'phone_entry.js' %}"></script><script src="{% static 'bulk.js' %}" defer></script>{% endblock %}

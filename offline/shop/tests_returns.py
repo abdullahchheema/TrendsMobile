@@ -190,7 +190,7 @@ class AccessoryReturns(TestCase):
         Line.objects.create(document=sale,product=self.item,warehouse=self.warehouse,quantity=2,rate=500)
         sale=s.checkout(sale,self.user,[dict(mode='Cash',amount='1000')],self.handler)
         self.client.force_login(self.user)
-        self.assertContains(self.client.get(reverse('collection',args=['Sales Invoice'])),sale.code)
+        self.assertContains(self.client.get(reverse('collection',args=['Sales Invoice'])),self.customer.name)
         credit=self.credit(sale);self.assertEqual(credit.reference,sale);self.assertEqual(credit.total,-500)
 
 

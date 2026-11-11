@@ -43,6 +43,7 @@ class EasyEntryForm(forms.Form):
         self.fields['pta_status']=forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA approved'),('Non-PTA','Non-PTA')],initial=phone.pta_status if phone and phone.pta_status in ('PTA','Non-PTA') else '')
         self.fields['price']=forms.DecimalField(label='Selling price (PKR)' if kind=='sale' else 'Buying price per phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2,initial=(phone.asking_price or None) if phone else None)
         if kind=='purchase':
+            self.fields['asking_price']=forms.DecimalField(label='Selling price per phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2,help_text='The price this phone is listed at. The cashier can still change it at the sale.')
             self.fields['device_type']=forms.ChoiceField(label='Phone type',choices=[(x,x) for x in ('Used','New','Refurbished')],initial='Used')
             self.fields['condition']=forms.ChoiceField(label='Condition',choices=[(x,x) for x in ('Good','Excellent','Very Good','Fair','For Parts')],initial='Good')
             self.fields['phone_notes']=forms.CharField(label='Notes about the phone (optional)',required=False,max_length=400,widget=forms.Textarea(attrs={'rows':2,'placeholder':'e.g. battery changed, display replaced, back glass cracked'}))
@@ -69,7 +70,7 @@ class EasyEntryForm(forms.Form):
         shop=shopdefaults.ensure(branch);self.shop_defaults=dict(staff=shopdefaults.person(user,branch),handler=shopdefaults.person(user,branch),warehouse=shop['warehouse'])
         for name,default in self.shop_defaults.items():       # nobody is asked who handled it or which warehouse: the shop fills these in
             if name in self.fields:self.fields[name].widget=forms.HiddenInput();self.fields[name].required=False;self.fields[name].initial=default.pk
-        self.main_fields=[self[name] for name in ('party_name','find_imei','phone','brand','model','storage','colour','quantity','imeis','pta_status','device_type','condition','phone_notes','price') if name in self.fields]
+        self.main_fields=[self[name] for name in ('party_name','find_imei','phone','brand','model','storage','colour','quantity','imeis','pta_status','device_type','condition','phone_notes','price','asking_price') if name in self.fields]
         self.payment_fields=[self[name] for name in ('payment_status','amount_paid','method','due_date','instalments') if name in self.fields]
         self.extra_fields=[self[name] for name in ('staff','handler','posting_date','warehouse','override_approver','override_pin','notes') if name in self.fields]
 

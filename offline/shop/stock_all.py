@@ -20,6 +20,6 @@ def stock_everywhere(request):
     rows=[]
     for r in devices.values('branch_id','branch__name','product__name','product__storage','product__colour','condition').annotate(n=Count('pk')).order_by('product__name','product__storage','branch__name'):
         contact=contacts.get(r['branch_id'])
-        rows.append(dict(shop=r['branch__name'],mine=r['branch_id'] in mine and not request.user.is_superuser,name=r['product__name'],storage=r['product__storage'],colour=r['product__colour'],condition=r['condition'],count=r['n'],phone=contact.shop_phone if contact else '',address=contact.shop_address if contact else ''))
+        rows.append(dict(shop_id=r['branch_id'],shop=r['branch__name'],mine=r['branch_id'] in mine and not request.user.is_superuser,name=r['product__name'],storage=r['product__storage'],colour=r['product__colour'],condition=r['condition'],count=r['n'],phone=contact.shop_phone if contact else '',address=contact.shop_address if contact else ''))
     shops=Branch.objects.filter(enabled=True).order_by('name')
     return render(request,'stock_everywhere.html',dict(title='Stock in All Shops',rows=rows,q=q,shop=shop,all_shops=shops,total=sum(r['count'] for r in rows)))

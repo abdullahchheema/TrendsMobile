@@ -65,3 +65,7 @@ label>input[type=checkbox],label>input[type=radio]{flex:none;margin:0;display:in
 
 /* the tick box must stay box-sized inside .field (inputs are otherwise full width) */
 .field label>input[type=checkbox],.field label>input[type=radio],label>input[type=checkbox],label>input[type=radio]{width:18px;min-width:18px;height:18px;min-height:0;padding:0;flex:none;margin:0}
+
+/* amount in words */
+.words-line{display:block;margin-top:2px;font-size:12px;line-height:1.3;color:var(--ink-3)}.words-line[hidden]{display:none}
+.in-words{flex-direction:column;align-items:flex-start;gap:2px}.in-words strong{font-weight:500;font-size:.9em}

@@ -1,4 +1,4 @@
-{% load static %}<!doctype html><html lang="en"><head><meta name="turbo-visit-control" content="reload"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ doc.code }} · Receipt</title><link rel="stylesheet" href="{% static 'offline.css' %}"><link rel="stylesheet" href="{% static 'receipt.css' %}"></head>
+{% load static %}{% load covison_tags %}<!doctype html><html lang="en"><head><meta name="turbo-visit-control" content="reload"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ doc.code }} · Receipt</title><link rel="stylesheet" href="{% static 'offline.css' %}"><link rel="stylesheet" href="{% static 'receipt.css' %}"></head>
 <body class="receipt receipt-{{ receipt_format }}"><nav class="receipt-toolbar"><a href="?paper=58">58 mm layout</a> · <a href="?paper=thermal">80 mm layout</a> · <a href="?paper=a4">A4 layout</a> · <button data-print>Print receipt</button></nav>
 <main class="easy-receipt">
   <h1>{{ doc.branch.name }}</h1>
@@ -9,12 +9,13 @@
     {% for line in lines %}<div class="item">
       <div class="item-main"><strong>{{ line.product.name }}{% if line.quantity != 1 %} × {{ line.quantity|floatformat:"-3" }}{% endif %}</strong><span class="price">{{ line.receipt_amount }}</span></div>
       {% if line.device_id %}{% for i in line.device.imeis.all %}<div class="item-sub">IMEI {{ i.number }}</div>{% endfor %}{% endif %}
-      {% if line.product.serialized and not doc.is_return %}<div class="item-sub warranty">{{ line.receipt_warranty }}</div>{% endif %}
+      {% if line.product.serialized and not doc.is_return and line.receipt_warranty %}<div class="item-sub warranty">{{ line.receipt_warranty }}</div>{% endif %}
     </div>{% endfor %}
   </div>
   {% if show_pricing %}{% include 'pricing_totals.html' %}{% endif %}
   <div class="sum">
     <div><span>Total</span><strong>{{ doc.currency }} {{ doc.total }}</strong></div>
+    <div class="in-words"><span>In words</span><strong>{{ doc.total|words }}</strong></div>
     {% if not doc.is_return %}<div><span>Paid</span><strong>{{ doc.currency }} {{ paid }}</strong></div>{% if doc.outstanding > 0 %}<div class="due"><span>Balance due</span><strong>{{ doc.currency }} {{ doc.outstanding }}</strong></div>{% endif %}{% endif %}
   </div>
   {% for p in payments %}<p class="paid-line">{% if p.direction == 'Pay' %}Refunded{% else %}Received{% endif %} by {{ p.mode }}: {{ doc.currency }} {{ p.amount }}</p>{% endfor %}

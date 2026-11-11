@@ -7,12 +7,23 @@ from . import access,catalog_entry,services as s,customer_names
 
 
 def paid_amount(data,total):
-    mode=data['payment_status']
-    if mode=='full':paid=total
-    elif mode=='unpaid':paid=s.ZERO
-    elif mode=='part':paid=s.payment_money(data.get('amount_paid') or 0)
+    """How much is paid now. The choice and the typed amount must agree: nothing is guessed when they do not."""
+    from .words import amount_in_words
+    mode=data['payment_status'];typed=data.get('amount_paid')
+    typed=s.payment_money(typed) if typed not in (None,'') else None
+    if typed is not None and typed<0:raise ValidationError('The amount paid cannot be negative.')
+    if mode=='full':
+        if typed not in (None,s.ZERO) and typed!=total:raise ValidationError(f'You chose “Paid in full” (PKR {total:,.2f}) but typed PKR {typed:,.2f}. Choose “Part payment” to pay a different amount, or clear the amount.')
+        paid=total
+    elif mode=='unpaid':
+        if typed:raise ValidationError(f'You chose “Pay later” but typed PKR {typed:,.2f}. Choose “Part payment” to pay that amount now, or clear the amount.')
+        paid=s.ZERO
+    elif mode=='part':
+        paid=typed if typed is not None else s.ZERO
+        if paid>total:raise ValidationError(f'You cannot pay PKR {paid:,.2f} ({amount_in_words(paid)}) against a total of only PKR {total:,.2f}. The most you can pay is PKR {total:,.2f}.')
+        if paid<=0 or paid==total:raise ValidationError('A part payment must be more than zero and less than the total. Use “Paid in full” to pay all of it.')
     else:raise ValidationError('Choose how much has been paid.')
-    if paid<0 or paid>total or (mode=='part' and not 0<paid<total):raise ValidationError('A part payment must be greater than zero and less than the total.')
+    if paid<0 or paid>total:raise ValidationError(f'The amount paid (PKR {paid:,.2f}) must be between 0 and the total (PKR {total:,.2f}).')
     return paid
 
 
@@ -53,7 +64,7 @@ def purchase(data,user,demo_batch=''):
     if data['pta_status'] not in ('PTA','Non-PTA'):raise ValidationError('Choose PTA or Non-PTA.')
     receipt=s.new_doc('Purchase Receipt',branch,supplier=supplier,warehouse=data['warehouse'],buyer=data['staff'],posting_date=data['posting_date'],demo_batch=demo_batch,
         notes=data.get('notes',''),data={'device':dict(pta_status=data['pta_status'],device_type=data['device_type'],condition=data['condition'],inspection_status='Passed',inspection_date=str(data['posting_date']),asking_price=str(asking),line_imeis=data.get('imeis') or [],**({'details':dict(condition_notes=catalog_entry.tidy(data['phone_notes']))} if catalog_entry.tidy(data.get('phone_notes')) else {}))})
-    for _ in range(qty):Line.objects.create(document=receipt,product=product,warehouse=data['warehouse'],quantity=1,rate=cost)
+    Line.objects.bulk_create([Line(document=receipt,product=product,warehouse=data['warehouse'],quantity=1,rate=cost) for _ in range(qty)])
     receipt=s.submit(receipt,user);bill=s.supplier_bill(receipt,user);bill.posting_date=data['posting_date'];bill.data['easy_entry']={'kind':'purchase','quantity':qty};bill.save();bill=s.submit(bill,user)
     paid=paid_amount(data,bill.total)
     if paid:

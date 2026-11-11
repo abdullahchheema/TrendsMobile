@@ -160,9 +160,8 @@ def new_doc(kind,branch,**values):
     return Document.objects.create(kind=kind,branch=branch,code=code({'Sales Invoice':'SALE','POS Invoice':'POS','Purchase Receipt':'RECEIPT','Purchase Invoice':'BILL','Payment Entry':'PAY','Journal Entry':'JOURNAL','Stock Adjustment':'ADJ','Voucher':'VCH','Purchase Return':'PRET'}.get(kind,'COV')),**values)
 
 def copy_lines(source,target):
-    for line in source.lines.all():
-        Line.objects.create(document=target,product=line.product,device=line.device,warehouse=line.warehouse,
-            quantity=line.quantity,rate=line.rate,cost=line.cost,snapshot=line.snapshot)
+    Line.objects.bulk_create([Line(document=target,product_id=line.product_id,device_id=line.device_id,warehouse_id=line.warehouse_id,
+        quantity=line.quantity,rate=line.rate,cost=line.cost,snapshot=line.snapshot) for line in source.lines.all()])
 
 def stock(doc,line,qty,cost,warehouse=None):
     place=warehouse or line.warehouse or doc.warehouse
@@ -200,6 +199,20 @@ def update_imeis(device,values,user):
         if value.get('evidence'):obj.evidence=value['evidence']
         obj.full_clean();obj.save()
 
+def _imei_rows(device,values,user):
+    """The IMEI records for one new phone, checked like update_imeis (format, check digit, two different numbers, slot order) but built in memory."""
+    numbers=[str(v.get('number','')).strip() for v in values if v.get('number')]
+    if len(numbers)!=len(set(numbers)):raise ValidationError('IMEI 1 and IMEI 2 must differ.')
+    if numbers and not values[0].get('number'):raise ValidationError('Enter IMEI 1 before IMEI 2.')
+    rows=[]
+    for slot,value in enumerate(values,1):
+        number=str(value.get('number','')).strip()
+        if not number:continue
+        row=IMEI(number=number,device=device,slot=slot,pta_status=value.get('pta_status','Not Checked'),verified_on=value.get('verified_on') or None)
+        row.verified_by=user.get_username() if row.pta_status!='Not Checked' else ''
+        row.clean_fields(exclude=['device','evidence']);row.clean();rows.append(row)
+    return rows
+
 def _receive(doc):
     assigned(doc,'buyer','can_buy')
     if not doc.supplier or doc.supplier.kind!='Supplier':raise ValidationError('Select a supplier.')
@@ -213,8 +226,10 @@ def _receive(doc):
             incoming=doc.lines.filter(product_id=product_id).aggregate(q=Sum('quantity'))['q'] or ZERO
             if received+incoming>ordered:raise ValidationError('Receipt quantity exceeds the remaining purchase order quantity.')
     total=ZERO;phone_index=0
-    for line in doc.lines.select_related('product').order_by('product_id','pk'):
-        Product.objects.select_for_update().get(pk=line.product_id)
+    lines=list(doc.lines.select_related('product','warehouse').order_by('product_id','pk'))
+    locked=set();devices=[];imeis=[];moves=[];changed=[];places={}
+    for line in lines:
+        if line.product_id not in locked:Product.objects.select_for_update().get(pk=line.product_id);locked.add(line.product_id)      # one lock per model, not per phone
         if line.quantity<=0 or line.rate<0:raise ValidationError('Purchase quantities must be positive and rates cannot be negative.')
         if line.product.serialized:
             if line.quantity!=1:raise ValidationError('Receive one physical phone per line.')
@@ -222,7 +237,8 @@ def _receive(doc):
             attrs=doc.data.get('device',{})
             per_line=attrs.get('line_attrs') or []
             if phone_index<len(per_line):attrs=dict(attrs,**per_line[phone_index])      # bulk purchases give each phone its own condition, grade, price
-            device=Device(code=code('PHONE'),branch=doc.branch,product=line.product,warehouse=line.warehouse or doc.warehouse,status='Holding' if attrs.get('holding') else 'Available',
+            place=line.warehouse or doc.warehouse
+            device=Device(code=code('PHONE'),branch=doc.branch,product=line.product,warehouse=place,status='Holding' if attrs.get('holding') else 'Available',
                 purchase_cost=line.rate,received_on=doc.posting_date,demo_batch=doc.demo_batch,
                 device_type=attrs.get('device_type','Used'),condition=attrs.get('condition','Not Inspected'),
                 pta_status=attrs.get('pta_status','Not recorded'),grade=attrs.get('grade') or None,
@@ -233,10 +249,23 @@ def _receive(doc):
                 warranty_terms=attrs.get('warranty_terms',''),faults=attrs.get('faults',''),details=attrs.get('details',{}))
             per_phone=attrs.get('line_imeis') or []
             numbers=[{'number':n} for n in per_phone[phone_index]] if phone_index<len(per_phone) else attrs.get('imeis',[{},{}]);phone_index+=1
-            device.full_clean();device.save();update_imeis(device,numbers,doc.posted_by)
-            line.device=device;line.cost=line.rate;line.save()
-        if line.product.stock_item:stock(doc,line,line.quantity,line.rate)
+            # same checks as a normal save, without a database round trip per phone (the shop, model and place are objects we already hold)
+            device.full_clean(exclude=['branch','product','warehouse','customer','sale'],validate_unique=False)
+            if place and place.branch_id!=device.branch_id:raise ValidationError('Phone warehouse belongs to another shop.')
+            devices.append(device);imeis.extend(_imei_rows(device,numbers,doc.posted_by))
+            line.device=device;line.cost=line.rate;changed.append(line)
+        if line.product.stock_item:
+            place=line.warehouse or doc.warehouse
+            if not place or not place.enabled:raise ValidationError('Select an active warehouse.')
+            if place.pk not in places:
+                if place.branch_id!=doc.branch_id:raise ValidationError('Warehouse belongs to another shop.')
+                places[place.pk]=place
+            moves.append(StockMovement(document=doc,posting_date=doc.posting_date,product=line.product,device=line.device,warehouse=place,quantity=line.quantity,value=money(line.quantity*line.rate)))
         total+=money(line.quantity*line.rate)
+    if imeis and IMEI.objects.filter(number__in=[row.number for row in imeis]).exists():raise ValidationError('IMEI is already registered to another device.')
+    Device.objects.bulk_create(devices);IMEI.objects.bulk_create(imeis)
+    if changed:Line.objects.bulk_update(changed,['device','cost'])
+    StockMovement.objects.bulk_create(moves)
     doc.total=total
     entry(doc,'inventory',debit=total);entry(doc,'stock_received',credit=total)
 
@@ -244,7 +273,7 @@ def _adjust(doc):
     """Stock write-off / count correction. Line quantity is the signed change (negative = stock leaves).
     Phones can only be written off one exact device at a time; accessories take the change at the location's average
     cost (a write-off of the last units takes the exact remaining value so no rounding residue is left behind).
-    Ledger: write-offs Dr expense / Cr inventory, gains Dr inventory / Cr expense — always balanced."""
+    Ledger: write-offs Dr expense / Cr inventory, gains Dr inventory / Cr cost of goods sold — always balanced."""
     if doc.data.get('reason') not in ADJUST_REASONS:raise ValidationError('Choose a reason for the stock adjustment.')
     if not doc.lines.exists():raise ValidationError('Add at least one stock line.')
     loss=gain=ZERO;seen=set()
@@ -276,7 +305,7 @@ def _adjust(doc):
         if value<0:loss+=-value
         else:gain+=value
     if loss:entry(doc,'expense',debit=loss);entry(doc,'inventory',credit=loss)
-    if gain:entry(doc,'inventory',debit=gain);entry(doc,'expense',credit=gain)
+    if gain:entry(doc,'inventory',debit=gain);entry(doc,'cogs',credit=gain)      # a stock gain lowers the cost of goods sold; it must never show up as a negative expense
     doc.total=loss+gain;doc.data['loss']=str(loss);doc.data['gain']=str(gain)
 
 def quantity_signed(value):
@@ -442,7 +471,7 @@ def _payment(doc):
         if invoice.is_return and direction=='Pay' and invoice.reference_id:
             original=Document.objects.select_for_update().get(pk=invoice.reference_id)
             if original.outstanding>0:raise ValidationError('Apply return credit to the unpaid original invoice before issuing a refund.')
-        if amount>abs(invoice.outstanding):raise ValidationError('Payment exceeds invoice outstanding. Record an advance separately.')
+        if amount>abs(invoice.outstanding):raise ValidationError(f'Payment exceeds invoice outstanding: you entered PKR {amount:,.2f} but only PKR {abs(invoice.outstanding):,.2f} is still due on this bill. Enter {abs(invoice.outstanding):,.2f} or less (an advance is recorded separately).')
         reduce=(party.kind=='Customer' and direction=='Receive') or (party.kind=='Supplier' and direction=='Pay')
         if (invoice.outstanding>0)!=reduce:raise ValidationError('Payment direction does not match the invoice or refund balance.')
         invoice.outstanding+=-amount if reduce else amount;invoice.save(update_fields=['outstanding','modified'])

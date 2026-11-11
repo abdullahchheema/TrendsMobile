@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% load covison_tags %}{% block content %}
+<div class="page-head"><div><h1>Return saved</h1><p>{{ doc.customer.name }} · {{ doc.code }} · {{ doc.posting_date|date:'j M Y' }} · {{ doc.branch.name }}</p></div><span class="badge">Done</span></div>
+<section class="panel"><div class="statement-cards"><article><h3>Value of the return</h3><strong>PKR {{ value|floatformat:'2g' }}</strong><small class="muted">{{ value|words }}</small></article>
+<article><h3>Taken off what the customer owed</h3><strong>PKR {{ flow.applied_to_balance|default:'0'|floatformat:'2g' }}</strong></article>
+<article><h3>Refunded now</h3><strong>PKR {{ flow.refunded|default:'0'|floatformat:'2g' }}</strong></article>
+<article><h3>Credit left on the customer’s account</h3><strong>PKR {{ left|floatformat:'2g' }}</strong></article></div>
+<div class="table-scroll"><table><thead><tr><th>Item</th><th>Quantity</th><th class="num">Credited each (PKR)</th></tr></thead><tbody>{% for line in lines %}<tr><td>{{ line.product.name }}{% if line.device %}<small>{{ line.device.code }} — now in Holding for inspection</small>{% endif %}</td><td>{{ line.quantity|floatformat:'-3' }}</td><td class="num">{{ line.rate|floatformat:'2g' }}</td></tr>{% endfor %}</tbody></table></div>
+<p class="muted">Reason: {{ flow.reason }} · Condition: {{ flow.condition }}</p>
+<div class="actions">{% if exchange %}<a class="button primary" href="{% url 'pos' %}?branch={{ doc.branch_id }}&amp;credit={{ doc.pk }}">Sell the replacement (credit PKR {{ left|floatformat:'2g' }} is used automatically)</a>{% elif left %}<a class="button" href="{% url 'pos' %}?branch={{ doc.branch_id }}&amp;credit={{ doc.pk }}">Use the credit on a new sale</a>{% endif %}<a class="button" href="{% url 'detail' doc.pk %}">Full record</a><a class="button" href="{% url 'returns' %}?branch={{ doc.branch_id }}">Another return</a></div></section>
+{% endblock %}

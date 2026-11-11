@@ -29,12 +29,18 @@
       </div>
       <datalist id="pos-customer-suggestions"></datalist>
       <input type="hidden" name="seller" value="{{ me.pk }}"><input type="hidden" name="handler" value="{{ me.pk }}">
+      {% if credit_doc %}<p class="notice pos-credit" id="pos-credit" data-credit-doc="{{ credit_doc.pk }}" data-credit="{{ credit_amount }}">Exchange for <strong>{{ credit_doc.customer.name }}</strong>: return credit of <strong>PKR {{ credit_amount }}</strong> ({{ credit_doc.code }}) will be used automatically on this sale.</p>{% endif %}
       <p class="muted" id="pos-from" hidden></p><div id="cart-items" class="pos-cart"></div>
       <p class="muted pos-empty" id="pos-empty">Tap a phone on the left, or scan its IMEI, to add it.</p>
-      <input type="hidden" name="discount_type" value="amount"><input type="hidden" name="discount_value" value="0"><input type="hidden" name="tax_rule" value=""><input type="hidden" name="credit_due" value=""><input type="hidden" name="credit_instalments" value="0"><input type="hidden" name="override_approver" value=""><input type="hidden" name="override_pin" value="">
+      <input type="hidden" name="tax_rule" value=""><input type="hidden" name="credit_due" value=""><input type="hidden" name="credit_instalments" value="0"><input type="hidden" name="override_approver" value=""><input type="hidden" name="override_pin" value="">
+      <div class="pos-discount" data-pos-discount>
+        <label>Discount<span class="pos-discount-row"><select name="discount_type" aria-label="Discount type"><option value="amount">PKR</option><option value="percent">%</option></select><input name="discount_value" type="number" min="0" step="0.01" value="0" inputmode="decimal" aria-label="Discount"></span></label>
+        <label>Or set the final total<input id="pos-final" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Total agreed with the customer" aria-label="Final total"></label>
+      </div>
       <div class="pos-totals">
         <p id="cart-breakdown" aria-live="polite" class="muted"></p>
         <div class="pos-total-row"><span>Total payable</span><strong id="cart-total">PKR 0.00</strong></div>
+        <p class="muted words-line" id="cart-words" aria-live="polite"></p>
         <div class="pos-total-row"><span>Received</span><strong id="pos-received">PKR 0.00</strong></div>
         <div class="pos-total-row remaining"><span>Remaining balance</span><strong id="pos-remaining">PKR 0.00</strong></div>
       </div>
@@ -48,5 +54,6 @@
     </div>
   </aside>
 </div></div>
+<dialog id="pos-preview" class="pos-preview" aria-label="Item details"><div class="dialog-body" id="pos-preview-body"></div><div class="dialog-actions"><button type="button" data-preview-close>Close</button><button type="button" class="primary" data-preview-add>Add to sale</button></div></dialog>
 {{ items|json_script:'pos-data' }}{{ tax_rules|json_script:'pos-tax-rules' }}{{ customers|json_script:'pos-customers' }}
 {% endblock %}{% block scripts %}<script src="{% static 'connection.js' %}" defer></script><script src="{% static 'pricing.js' %}" defer></script><script src="{% static 'pos.js' %}" defer></script>{% endblock %}

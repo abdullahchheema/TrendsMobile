@@ -85,12 +85,13 @@ def menu_for(user,visible,path=''):
     sections=[('Dashboard','home',r('dashboard'),[])]
     if owner:
         sections.append(('Shops','shops',r('setup'),[('All Shops',r('setup')),('Shop Accounts',r('users')),('Branch Information',r('settings'))]))
-    sections.append(('POS','sell-pos',r('pos'),[('New Sale',r('pos')),('Sales History',coll('Sales Invoice'))]))
+    sections.append(('Sales','sell-pos',r('pos'),[('New Sale',r('pos')),('Sales History',coll('Sales Invoice')),('Customer Dues',r('customer_dues'))]))
+    sections.append(('Returns & Exchanges','exchanges',r('returns'),[('New Return / Exchange',r('returns')),('Return History',r('return_history')),('Exchange History',coll('Mobile Exchange'))]))
     inventory=[('All Shops Inventory' if owner else 'My Shop Inventory',coll('Mobile Device'))]
     inventory.append(('Product and Model Management',coll('Item')) if owner else ('Add Stock',r('easy_entry',args=['purchase'])))
-    inventory+=[('Stock in All Shops',r('stock_everywhere')),('IMEI Management',r('imei_lookup')),('Stock Adjustments',r('stock_adjust'))]
+    inventory+=[('Accessories',r('accessories')),('Stock in All Shops',r('stock_everywhere')),('IMEI Management',r('imei_lookup')),('Stock Adjustments',r('stock_adjust'))]
     sections.append(('Inventory','stock',coll('Mobile Device'),inventory))
-    sections.append(('Purchases','buy',r('easy_entry',args=['purchase']),[('New Purchase',r('easy_entry',args=['purchase'])),('Bulk Purchase',r('bulk_purchase')),('Purchase History',coll('Purchase Invoice')),('Supplier Records' if owner else 'Suppliers',coll('Supplier'))]))
+    sections.append(('Purchases','buy',r('easy_entry',args=['purchase']),[('New Purchase',r('easy_entry',args=['purchase'])),('Bulk Purchase',r('bulk_purchase')),('Buy Accessories',r('accessory_buy')),('Purchase History',coll('Purchase Invoice')),('Supplier Records' if owner else 'Suppliers',coll('Supplier'))]))
     if owner:sections.append(('Stock Transfers','exchanges',r('stock_transfer'),[('All Transfers',r('stock_transfer')),('Pending Transfers',r('stock_transfer')+'?state=Open'),('Transfer History',r('stock_transfer')+'?state=Received')]))
     sections.append(('Customers','customers-suppliers',coll('Customer'),[('Customer Directory',coll('Customer')),('Customer Outstanding Balances' if owner else 'Customer Dues',r('customer_dues')),('Customer Payment History',coll('Payment Entry'))]))
     sections.append(('Suppliers','buy',coll('Supplier'),[('Supplier Directory',coll('Supplier')),('Supplier Outstanding Balances' if owner else 'Supplier Dues',r('supplier_dues')),('Supplier Payment History',coll('Payment Entry'))]))
@@ -129,5 +130,6 @@ def navigation(request):
         from .report_catalog import label as _label
         quick=[dict(name=n,label=_label(n)) for n in ('Daily Sales','Profit and Loss Statement','Expense Report','Mobile Inventory','Accounts Receivable','Accounts Payable','Branch Comparison') if n in visible]
         company=branches(request.user).exclude(company='').values_list('company',flat=True).first() or ''
-        return dict(menu=menu_for(request.user,visible,request.get_full_path()),owner_company=company,navigation=sections,reports=visible,report_navigation=[dict(name=name,label=label(name)) for name in visible],quick_reports=quick,staff_report_navigation=[dict(name=name,label=label(name)) for name in visible if name.startswith('Staff ')],can_costs=can_costs,can_buy=can_buy,can_statements=can_statements,can_audit=permissions.can(request.user,'view_audit'),can_accounting=permissions.can(request.user,'accounting'),can_roles=request.user.is_superuser or permissions.can(request.user,'manage_roles'),can_sell=can_sell,is_manager=is_manager,can_fund_transfers=is_manager or person.can_handle_payments,shops=branches(request.user))
+        who=dict(who_name=request.user.get_full_name().strip() or request.user.get_username(),who_shop=('Admin' if request.user.is_superuser else (person.branch.name if person is not None else '')))
+        return dict(**who,menu=menu_for(request.user,visible,request.get_full_path()),owner_company=company,navigation=sections,reports=visible,report_navigation=[dict(name=name,label=label(name)) for name in visible],quick_reports=quick,staff_report_navigation=[dict(name=name,label=label(name)) for name in visible if name.startswith('Staff ')],can_costs=can_costs,can_buy=can_buy,can_statements=can_statements,can_audit=permissions.can(request.user,'view_audit'),can_accounting=permissions.can(request.user,'accounting'),can_roles=request.user.is_superuser or permissions.can(request.user,'manage_roles'),can_sell=can_sell,is_manager=is_manager,can_fund_transfers=is_manager or person.can_handle_payments,shops=branches(request.user))
     except PermissionDenied:return {}

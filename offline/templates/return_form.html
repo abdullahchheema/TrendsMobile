@@ -1,4 +1,4 @@
-{% if doc.status == 'Submitted' and can_checkout %}<details class="panel"><summary>Return, refund or exchange</summary>
+{% if doc.status == 'Submitted' and can_checkout %}<section class="panel"><h2 style="margin-top:0">Return, refund or exchange</h2><p>Take items back, refund or credit the customer, or exchange for something else, all in one guided screen.</p><a class="button primary" href="{% url 'return_sale' doc.pk %}">Return or exchange items from this sale</a></section><details class="panel"><summary>Advanced: raw return draft (for accountants)</summary>
 <div class="actions" style="margin:0 0 var(--s3)"><a class="button" href="{% url 'exchange' %}?branch={{ doc.branch_id }}&amp;customer={{ doc.customer.name|urlencode }}">Exchange for another phone</a><a class="button" href="{% url 'pos' %}?branch={{ doc.branch_id }}&amp;customer={{ doc.customer.name|urlencode }}">Sell a replacement to this customer</a></div>
 {% if return_warning %}<p class="notice">{{ return_warning }}</p>{% else %}
 <p><button type="button" data-select-returns>Select every phone on this invoice</button></p>

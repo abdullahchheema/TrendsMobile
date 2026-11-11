@@ -16,7 +16,7 @@
 <meta name="turbo-cache-control" content="no-cache">
 <script src="{% static 'vendor/turbo-8.0.13.js' %}" data-turbo-track="reload" defer></script>
 <script src="{% static 'page.js' %}" data-turbo-track="reload" defer></script>
-<script src="{% static 'offline.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'payments.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'shell.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'ui.js' %}" data-turbo-track="reload" defer></script>
+<script src="{% static 'offline.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'payments.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'shell.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'ui.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'words.js' %}" data-turbo-track="reload" defer></script>
 </head>
 <body class="app">
 <a class="skip-link" href="#content">Skip to content</a>
@@ -40,7 +40,7 @@
 {% firstof branch.pk request.GET.branch as qs %}
 <header class="app-header">
   <button class="sidebar-toggle" type="button" data-menu-toggle aria-controls="main-navigation" aria-expanded="false" aria-label="Open menu"><svg class="ico" width="20" height="20"><use href="#i-menu"/></svg></button>
-  <div class="welcome"><span>Welcome</span><strong>{{ user.get_full_name|default:user.get_username }}</strong></div>
+  <div class="welcome"><span>Welcome{% if who_shop %} · {{ who_shop }}{% endif %}</span><strong>{{ who_name|default:user.get_username }}</strong></div>
   <div class="header-end">
     <button type="button" class="header-search" data-open-search aria-label="Search phones, customers and documents"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Search IMEI, customer, invoice…</span><kbd>Ctrl K</kbd></button>
     <span class="tag">Pakistan · PKR</span>

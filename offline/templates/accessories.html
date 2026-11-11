@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Accessories</h1><p>Shop: <strong>{{ branch.name }}</strong> {% if user.is_superuser %}· <a href="{% url 'accessories' %}">Change shop</a>{% endif %} · covers, protectors, chargers, adapters, headphones, AirPods and the like. Counted by quantity.</p></div>
+{% if can_buy %}<a class="button primary" href="{% url 'accessory_buy' %}?branch={{ branch.pk }}">Buy accessories</a>{% endif %}</div>
+<form method="get" class="search-bar"><input type="hidden" name="branch" value="{{ branch.pk }}"><input type="search" name="search" placeholder="Search accessories" value="{{ search }}"><button>Search</button></form>
+<div class="panel table-scroll"><table><thead><tr><th>Item</th><th>Category</th><th class="num">Selling price</th><th class="num">In stock</th>{% if see_cost %}<th class="num">Cost each (average)</th>{% endif %}<th></th></tr></thead><tbody>
+{% for row in rows %}<tr><td>{{ row.product.name }}{% if not row.product.enabled %} <span class="badge">Not for sale</span>{% endif %}</td><td>{{ row.product.group }}</td><td class="num">PKR {{ row.product.selling_price|floatformat:'2g' }}</td><td class="num">{{ row.quantity|floatformat:'-3' }}{% if row.low %} <span class="badge warn">Low</span>{% endif %}</td>{% if see_cost %}<td class="num">{% if row.average %}PKR {{ row.average|floatformat:'2g' }}{% else %}—{% endif %}</td>{% endif %}<td>{% if can_buy %}<a href="{% url 'accessory_edit' row.product.pk %}?branch={{ branch.pk }}">Edit</a>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">No accessories yet. Use “Buy accessories” to add the first ones with their selling prices.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

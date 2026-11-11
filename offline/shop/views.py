@@ -115,9 +115,9 @@ def collection(request,kind):
     if kind in OWNER_ONLY_RECORDS and not request.user.is_superuser:raise PermissionDenied('Only the owner can open this list.')
     if kind=='Mobile Shop Settings':return redirect('settings')
     if kind=='Mobile Device':
-        objects=scoped_devices(request.user).select_related('product','warehouse').prefetch_related('imeis').order_by('code')
-        rows=[dict(id=d.pk,code=d.code,name=d.product.name,state=d.status,amount=d.asking_price,party=d.branch.name) for d in objects]
-    elif kind in MASTER_MODELS:
+        from . import inventory
+        return inventory.listing(request)
+    if kind in MASTER_MODELS:
         model=MASTER_MODELS[kind][0];objects=model.objects.all()
         if kind in ('Customer','Supplier'):objects=access.scoped_parties(request.user).filter(kind=kind)
         if kind in ('Mobile Staff','Warehouse','Till'):objects=objects.filter(branch__in=access.branches(request.user))
@@ -507,7 +507,11 @@ def shop_settings(request):
     obj,_=ShopSettings.objects.get_or_create(branch=branch)
     Form=forms.modelform_factory(ShopSettings,fields=['shop_phone','shop_address','receipt_terms','urdu_receipt_note','ageing_days'])
     form=Form(request.POST or None,instance=obj)
-    if request.method=='POST' and form.is_valid():form.save();messages.success(request,'Shop settings saved.');return redirect(reverse('settings')+'?branch='+str(branch.pk))
+    form.fields={'shop_name':forms.CharField(label='Shop name (shown at the top of every page and on receipts)',max_length=180,initial=branch.name,required=False),**form.fields}
+    if request.method=='POST' and form.is_valid():
+        new_name=form.cleaned_data['shop_name'].strip()
+        if new_name and new_name!=branch.name:branch.name=new_name;branch.save(update_fields=['name'])
+        form.save();messages.success(request,'Shop settings saved.');return redirect(reverse('settings')+'?branch='+str(branch.pk))
     return render(request,'form.html',dict(title='Shop Settings',form=form,master=True,settings_branch=branch,settings_shops=access.branches(request.user)))
 
 @login_required
@@ -548,7 +552,7 @@ WARRANTY_LABELS={7:'7 days',15:'15 days',30:'1 month',90:'3 months',180:'6 month
 def warranty_text(days,sold_on):
     """'Warranty: 3 months (until 10 Feb 2027)' or 'No warranty' for a receipt line."""
     days=int(days or 0)
-    if days<=0:return 'No warranty'
+    if days<=0:return ''
     until=sold_on+timedelta(days=days)
     return f'Warranty: {WARRANTY_LABELS.get(days,str(days)+" days")} (until {until:%d %b %Y})'
 
@@ -593,16 +597,20 @@ def pos(request):
         return render(request,'empty.html',{'title':'Point of Sale setup','text':'This shop needs its payment and posting accounts configured by an administrator before POS can start.'})
     places=configured;branch=places[0]
     items=[]
+    see_cost=access.costs(request.user)
     for d in scoped_devices(request.user).filter(branch__in=places,status='Available',warehouse__isnull=False).select_related('product__model','warehouse','branch').prefetch_related('imeis'):
         imeis=[i.number for i in d.imeis.all()]
         items.append(dict(product=str(d.product_id),device=str(d.pk),warehouse=str(d.warehouse_id),branch=str(d.branch_id),shop=d.branch.name,code=d.code,
             name=d.product.name,rate=str(d.asking_price),stock=1,pta_status=d.pta_status,barcode=' '.join([d.code]+imeis),barcodes=[d.code]+imeis,imeis=imeis,serialized=True,
-            model=(d.product.model.name if d.product.model_id else d.product.name),brand=(d.product.model.brand if d.product.model_id else d.product.brand) or '',storage=d.product.storage,colour=d.product.colour,condition=d.condition,grade=d.grade))
+            model=(d.product.model.name if d.product.model_id else d.product.name),brand=(d.product.model.brand if d.product.model_id else d.product.brand) or '',storage=d.product.storage,colour=d.product.colour,condition=d.condition,grade=d.grade,
+            kind=d.device_type,battery=(d.battery if d.battery_checked and d.battery else None),received=d.received_on.strftime('%d %b %Y'),notes=(d.details or {}).get('condition_notes',''),
+            cost=(str(d.purchase_cost) if see_cost else None)))
     for place in places:
         warehouse=shopdefaults.warehouse(place)
         for p in Product.objects.filter(enabled=True,serialized=False):
             qty,_=services.on_hand(p,warehouse)
-            if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),branch=str(place.pk),shop=place.name,code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False))
+            if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),branch=str(place.pk),shop=place.name,code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False,brand=p.brand,model=p.name,storage='',colour=p.colour,condition='',kind='Accessory',category=p.group,
+                cost=(str(services.on_hand(p,warehouse)[1]/qty) if see_cost and qty>0 else None),notes=''))
     shift=services.active_shift(branch,request.user) if not all_shops else None
     if all_shops:
         seen={};[seen.setdefault(p.name.casefold(),dict(name=p.name,phone=p.phone)) for p in access.scoped_parties(request.user).filter(kind='Customer',enabled=True).order_by('name')[:3000]]
@@ -612,7 +620,10 @@ def pos(request):
     for place in places:
         for name,account in ShopSettings.objects.get(branch=place).payment_methods.items():methods.setdefault(name,account)
     stale_shift=bool(shift and shift.posting_date!=timezone.localdate())
-    return render(request,'pos.html',dict(title='New Sale',items=items,customers=customers,stale_shift=stale_shift,prefill=request.GET.get('customer',''),add_device=request.GET.get('phone',''),all_shops=all_shops,
+    credit_doc=None
+    if request.GET.get('credit') and not all_shops:
+        credit_doc=scoped(request.user).filter(pk=request.GET['credit'],is_return=True,kind__in=services.SELL,status='Submitted',branch=branch,outstanding__lt=0).select_related('customer').first()
+    return render(request,'pos.html',dict(title='New Sale',items=items,credit_doc=credit_doc,credit_amount=(-credit_doc.outstanding if credit_doc else 0),customers=customers,stale_shift=stale_shift,prefill=(credit_doc.customer.name if credit_doc else request.GET.get('customer','')),add_device=request.GET.get('phone',''),all_shops=all_shops,
         me=shopdefaults.person(request.user,branch),cash_modes=services.cash_modes(branch),
         branch=branch,methods=methods,request_key=uuid.uuid4(),tax_rules=pricing.rules(branch),
         shift=shift,reconciliation=services.till_balance(shift) if shift else None))
@@ -660,6 +671,10 @@ def pos_checkout(request):
                     quantity=services.quantity(row['quantity']),rate=services.money(row['rate']))
             doc.save()
             sale=services.checkout(doc,request.user,data.get('payments',[]),handler)
+            if data.get('credit_doc') and sale.outstanding>0:       # exchange: the customer's return credit pays for what is still due
+                from . import returns
+                returns.apply_to_sale(get_object_or_404(scoped(request.user),pk=data['credit_doc'],is_return=True),sale,request.user)
+                sale.refresh_from_db()
             terms=data.get('credit') or {}
             if sale.outstanding>0 and terms.get('due_date'):
                 from . import credit
@@ -690,6 +705,15 @@ def sign_out(request):
         try:supabase.sign_out(request.session['supabase']['access_token'])
         except (supabase.ProviderUnavailable,ValidationError):pass
     logout(request);return redirect('login')
+
+@login_required
+def display_name(request):
+    """Change the name shown at the top of the page (the sign-in name does not change)."""
+    if request.method=='POST':
+        name=' '.join(request.POST.get('name','').split())[:150]
+        if not name:messages.error(request,'Enter a name.')
+        else:request.user.first_name=name;request.user.last_name='';request.user.save(update_fields=['first_name','last_name']);messages.success(request,'Your name is saved.')
+    return redirect('password')
 
 @login_required
 def change_password(request):

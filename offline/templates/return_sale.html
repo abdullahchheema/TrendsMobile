@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% load static covison_tags %}{% block content %}
+<div class="page-head"><div><h1>Return or exchange</h1><p>{{ doc.customer.name }} · {{ doc.code }} · {{ doc.posting_date|date:'j M Y' }} · {{ branch.name }}</p></div><a href="{% url 'returns' %}?branch={{ branch.pk }}">Find another sale</a></div>
+<section class="panel"><div class="statement-cards"><article><h3>Sale total</h3><strong>PKR {{ doc.total|floatformat:'2g' }}</strong></article><article><h3>Customer paid</h3><strong>PKR {{ paid|floatformat:'2g' }}</strong></article><article><h3>Customer still owes</h3><strong>PKR {{ doc.outstanding|floatformat:'2g' }}</strong></article></div>
+{% if previous %}<p class="muted">Earlier returns on this sale: {% for p in previous %}<a href="{% url 'return_done' p.pk %}">{{ p.code }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>{% endif %}</section>
+{% if warning %}<p class="notice">{{ warning }}</p>{% else %}
+<form method="post" class="panel" data-return-flow>{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}">
+<h2 style="margin-top:0">1. What is coming back?</h2>
+<div class="table-scroll"><table><thead><tr><th>Return</th><th>Item</th><th class="num">Sold at (each)</th><th class="num">Already returned</th></tr></thead><tbody>
+{% for line in options %}<tr>
+<td>{% if line.returnable %}{% if line.product.serialized %}<label class="check"><input type="checkbox" name="devices" value="{{ line.device_id }}" data-value="{{ line.unit_value }}"> Return</label>{% else %}<input type="number" name="return_qty_{{ line.pk }}" min="0" max="{{ line.remaining_quantity }}" step="1" value="0" style="width:80px" data-value-each="{{ line.unit_value }}" aria-label="Quantity of {{ line.product.name }} to return"> <small class="muted">of {{ line.remaining_quantity|floatformat:'-3' }}</small>{% endif %}{% else %}<span class="muted">Not returnable</span>{% endif %}</td>
+<td>{{ line.product.name }}{% if line.device_id %}<small>{% for i in line.device.imeis.all %}IMEI {{ i.number }} {% endfor %}</small>{% endif %}</td><td class="num">{% if line.returnable %}PKR {{ line.unit_value|floatformat:'2g' }}{% endif %}</td><td class="num">{{ line.returned_quantity|floatformat:'-3' }}</td></tr>
+{% empty %}<tr><td colspan="4">There are no stock items on this sale.</td></tr>{% endfor %}</tbody></table></div>
+<p class="muted">The customer is credited what they actually paid for each item, after any discount.</p>
+<div class="form-grid">
+<div class="field"><label for="rt-reason">Why is it coming back?</label><select id="rt-reason" name="reason" required><option value="">Choose a reason</option>{% for r in reasons %}<option {% if posted.reason == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select></div>
+<div class="field"><label for="rt-condition">Condition it came back in</label><select id="rt-condition" name="condition" required><option value="">Choose the condition</option>{% for c in conditions %}<option {% if posted.condition == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></div>
+<div class="field" style="grid-column:1/-1"><label for="rt-note">Note (optional)</label><input id="rt-note" name="note" maxlength="300" value="{{ posted.note }}" placeholder="What the customer said, what you found…"></div></div>
+<p class="muted">Phones that come back go to <strong>Holding</strong> and cannot be sold until you inspect and accept them.</p>
+<h2>2. What happens to the money?</h2>
+<p class="notice" data-value-note>Value of the items being returned: <strong data-value-total>PKR 0.00</strong>{% if doc.outstanding > 0 %}. The customer still owes <strong>PKR {{ doc.outstanding|floatformat:'2g' }}</strong> on this sale, so that is reduced first; only what is left can be refunded.{% endif %}</p>
+<fieldset class="bulk-price-mode">{% for value,label in resolutions %}<label><input type="radio" name="resolution" value="{{ value }}" {% if posted.resolution == value or not posted.resolution and value == 'refund' %}checked{% endif %}> {{ label }}</label>{% endfor %}
+<div data-refund-box><div class="form-grid"><div class="field"><label for="rt-method">Pay the refund from</label><select id="rt-method" name="refund_method">{% for m in methods %}<option {% if posted.refund_method == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+<div class="field"><label for="rt-amount">Refund amount (PKR) — leave empty for the full amount due</label><input id="rt-amount" name="refund_amount" type="number" min="0" step="0.01" inputmode="decimal" data-words value="{{ posted.refund_amount }}"></div></div><p class="muted">The refund is paid out of the shop’s cash or bank balance and recorded in Transaction History. It is refused if that account does not hold the money.</p></div>
+</fieldset>
+<div class="form-actions"><button class="primary" type="submit">Save return</button></div></form>{% endif %}
+{% endblock %}{% block scripts %}<script src="{% static 'return_flow.js' %}" defer></script>{% endblock %}

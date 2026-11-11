@@ -65,8 +65,9 @@ def parse_rows(raw,require_imei=True,bulk_total=None):
         except (TypeError,ValueError):raise ValidationError(f'Line {position}: the grade must be a whole number from 1 to 10.')
         if grade is not None and not 1<=grade<=10:raise ValidationError(f'Line {position}: the grade must be from 1 to 10.')
         if row.get('pta_status') not in ('PTA','Non-PTA'):raise ValidationError(f'Line {position}: choose PTA or Non-PTA.')
-        asking=s.payment_money(row.get('asking_price') or 0)      # optional: the selling price is decided at the counter
-        if asking<0:raise ValidationError(f'Line {position}: the price cannot be negative.')
+        try:asking=s.payment_money(row.get('asking_price') or 0)       # the price the phone is listed at; the cashier can still change it at the sale
+        except ValidationError:raise ValidationError(f'Line {position}: enter the selling price as an amount.')
+        if asking<=0:raise ValidationError(f'Line {position}: enter the selling price (more than zero).')
         imeis=easy_retail.parse_imeis(row.get('imeis',''),qty) if (row.get('imeis') or '').strip() else []
         if require_imei and not imeis:raise ValidationError(f'Line {position} ({label}): scan or type {qty} IMEI(s), or tick “I will add IMEIs later”.')
         for index,pair in enumerate(imeis,1):
@@ -95,13 +96,15 @@ def post(data,rows,user):
     rows=sorted(rows,key=lambda r:str(r['product'].pk))     # receipt lines are processed grouped by product
     line_attrs=[];line_imeis=[];has_imeis=all(r['imeis'] for r in rows)
     receipt=s.new_doc('Purchase Receipt',branch,supplier=supplier,warehouse=data['warehouse'],buyer=data['staff'],posting_date=data['posting_date'],demo_batch=branch.demo_batch,notes=data.get('notes',''))
+    from .models import Line
+    locked=set();new_lines=[]
     for r in rows:
-        Product.objects.select_for_update().get(pk=r['product'].pk)
+        if r['product'].pk not in locked:Product.objects.select_for_update().get(pk=r['product'].pk);locked.add(r['product'].pk)
         for i in range(r['qty']):
-            from .models import Line
-            Line.objects.create(document=receipt,product=r['product'],warehouse=data['warehouse'],quantity=1,rate=r['costs'][i])
+            new_lines.append(Line(document=receipt,product=r['product'],warehouse=data['warehouse'],quantity=1,rate=r['costs'][i]))
             line_attrs.append(dict(condition=r['condition'],device_type=r['device_type'],grade=r['grade'],pta_status=r['pta_status'],asking_price=str(r['asking']),**({'details':dict(condition_notes=r['notes'])} if r['notes'] else {})))
             line_imeis.append(r['imeis'][i] if r['imeis'] else [])
+    Line.objects.bulk_create(new_lines)
     receipt.data={'device':dict(inspection_status='Passed',inspection_date=str(data['posting_date']),line_attrs=line_attrs,line_imeis=line_imeis if has_imeis else [])};receipt.save()
     receipt=s.submit(receipt,user);bill=s.supplier_bill(receipt,user);bill.posting_date=data['posting_date']
     bill.data['easy_entry']={'kind':'purchase','quantity':len(line_attrs),'bulk':True,'lines':len(rows)};bill.save();bill=s.submit(bill,user)
@@ -183,7 +186,9 @@ def bulk_purchase(request):
         except _Invalid:pass
         except (ValidationError,IntegrityError,ValueError) as error:form.add_error(None,error_text(error))
     products=[dict(id=str(p.pk),name=p.name,model=p.model.name if p.model_id else '',brand=p.model.brand if p.model_id else '') for p in Product.objects.filter(enabled=True,serialized=True,stock_item=True).select_related('model').order_by('name')]
-    return render(request,'bulk_purchase.html',dict(title='Bulk purchase',form=form,branch=branch,products=products,catalog=catalog_entry.catalog(),conditions=CONDITIONS,types=TYPES))
+    from . import money
+    balances={r['method']:str(r['amount']) for r in money.balances([branch])}
+    return render(request,'bulk_purchase.html',dict(title='Bulk purchase',balances=balances,form=form,branch=branch,products=products,catalog=catalog_entry.catalog(),conditions=CONDITIONS,types=TYPES))
 
 
 class _Invalid(Exception):pass

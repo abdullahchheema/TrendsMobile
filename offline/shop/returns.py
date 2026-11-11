@@ -167,6 +167,29 @@ def create(original,user,device_ids,condition,reason,quantities=None,warehouse=N
 
 
 @transaction.atomic
+def apply_to_sale(credit,sale,user):
+    """Use a customer's return credit to pay (part of) a new sale of the same customer in the same shop: the exchange case.
+    Returns the amount used (zero when there is nothing to use or nothing owed)."""
+    from . import services as s
+    credit=Document.objects.select_for_update().get(pk=credit.pk);sale=Document.objects.select_for_update().get(pk=sale.pk)
+    if credit.kind not in s.SELL or not credit.is_return or credit.status!='Submitted' or credit.branch_id!=sale.branch_id or credit.customer_id!=sale.customer_id:
+        raise ValidationError('This return credit belongs to a different customer or shop. Use the same customer name as the return.')
+    if sale.is_return or sale.status!='Submitted' or sale.kind not in s.SELL:raise ValidationError('The credit can only be used on a submitted sale.')
+    amount=min(-credit.outstanding,sale.outstanding)
+    if amount<=0:return Decimal(0)
+    doc=s.new_doc('Journal Entry',credit.branch,customer=credit.customer,reference=credit,posted_by=user,
+        notes='Return credit '+credit.code+' used on '+sale.code,demo_batch=credit.demo_batch,data={'return_credit':str(credit.pk),'exchange_sale':str(sale.pk)})
+    s.open_date(doc)
+    s.entry(doc,'receivable',debit=amount,party=credit.customer,reference=credit)
+    s.entry(doc,'receivable',credit=amount,party=credit.customer,reference=sale)
+    evidence=dict(amount=str(amount),journal=str(doc.pk),date=str(doc.posting_date),applied_by=user.get_username())
+    sale.data.setdefault('return_credit_applications',[]).append({**evidence,'reference_code':credit.code})
+    credit.data.setdefault('credit_applications',[]).append({**evidence,'reference_code':sale.code})
+    sale.outstanding-=amount;credit.outstanding+=amount;sale.save();credit.save()
+    doc.total=amount;doc.status='Submitted';doc.save();s.balanced(doc);s.audit(user,'Use return credit on sale',doc);return amount
+
+
+@transaction.atomic
 def apply_credit(credit,amount,user):
     from . import services as s
     credit=Document.objects.get(pk=credit.pk);s.require(user,credit.branch,'can_handle_payments')
