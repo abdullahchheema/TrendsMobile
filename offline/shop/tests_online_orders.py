@@ -10,7 +10,7 @@ from django.utils import timezone
 from .models import *
 from .tests import imei
 from .tests_transfers import transfer_setup
-from . import access,coa,online_accounts,online_orders as oo,shopdefaults,shop_accounts,services as s
+from . import access,coa,money_views,online_accounts,online_orders as oo,shopdefaults,shop_accounts,services as s
 
 
 class OrderBase(TestCase):
@@ -195,8 +195,8 @@ class Access(OrderBase):
         inv=Document.objects.get(online_order=o,kind='Sales Invoice');self.assertEqual((inv.outstanding,inv.posted_by_id),(Decimal('0.00'),self.web.pk))
     def test_the_online_login_can_record_online_expenses_but_not_pay_a_shop(self):
         self.phone(self.other);o=self.order([self.item()]);oo.dispatch(o,self.user);oo.deliver(o,self.user)
-        self.client.force_login(self.web);cat=Account.objects.filter(code__startswith='COA-',root_type='Expense',is_group=False).exclude(account_type__in=['Cost of Goods Sold']).first()
-        self.client.post(reverse('online_accounts'),dict(action='expense',category=str(cat.pk),amount='1200',method='Cash',description='Facebook ads'))
+        self.client.force_login(self.web);cat=money_views._accounts('Expense',('COA-6950','COA-5200')).order_by('code').first()      # a category the screen really offers (an unordered pick failed at random)
+        self.client.post(reverse('online_accounts'),dict(action='expense',category=str(cat.pk),amount='1200',method='Cash',description='Facebook ads'),follow=True)
         self.assertEqual(online_accounts.summary()['expenses'],Decimal('1200'))
         r=self.client.post(reverse('online_accounts'),dict(action='pay_shop',shop=str(self.other.pk),amount='1000',method='Cash',shop_method='Cash'),follow=True);self.assertContains(r,'Only the owner')
     def test_shops_know_nothing_about_online_sales_while_the_owner_sees_everything(self):

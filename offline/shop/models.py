@@ -495,7 +495,23 @@ class OnlineOrder(Record):
     discount_code=models.CharField(max_length=60,blank=True)
     extra=models.JSONField(default=dict,blank=True,help_text='Everything else the website sent with the order (billing address, delivery notes, source, …).')
     exchange_credit=models.ForeignKey(Document,on_delete=models.PROTECT,null=True,blank=True,related_name='+',help_text='A return credit from an earlier online sale that pays for this replacement order.')
+    stage=models.CharField(max_length=24,blank=True,default='')      # Pending, Confirmed, Processing, Ready for Dispatch (New); Dispatched, In Transit; Return Requested. Empty on old orders
+    dispatch_notes=models.TextField(blank=True,default='')
+    return_note=models.CharField(max_length=240,blank=True,default='')
     class Meta:ordering=['-created']
+
+
+class OnlineOrderEvent(models.Model):
+    """Every step of an online order, kept for good: who did what and when. Never edited or deleted."""
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    order=models.ForeignKey(OnlineOrder,on_delete=models.CASCADE,related_name='events')
+    at=models.DateTimeField(default=timezone.now,db_index=True)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name='+')
+    kind=models.CharField(max_length=40)
+    from_stage=models.CharField(max_length=40,blank=True)
+    to_stage=models.CharField(max_length=40,blank=True)
+    note=models.TextField(blank=True)
+    class Meta:ordering=['at','pk']
 
 
 class OnlineOrderLine(models.Model):

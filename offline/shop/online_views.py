@@ -34,6 +34,8 @@ def orders(request):
     rows=OnlineOrder.objects.all().prefetch_related('lines__product','lines__allocations__branch')
     counts={name:OnlineOrder.objects.filter(status=name).count() for name in ('New','Dispatched','Delivered','Cancelled')}
     if status in counts:rows=rows.filter(status=status)
+    elif status=='history':rows=rows.filter(status__in=(OnlineOrder.DELIVERED,OnlineOrder.CANCELLED))
+    elif status!='all':rows=rows.filter(status__in=(OnlineOrder.NEW,OnlineOrder.DISPATCHED)); status=''     # the working list: orders still to dispatch or on the way
     if q:
         digits=''.join(ch for ch in q if ch.isdigit())
         match=Q(code__icontains=q)|Q(customer_name__icontains=q)|Q(external_ref__icontains=q)|Q(tracking__icontains=q)
@@ -41,7 +43,7 @@ def orders(request):
         rows=rows.filter(match)
     from .views import paginate
     page,pager=paginate(request,list(rows),40)
-    data=[dict(o=o,items=', '.join(f'{l.product.name} × {l.quantity}' for l in o.lines.all())[:90],shops=sorted({a.branch.name for l in o.lines.all() for a in l.allocations.all()})) for o in page.object_list]
+    data=[dict(o=o,stage=oo.display_stage(o),items=', '.join(f'{l.product.name} × {l.quantity}' for l in o.lines.all())[:90],shops=sorted({a.branch.name for l in o.lines.all() for a in l.allocations.all()})) for o in page.object_list]
     return render(request,'online_orders.html',dict(title='Online Orders',rows=data,page_obj=page,pager_query=pager,q=q,status=status,counts=counts))
 
 
@@ -72,8 +74,13 @@ def order(request,pk):
             elif action=='paid':oo.mark_paid(o,request.user,request.POST.get('reference',''));messages.success(request,'Payment confirmed.')
             elif action=='reassign':oo.reassign(o,request.user,get_object_or_404(Branch,pk=request.POST.get('shop'),enabled=True));messages.success(request,'The order will be supplied from that shop.')
             elif action=='dispatch':
-                made=oo.dispatch(o,request.user,request.POST.get('courier',''),request.POST.get('tracking',''))
+                courier=' '.join(request.POST.get('courier','').split());tracking=' '.join(request.POST.get('tracking','').split())
+                if not courier or not tracking:raise ValidationError('Enter the courier company and the tracking number (or the rider name) before dispatching.')
+                made=oo.dispatch(o,request.user,courier,tracking,request.POST.get('notes',''))
                 messages.success(request,f'Dispatched. {len(made)} invoice{"s" if len(made)!=1 else ""} posted in the supplying shop{"s" if len(made)!=1 else ""}.')
+            elif action=='stage':oo.set_stage(o,request.user,request.POST.get('stage',''),request.POST.get('note',''));messages.success(request,'Order updated.')
+            elif action=='shipment':oo.update_shipment(o,request.user,request.POST.get('courier',''),request.POST.get('tracking',''),request.POST.get('notes',''));messages.success(request,'Courier and tracking saved.')
+            elif action=='return_request':oo.request_return(o,request.user,request.POST.get('note',''));messages.success(request,'Return request recorded. Nothing moves in stock until the phone is received and inspected.')
             elif action=='deliver':oo.deliver(o,request.user,request.POST.get('method','Cash'));messages.success(request,'Marked delivered; any cash on delivery is now recorded as received.')
             else:raise ValidationError('Unknown action.')
         except (ValidationError,IntegrityError,ValueError) as error:messages.error(request,_err(error))
@@ -87,7 +94,7 @@ def order(request,pk):
         if isinstance(v,list):return ', '.join(flat(x) for x in v)
         return str(v)
     extra_rows=[(str(k).replace('_',' ').capitalize(),flat(v)) for k,v in (o.extra or {}).items() if v not in ('',None,[],{})]
-    return render(request,'online_order.html',dict(title=o.code,o=o,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
+    return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),events=list(o.events.select_related('user')),new_stages=oo.NEW_STAGES[1:],shipped_stages=oo.SHIPPED_STAGES,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
         candidates=list(_candidates(o)) if o.status==OnlineOrder.NEW and not o.exchange_credit_id else [],prepaid=o.payment_method!='Cash on Delivery',
         outstanding=sum((i.outstanding for i in invoices if i.outstanding>0),Decimal(0))))
 
@@ -208,7 +215,7 @@ def api_order_status(request,ref):
     if not _authorized(request):return JsonResponse({'error':'Invalid or missing API key.'},status=401)
     o=OnlineOrder.objects.filter(Q(external_ref=ref)|Q(code=ref)).first()
     if not o:return JsonResponse({'error':'Order not found.'},status=404)
-    return JsonResponse(dict(order=o.code,external_ref=o.external_ref,status=o.status,payment_status=o.payment_status,courier=o.courier,tracking=o.tracking,total=str(o.total),
+    return JsonResponse(dict(order=o.code,external_ref=o.external_ref,status=o.status,stage=oo.display_stage(o),payment_status=o.payment_status,courier=o.courier,tracking=o.tracking,total=str(o.total),
                              placed_on=str(o.placed_on),dispatched_on=str(o.dispatched_on) if o.dispatched_on else None,delivered_on=str(o.delivered_on) if o.delivered_on else None))
 
 
