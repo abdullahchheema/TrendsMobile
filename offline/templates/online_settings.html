@@ -1,0 +1,39 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Delivery &amp; Payment Settings</h1><p>What the website charges for delivery and which accounts customers can pay into. Changes appear on the website within seconds.</p></div></div>
+
+<section class="panel"><h2 style="margin-top:0">Delivery pricing</h2>
+<form method="post" class="form-block">{% csrf_token %}<input type="hidden" name="action" value="delivery">
+<div class="form-grid">
+<div class="field"><label for="delivery_fee">Delivery fee (PKR)</label><input id="delivery_fee" name="delivery_fee" type="number" min="0" max="100000" step="1" inputmode="decimal" value="{{ cfg.delivery_fee|stringformat:'.0f' }}" required></div>
+<div class="field"><label for="free_from">Free delivery on orders from (PKR)</label><input id="free_from" name="free_from" type="number" min="0" step="1" inputmode="decimal" value="{% if cfg.free_delivery_from is not None %}{{ cfg.free_delivery_from|stringformat:'.0f' }}{% endif %}" placeholder="Leave empty: delivery is never free"></div>
+</div>
+<label class="check"><input type="checkbox" name="cod" {% if cfg.cod_enabled %}checked{% endif %}> Offer cash on delivery</label>
+<button class="primary" type="submit">Save delivery settings</button></form>
+<p class="sh-hint">Today: {% for p in preview %}{{ p.label }} pays {% if p.fee %}PKR {{ p.fee|floatformat:"0g" }}{% else %}nothing{% endif %} for delivery{% if not forloop.last %}; {% endif %}{% endfor %}.</p>
+
+<h3>A different fee for one province</h3>
+<form method="post" class="form-block">{% csrf_token %}<input type="hidden" name="action" value="rule_add"><div class="form-grid">
+<div class="field"><label for="province">Province</label><select id="province" name="province">{% for p in provinces %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select></div>
+<div class="field"><label for="rule_fee">Fee (PKR)</label><input id="rule_fee" name="rule_fee" type="number" min="0" max="100000" step="1" inputmode="decimal" required></div></div>
+<button type="submit">Save this province</button></form>
+{% if rules %}<div class="table-scroll"><table><thead><tr><th>Province</th><th class="num">Fee</th><th></th></tr></thead><tbody>
+{% for r in rules %}<tr><td>{{ r.province }}</td><td class="num">{{ r.fee|floatformat:"0g" }}</td><td><form method="post">{% csrf_token %}<input type="hidden" name="action" value="rule_delete"><input type="hidden" name="rule" value="{{ r.pk }}"><button type="submit" data-confirm="Remove this fee? The default fee applies there.">Remove</button></form></td></tr>{% endfor %}</tbody></table></div>{% endif %}
+</section>
+
+<section class="panel"><h2 style="margin-top:0">Payment accounts</h2>
+<p class="sh-hint">Customers who choose Bank Transfer, Easypaisa, JazzCash or Card see these account details at checkout. Until you add any, those methods stay available without details. Once you add one, only methods with a shown account are offered.</p>
+{% if accounts %}<div class="table-scroll"><table><thead><tr><th>Method</th><th>Account</th><th>Number / IBAN</th><th>On the website</th><th></th></tr></thead><tbody>
+{% for a in accounts %}<tr><td>{{ a.method }}</td><td>{{ a.title }}{% if a.bank_name %}<small class="muted"> {{ a.bank_name }}</small>{% endif %}</td><td>{{ a.account_number }}{% if a.iban %}<small class="muted"> {{ a.iban }}</small>{% endif %}</td><td>{% if a.enabled %}<span class="badge ok">Shown</span>{% else %}<span class="badge">Hidden</span>{% endif %}</td>
+<td><form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="account_toggle"><input type="hidden" name="account" value="{{ a.pk }}"><button type="submit">{% if a.enabled %}Hide{% else %}Show{% endif %}</button></form>
+<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="account_delete"><input type="hidden" name="account" value="{{ a.pk }}"><button type="submit" data-confirm="Remove this account?">Remove</button></form></td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<h3>Add an account</h3>
+<form method="post" class="form-block">{% csrf_token %}<input type="hidden" name="action" value="account_add"><div class="form-grid">
+<div class="field"><label for="method">Method</label><select id="method" name="method">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
+<div class="field"><label for="title">Account title</label><input id="title" name="title" maxlength="120" required placeholder="Name on the account"></div>
+<div class="field"><label for="bank_name">Bank (for bank transfer)</label><input id="bank_name" name="bank_name" maxlength="120" placeholder="e.g. Meezan Bank"></div>
+<div class="field"><label for="account_number">Account or wallet number</label><input id="account_number" name="account_number" maxlength="60" inputmode="numeric" placeholder="e.g. 0300 1234567"></div>
+<div class="field"><label for="iban">IBAN (optional)</label><input id="iban" name="iban" maxlength="40"></div>
+<div class="field"><label for="instructions">Instructions (optional)</label><input id="instructions" name="instructions" maxlength="300" placeholder="e.g. Send a screenshot on WhatsApp"></div></div>
+<button class="primary" type="submit">Add account</button></form>
+</section>
+{% endblock %}

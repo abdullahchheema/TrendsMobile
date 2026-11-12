@@ -32,10 +32,14 @@ def orders(request):
     _guard(request)
     q=request.GET.get('q','').strip();status=request.GET.get('status','')
     rows=OnlineOrder.objects.all().prefetch_related('lines__product','lines__allocations__branch')
-    counts={name:OnlineOrder.objects.filter(status=name).count() for name in ('New','Dispatched','Delivered','Cancelled','Returned')}
-    if status in counts:rows=rows.filter(status=status)
-    elif status=='history':rows=rows.filter(status__in=(OnlineOrder.DELIVERED,OnlineOrder.CANCELLED,OnlineOrder.RETURNED))
-    elif status!='all':rows=rows.filter(status__in=(OnlineOrder.NEW,OnlineOrder.DISPATCHED)); status=''     # the working list: orders still to dispatch or on the way
+    NEW,DISP,DELIV=OnlineOrder.NEW,OnlineOrder.DISPATCHED,OnlineOrder.DELIVERED
+    fulfilled=Q(status__in=(DISP,DELIV),payment_status='Paid')&~Q(tracking='')
+    kinds={'Unconfirmed':Q(status=NEW,confirmed_at__isnull=True),'Confirmed':(Q(status=NEW,confirmed_at__isnull=False)|Q(status__in=(DISP,DELIV)))&~fulfilled,'Fulfilled':fulfilled,
+           'Cancelled':Q(status=OnlineOrder.CANCELLED),'Returned':Q(status=OnlineOrder.RETURNED)}
+    counts={name:OnlineOrder.objects.filter(cond).count() for name,cond in kinds.items()}
+    if status in kinds:rows=rows.filter(kinds[status])
+    elif status=='history':rows=rows.filter(kinds['Fulfilled']|kinds['Cancelled']|kinds['Returned'])
+    elif status!='all':rows=rows.filter(kinds['Unconfirmed']|kinds['Confirmed']);status=''      # the working list: orders to call, to ship, or shipped and awaiting payment
     if q:
         digits=''.join(ch for ch in q if ch.isdigit())
         match=Q(code__icontains=q)|Q(customer_name__icontains=q)|Q(external_ref__icontains=q)|Q(tracking__icontains=q)
@@ -43,7 +47,7 @@ def orders(request):
         rows=rows.filter(match)
     from .views import paginate
     page,pager=paginate(request,list(rows),40)
-    data=[dict(o=o,primary=oo.order_status(o),new=o.seen_at is None and o.status==OnlineOrder.NEW,stage=oo.display_stage(o),items=', '.join(f'{l.product.name} × {l.quantity}' for l in o.lines.all())[:90],shops=sorted({a.branch.name for l in o.lines.all() for a in l.allocations.all()})) for o in page.object_list]
+    data=[dict(o=o,primary=oo.order_status(o),new=False,stage=oo.display_stage(o),items=', '.join(f'{l.product.name} × {l.quantity}' for l in o.lines.all())[:90],shops=sorted({a.branch.name for l in o.lines.all() for a in l.allocations.all()})) for o in page.object_list]
     return render(request,'online_orders.html',dict(title='Online Orders',rows=data,page_obj=page,pager_query=pager,q=q,status=status,counts=counts))
 
 
@@ -70,7 +74,12 @@ def order(request,pk):
     if request.method=='POST':
         action=request.POST.get('action')
         try:
-            if action=='cancel':oo.cancel(o,request.user,request.POST.get('reason',''));messages.success(request,'Order cancelled. The stock is available again.')
+            if action=='confirm':oo.confirm(o,request.user,request.POST.get('note',''));messages.success(request,'Order confirmed. It can now be shipped.')
+            elif action=='cancel':
+                choice=request.POST.get('reason_choice','').strip();note=request.POST.get('reason_note','').strip()
+                if choice not in oo.CANCEL_REASONS:raise ValidationError('Choose why the order is cancelled.')
+                if choice.startswith('Other') and not note:raise ValidationError('Write the reason for cancelling.')
+                oo.cancel(o,request.user,(choice if not choice.startswith('Other') else '')+(' — ' if note and not choice.startswith('Other') else '')+note);messages.success(request,'Order cancelled. The stock is available again.')
             elif action=='paid':oo.mark_paid(o,request.user,request.POST.get('reference',''));messages.success(request,'Payment confirmed.')
             elif action=='reassign':oo.reassign(o,request.user,get_object_or_404(Branch,pk=request.POST.get('shop'),enabled=True));messages.success(request,'The order will be supplied from that shop.')
             elif action=='dispatch':
@@ -103,7 +112,7 @@ def order(request,pk):
         if isinstance(v,list):return ', '.join(flat(x) for x in v)
         return str(v)
     extra_rows=[(str(k).replace('_',' ').capitalize(),flat(v)) for k,v in (o.extra or {}).items() if v not in ('',None,[],{})]
-    return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),primary=oo.order_status(o),events=list(o.events.select_related('user')),shipped_stages=oo.SHIPPED_STAGES,failed=oo.FAILED,receiving=_receiving(o),extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
+    return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),primary=oo.order_status(o),events=list(o.events.select_related('user')),shipped_stages=oo.SHIPPED_STAGES,failed=oo.FAILED,receiving=_receiving(o),cancel_reasons=oo.CANCEL_REASONS,unconfirmed=o.status==OnlineOrder.NEW and o.confirmed_at is None,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
         candidates=list(_candidates(o)) if o.status==OnlineOrder.NEW and not o.exchange_credit_id else [],prepaid=o.payment_method!='Cash on Delivery',
         outstanding=sum((i.outstanding for i in invoices if i.outstanding>0),Decimal(0))))
 
@@ -222,11 +231,19 @@ def api_order(request):
     except ValueError:return JsonResponse({'error':'Send JSON.'},status=400)
     if not isinstance(data,dict):return JsonResponse({'error':'Send a JSON object.'},status=400)
     try:
-        with transaction.atomic():order,created=oo.create(data,None,'Website')
+        with transaction.atomic():order,created=oo.create(data,None,'Website',strict=True)
     except (ValidationError,IntegrityError,ValueError) as error:
-        text=_err(error);conflict=any(w in text for w in ('no longer','total is now','Only ','does not exist any more','not for sale online','changed to PKR'))
+        text=_err(error);conflict=any(w in text for w in ('no longer','total is now','Only ','does not exist any more','not for sale online','changed to PKR','delivery charge is now','is not available right now'))
         return JsonResponse({'error':text},status=409 if conflict else 400)
     return JsonResponse(dict(order=order.code,external_ref=order.external_ref,status=order.status,subtotal=str(order.subtotal),delivery_fee=str(order.delivery_fee),total=str(order.total),created=created),status=201 if created else 200)
+
+
+@csrf_exempt
+@require_http_methods(['GET'])
+def api_config(request):
+    """GET /api/online/config/  (header X-API-Key): delivery pricing and the payment methods and accounts customers may use."""
+    if not _authorized(request):return JsonResponse({'error':'Invalid or missing API key.'},status=401)
+    return JsonResponse(oo.store_config())
 
 
 @csrf_exempt
@@ -294,3 +311,54 @@ def live_state(request):
         person=access.staff(request.user)
         if person is not None:out['shop']=oo.shop_unseen_count(person.branch)
     resp=JsonResponse(out);resp['Cache-Control']='no-store';return resp
+
+
+# ------------------------------------------------------------------ delivery pricing and payment accounts
+@login_required
+def settings_page(request):
+    """The online manager's settings: what delivery costs (default, free-from amount, per province) and the accounts customers pay into."""
+    _guard(request)
+    from .models import OnlineDeliveryRule,OnlinePaymentAccount,OnlineSettings
+    cfg=OnlineSettings.get()
+    if request.method=='POST':
+        action=request.POST.get('action')
+        try:
+            with transaction.atomic():
+                if action=='delivery':
+                    fee=s.payment_money(request.POST.get('delivery_fee') or 0)
+                    free=request.POST.get('free_from','').strip().replace(',','')
+                    if fee<0 or fee>100000:raise ValidationError('The delivery fee must be between 0 and 100,000.')
+                    cfg.delivery_fee=fee;cfg.free_delivery_from=s.payment_money(free) if free else None;cfg.cod_enabled=request.POST.get('cod')=='on'
+                    if cfg.free_delivery_from is not None and cfg.free_delivery_from<0:raise ValidationError('The free-delivery amount cannot be negative.')
+                    cfg.save();messages.success(request,'Delivery settings saved.')
+                elif action=='rule_add':
+                    province=' '.join(request.POST.get('province','').split())
+                    if not province:raise ValidationError('Choose the province.')
+                    fee=s.payment_money(request.POST.get('rule_fee') or 0)
+                    if fee<0 or fee>100000:raise ValidationError('The delivery fee must be between 0 and 100,000.')
+                    found=OnlineDeliveryRule.objects.filter(province__iexact=province).first()
+                    if found:found.fee=fee;found.save(update_fields=['fee'])
+                    else:OnlineDeliveryRule.objects.create(province=province,fee=fee)
+                    messages.success(request,f'Delivery to {province} saved.')
+                elif action=='rule_delete':
+                    get_object_or_404(OnlineDeliveryRule,pk=request.POST.get('rule')).delete();messages.success(request,'Removed.')
+                elif action=='account_add':
+                    method=request.POST.get('method','')
+                    if method not in OnlinePaymentAccount.METHODS:raise ValidationError('Choose a payment method.')
+                    title=' '.join(request.POST.get('title','').split())[:120]
+                    if not title:raise ValidationError('Enter the account title (the name on the account).')
+                    number=' '.join(request.POST.get('account_number','').split())[:60]
+                    if method!='Card' and not number:raise ValidationError('Enter the account number or mobile wallet number.')
+                    OnlinePaymentAccount.objects.create(method=method,title=title,bank_name=request.POST.get('bank_name','').strip()[:120],account_number=number,iban=request.POST.get('iban','').replace(' ','')[:40],instructions=request.POST.get('instructions','').strip()[:300])
+                    messages.success(request,'Payment account added.')
+                elif action in ('account_toggle','account_delete'):
+                    account=get_object_or_404(OnlinePaymentAccount,pk=request.POST.get('account'))
+                    if action=='account_delete':account.delete();messages.success(request,'Account removed.')
+                    else:account.enabled=not account.enabled;account.save(update_fields=['enabled']);messages.success(request,'Account '+('shown' if account.enabled else 'hidden')+' on the website.')
+                else:raise ValidationError('Unknown action.')
+                s.audit(request.user,'Online settings changed',None,change=action)
+        except (ValidationError,ValueError,IntegrityError) as error:messages.error(request,_err(error))
+        return redirect('online_settings')
+    return render(request,'online_settings.html',dict(title='Delivery & Payment Settings',cfg=cfg,rules=list(OnlineDeliveryRule.objects.all()),accounts=list(OnlinePaymentAccount.objects.all()),
+        provinces=['Punjab','Sindh','Khyber Pakhtunkhwa','Balochistan','Islamabad Capital Territory','Gilgit-Baltistan','Azad Kashmir'],methods=OnlinePaymentAccount.METHODS,
+        preview=[dict(label=lab,amount=amt,fee=oo.delivery_fee_for(amt)) for lab,amt in (('A small order',Decimal('5000')),('An order of 20,000',Decimal('20000')),('A large order',Decimal('60000')))]))

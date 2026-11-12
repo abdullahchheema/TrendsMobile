@@ -32,8 +32,10 @@ class OrderBase(TestCase):
         doc=s.new_doc('Stock Entry',branch,warehouse=shopdefaults.warehouse(branch))
         StockMovement.objects.create(document=doc,posting_date=timezone.localdate(),product=self.cover,warehouse=shopdefaults.warehouse(branch),quantity=qty,value=Decimal(cost)*qty)
     def order(self,items,**extra):
-        data=dict(external_ref=f'WEB-{Document.objects.count()}-{OnlineOrder.objects.count()}',customer=dict(name='Ali Khan',phone='0300 1234567',address='House 5',city='Lahore'),payment_method='Cash on Delivery',items=items);data.update(extra)
-        return oo.create(data)[0]
+        data=dict(external_ref=f'WEB-{Document.objects.count()}-{OnlineOrder.objects.count()}',customer=dict(name='Ali Khan',phone='0300 1234567',address='House 5',city='Lahore'),payment_method='Cash on Delivery',items=items);confirm=extra.pop('confirm',True);data.update(extra)
+        order=oo.create(data)[0]
+        if confirm:oo.confirm(order,self.user);order.refresh_from_db()      # the online manager has called the customer
+        return order
     def item(self,product=None,qty=1,price='100000',**extra):
         d=dict(product_id=str((product or self.red).pk),condition='New',pta_status='PTA',device_type='New',price=price,quantity=qty);d.update(extra);return d
     def money(self,branch,method):
@@ -213,14 +215,14 @@ class Api(OrderBase):
     def post(self,body,key='secret-key-123'):
         return self.client.post(reverse('api_online_order'),json.dumps(body),content_type='application/json',HTTP_X_API_KEY=key)
     def body(self,**extra):
-        b=dict(external_ref='WEB-1001',customer=dict(name='Sara',phone='03211234567',city='Karachi',address='Street 1'),payment_method='Cash on Delivery',delivery_fee='300',items=[dict(product_id=str(self.red.pk),condition='New',pta_status='PTA',device_type='New',price='100000',quantity=1)]);b.update(extra);return b
+        b=dict(external_ref='WEB-1001',customer=dict(name='Sara',phone='03211234567',city='Karachi',address='Street 1'),payment_method='Cash on Delivery',delivery_fee='0',items=[dict(product_id=str(self.red.pk),condition='New',pta_status='PTA',device_type='New',price='100000',quantity=1)]);b.update(extra);return b
     def test_the_key_is_required(self):
         self.phone(self.branch);self.assertEqual(self.post(self.body(),key='wrong').status_code,401);self.assertFalse(OnlineOrder.objects.exists())
     @override_settings(ONLINE_API_KEY='')
     def test_the_api_is_off_when_no_key_is_configured(self):
         self.assertEqual(self.post(self.body(),key='').status_code,401)
     def test_an_order_is_created_once_and_reserves_stock(self):
-        self.phone(self.branch);a=self.post(self.body());self.assertEqual(a.status_code,201);self.assertEqual(a.json()['total'],'100300.00')
+        self.phone(self.branch);a=self.post(self.body());self.assertEqual(a.status_code,201);self.assertEqual(a.json()['total'],'100000.00')
         b=self.post(self.body());self.assertEqual((b.status_code,b.json()['order'],b.json()['created']),(200,a.json()['order'],False));self.assertEqual(OnlineOrder.objects.count(),1)
     def test_stale_prices_and_missing_stock_come_back_as_conflicts(self):
         self.phone(self.branch);r=self.post(self.body(external_ref='X',items=[dict(product_id=str(self.red.pk),condition='New',pta_status='PTA',device_type='New',price='90000',quantity=1)]));self.assertEqual(r.status_code,409)
@@ -270,7 +272,7 @@ class OrderDetails(OrderBase):
             items=[self.item()],expected_total='98300'))[0]
         self.assertEqual((o.total,o.discount_amount,o.discount_code,o.alt_phone,o.postal_code,o.shipping_method),(Decimal('98300'),Decimal('2000'),'EID25','03007654321','54000','Same-day'))
         self.assertEqual((o.extra['billing_address'],o.extra['source'],o.extra['utm']['campaign'],o.extra['customer_details']['whatsapp'],o.extra['shipping_details']['courier_hint']),('Office 9','web-app','eid','yes','TCS'))
-        inv=oo.dispatch(o,self.user)[0];self.assertEqual(inv.total,Decimal('98300.00'))                  # the invoice carries the same discount
+        oo.confirm(o,self.user);inv=oo.dispatch(o,self.user)[0];self.assertEqual(inv.total,Decimal('98300.00'))                  # the invoice carries the same discount
         self.client.force_login(self.user);page=self.client.get(reverse('online_order',args=[o.pk]));self.assertContains(page,'Details from the website');self.assertContains(page,'EID25');self.assertContains(page,'Office 9')
     def test_a_discount_larger_than_the_items_is_refused(self):
         self.phone(self.branch)

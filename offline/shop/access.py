@@ -90,7 +90,7 @@ def menu_for(user,visible,path=''):
     money=[('Money In',r('money_in')),('Money Out',r('money_out')),('Expenses',r('money_expenses')),('Customer Dues',r('customer_dues')),('Supplier Dues',r('supplier_dues')),('Cash and Bank',r('cash_and_bank')),('Transaction History',r('money_history'))]
     sections=[('Dashboard','home',r('dashboard'),[])]
     if owner:
-        sections.append(('Shops','shops',r('setup'),[('All Shops',r('setup')),('Shop Accounts',r('users')),('Branch Information',r('settings'))]))
+        sections.append(('Shops','shops',r('setup'),[('All Shops',r('setup')),('Shop Accounts',r('users')),('Staff & Commission',r('staff_list')),('Branch Information',r('settings'))]))
     sections.append(('Sales','sell-pos',r('pos'),[('New Sale',r('pos')),('Sales History',coll('Sales Invoice'))]))
     if not owner:sections.append(('Online Orders to Pack','buy',r('shop_online_orders'),[]))
     sections.append(('Returns & Exchanges','exchanges',r('returns'),[('Sale Return / Exchange',r('returns')),('Return to Supplier',r('purchase_returns')),('Return History',r('return_history')),('Exchange History',coll('Mobile Exchange')),('Supplier Return History',coll('Purchase Return'))]))
@@ -99,7 +99,7 @@ def menu_for(user,visible,path=''):
     inventory+=[('Accessories',r('accessories')),('Stock in All Shops',r('stock_everywhere')),('IMEI Management',r('imei_lookup')),('Stock Adjustments',r('stock_adjust'))]
     sections.append(('Inventory','stock',coll('Mobile Device'),inventory))
     sections.append(('Purchases','buy',r('bulk_purchase'),[('Buy Phones (one or many)',r('bulk_purchase')),('Buy Accessories',r('accessory_buy')),('Purchase History',coll('Purchase Invoice'))]))
-    if owner:sections.append(('Online Store','sell-pos',r('online_dashboard'),[('Online Dashboard',r('online_dashboard')),('Online Orders',r('online_orders')),('New Online Order',r('online_order_new')),('Online Stock',r('online_stock')),('Online Accounts',r('online_accounts')),('Products & Photos',r('online_store')),('Drafts (need a photo)',r('online_store')+'?show=Draft')]))
+    if owner:sections.append(('Online Store','sell-pos',r('online_dashboard'),[('Online Dashboard',r('online_dashboard')),('Online Orders',r('online_orders')),('New Online Order',r('online_order_new')),('Online Stock',r('online_stock')),('Delivery & Payment Settings',r('online_settings')),('Online Accounts',r('online_accounts')),('Products & Photos',r('online_store')),('Drafts (need a photo)',r('online_store')+'?show=Draft')]))
     if owner:sections.append(('Online Finance','payments-expenses',r('online_money_in'),[('Money In',r('online_money_in')),('Money Out',r('online_money_out')),('Online Expenses',r('online_expenses')),('Customer Dues (COD)',r('online_customer_dues')),('Cash and Bank',r('online_cash_and_bank')),('Transaction History',r('online_history')),('Online Accounts & Profit',r('online_accounts'))]))
     if owner:sections.append(('Stock Transfers','exchanges',r('stock_transfer'),[('All Transfers',r('stock_transfer')),('Pending Transfers',r('stock_transfer')+'?state=Open'),('Transfer History',r('stock_transfer')+'?state=Received')]))
     sections.append(('Customers','customers-suppliers',coll('Customer'),[('Customer Directory',coll('Customer')),('Customer Dues & Advances',r('customer_dues')),('Customer Payment History',r('customer_payments'))]))

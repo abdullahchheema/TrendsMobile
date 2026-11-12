@@ -94,22 +94,24 @@ class Notifications(OrderBase):
     def api(self,ref):
         data=dict(external_ref=ref,customer=dict(name='Ali Khan',phone='03001234567'),items=[self.item()])
         return self.client.post(reverse('api_online_order'),json.dumps(data),content_type='application/json',HTTP_X_API_KEY='k')
-    def test_the_badge_counts_real_unseen_orders_and_drops_when_opened_or_cancelled(self):
+    def test_the_badge_counts_orders_still_to_confirm_and_drops_when_confirmed_or_cancelled(self):
         with override_settings(ONLINE_API_KEY='k'):
             self.phone(self.branch);self.phone(self.branch);self.assertEqual(oo.unseen_count(),0)
             self.assertEqual(self.api('W-1').status_code,201);self.assertEqual(self.api('W-1').status_code,200);self.assertEqual(oo.unseen_count(),1)      # a repeat is not a second badge
             self.assertEqual(self.api('W-2').status_code,201);self.assertEqual(oo.unseen_count(),2)
             self.client.force_login(self.web);o=OnlineOrder.objects.get(external_ref='W-1')
-            self.assertEqual(self.client.get(reverse('live_state')).json()['online'],2);self.client.get(reverse('online_order',args=[o.pk]));self.assertEqual(oo.unseen_count(),1)
+            self.assertEqual(self.client.get(reverse('live_state')).json()['online'],2);self.client.get(reverse('online_order',args=[o.pk]));self.assertEqual(oo.unseen_count(),2)   # just looking does not confirm it
+            self.client.post(reverse('online_order',args=[o.pk]),dict(action='confirm'));self.assertEqual(oo.unseen_count(),1)
             oo.cancel(OnlineOrder.objects.get(external_ref='W-2'),self.user,'No answer');self.assertEqual(oo.unseen_count(),0)
-            page=self.client.get(reverse('online_orders'));self.assertContains(page,'data-live-badge="online"')
-    def test_a_team_member_typing_an_order_does_not_create_a_badge(self):
+            self.assertContains(self.client.get(reverse('online_orders')),'data-live-badge="online"')
+    def test_a_team_member_typing_an_order_after_a_call_needs_no_confirmation(self):
         self.phone(self.branch);self.phone(self.branch)
-        oo.create(dict(customer=dict(name='Sara',phone='03211234567'),items=[self.item()]),self.user,'Manual');self.assertEqual(oo.unseen_count(),0)
-    def test_a_shop_sees_only_the_orders_it_must_pack_and_nothing_about_the_customer(self):
+        o=oo.create(dict(customer=dict(name='Sara',phone='03211234567'),items=[self.item()]),self.user,'Manual')[0];self.assertEqual((oo.unseen_count(),oo.order_status(o)),(0,'Confirmed'))
+    def test_a_shop_packs_only_confirmed_orders_and_sees_nothing_about_the_customer(self):
         with override_settings(ONLINE_API_KEY='k'):
             d=self.phone(self.branch);self.api('W-5');o=OnlineOrder.objects.get(external_ref='W-5')
-            self.client.force_login(self.shop_a);page=self.client.get(reverse('shop_online_orders'))
+            self.client.force_login(self.shop_a);self.assertNotContains(self.client.get(reverse('shop_online_orders')),o.code);self.assertEqual(self.client.get(reverse('live_state')).json()['shop'],0)   # not yet confirmed
+            oo.confirm(o,self.user);page=self.client.get(reverse('shop_online_orders'))
             self.assertContains(page,o.code);self.assertContains(page,d.code);self.assertNotContains(page,'Ali Khan');self.assertNotContains(page,'03001234567');self.assertNotContains(page,'100000')
             self.assertEqual(self.client.get(reverse('live_state')).json()['shop'],1)
             self.client.post(reverse('shop_online_orders'),dict(order=str(o.pk)));self.assertEqual(self.client.get(reverse('live_state')).json()['shop'],0)

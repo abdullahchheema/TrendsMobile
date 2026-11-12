@@ -13,7 +13,7 @@ from django.urls import Resolver404,resolve,reverse
 
 _active=ContextVar('covison_online_mode',default=False)
 
-PAGES={'live_state','online_dashboard','online_store','online_edit','online_photo_upload','online_photo_order','online_photo_update','online_photo_delete','product_image_file','online_orders','online_order',
+PAGES={'online_settings','live_state','online_dashboard','online_store','online_edit','online_photo_upload','online_photo_order','online_photo_update','online_photo_delete','product_image_file','online_orders','online_order',
        'online_order_new','online_stock','online_accounts','online_money_in','online_money_out','online_expenses','online_customer_dues','online_cash_and_bank','online_history','logout','password','display_name','login'}
 PARTY_PAGES={'party_account'}                                          # a customer's account: only Online Store customers
 RECORD_PAGES={'return_sale','return_done','detail','receipt'}        # open one invoice, return or receipt: only if it belongs to an online order
@@ -62,6 +62,7 @@ def menu(path=''):
     rows=[dict(title='Online Dashboard',icon='home',url=r('online_dashboard'),items=[],open=False),
             dict(title='Orders',icon='buy',url=r('online_orders'),items=[dict(label='All Orders',url=r('online_orders'),current=False),dict(label='New Orders',url=r('online_orders')+'?status=New',current=False),dict(label='Dispatched',url=r('online_orders')+'?status=Dispatched',current=False),dict(label='New Order (phone / WhatsApp)',url=r('online_order_new'),current=False)],open=False),
             dict(title='Online Stock',icon='stock',url=r('online_stock'),items=[],open=False),
+            dict(title='Delivery & Payments',icon='settings',url=r('online_settings'),items=[],open=False),
             dict(title='Online Finance',icon='payments-expenses',url=r('online_money_in'),items=[dict(label='Money In',url=r('online_money_in'),current=False),dict(label='Money Out',url=r('online_money_out'),current=False),dict(label='Online Expenses',url=r('online_expenses'),current=False),dict(label='Customer Dues (COD)',url=r('online_customer_dues'),current=False),dict(label='Cash and Bank',url=r('online_cash_and_bank'),current=False),dict(label='Transaction History',url=r('online_history'),current=False),dict(label='Online Accounts & Profit',url=r('online_accounts'),current=False)],open=False),
             dict(title='Products & Photos',icon='phones',url=r('online_store'),items=[],open=False),
             dict(title='My Account',icon='settings',url=r('password'),items=[dict(label='Name and password',url=r('password'),current=False)],open=False)]

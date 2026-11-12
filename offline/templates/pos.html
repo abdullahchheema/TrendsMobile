@@ -28,7 +28,7 @@
         <label for="pos-customer-phone">Phone<input id="pos-customer-phone" name="customer_phone" type="tel" maxlength="40" autocomplete="off" placeholder="0300 1234567"></label>
       </div>
       <datalist id="pos-customer-suggestions"></datalist>
-      <input type="hidden" name="seller" value="{{ me.pk }}"><input type="hidden" name="handler" value="{{ me.pk }}">
+      {% if sellers %}<label for="pos-seller">Sold by<select id="pos-seller" name="seller" required><option value="">Choose who is selling…</option>{% for p in sellers %}<option value="{{ p.pk }}">{{ p.name }}</option>{% endfor %}<option value="{{ me.pk }}">{{ me.name }} (shop counter)</option></select></label>{% else %}<input type="hidden" name="seller" value="{{ me.pk }}">{% endif %}<input type="hidden" name="handler" value="{{ me.pk }}">
       {% if credit_doc %}<p class="notice pos-credit" id="pos-credit" data-credit-doc="{{ credit_doc.pk }}" data-credit="{{ credit_amount }}">Exchange for <strong>{{ credit_doc.customer.name }}</strong>: return credit of <strong>PKR {{ credit_amount }}</strong> ({{ credit_doc.code }}) will be used automatically on this sale.</p>{% endif %}
       <p class="muted" id="pos-from" hidden></p><div id="cart-items" class="pos-cart"></div>
       <p class="muted pos-empty" id="pos-empty">Tap a phone on the left, or scan its IMEI, to add it.</p>

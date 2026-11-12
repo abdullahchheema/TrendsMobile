@@ -128,7 +128,9 @@ class BulkForm(forms.Form):
         self.fields['warehouse']=forms.ModelChoiceField(queryset=places,initial=shopdefaults.warehouse(branch).pk,required=False,widget=forms.HiddenInput())
         self.fields['posting_date']=forms.DateField(label='Purchase date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
         buyers=people.filter(can_buy=True)
-        me=shopdefaults.person(user,branch);self.fields['staff']=forms.ModelChoiceField(queryset=buyers,initial=me.pk,required=False,widget=forms.HiddenInput())
+        me=shopdefaults.person(user,branch)
+        if buyers.filter(crew=True).exists():self.fields['staff']=forms.ModelChoiceField(label='Bought by',queryset=buyers,required=True,empty_label='Choose who is buying…')       # a shop with staff always records who bought
+        else:self.fields['staff']=forms.ModelChoiceField(queryset=buyers,initial=me.pk,required=False,widget=forms.HiddenInput())
         can_pay=person is None or person.manager or person.can_handle_payments
         choices=[('full','Paid in full'),('part','Part payment'),('unpaid','Pay later / on credit')] if can_pay else [('unpaid','Pay later')]
         self.fields['payment_status']=forms.ChoiceField(label='Payment',choices=choices,initial='unpaid' if not can_pay else 'full')

@@ -61,8 +61,8 @@ class Lifecycle(OrderBase):
         self.phone(self.branch);o=self.order([self.item()]);self.assertEqual((oo.order_status(o),oo.display_stage(o)),('Confirmed','Not dispatched'))
         with self.assertRaises(ValidationError):oo.set_stage(o,self.user,'Processing')                   # no intermediate order statuses
         oo.dispatch(o,self.user,'TCS','T-1');o.refresh_from_db();self.assertEqual((o.status,oo.order_status(o),oo.display_stage(o)),('Dispatched','Confirmed','Dispatched'))
-        oo.set_stage(o,self.user,'In Transit');oo.deliver(o,self.user);o.refresh_from_db();self.assertEqual((oo.order_status(o),oo.display_stage(o)),('Confirmed','Delivered'))
-        self.assertEqual(self.kinds(o),['Confirmed','Dispatched','Fulfilment','Delivered'])
+        oo.set_stage(o,self.user,'In Transit');oo.deliver(o,self.user);o.refresh_from_db();self.assertEqual((oo.order_status(o),oo.display_stage(o)),('Fulfilled','Delivered'))
+        self.assertEqual(self.kinds(o),['Order placed','Confirmed by phone','Dispatched','Fulfilment','Delivered'])
         with self.assertRaises(ValidationError):oo.set_stage(o,self.user,'In Transit')
         with self.assertRaises(ValidationError):oo.update_shipment(o,self.user,'DHL','X')       # a delivered order is closed
     def test_a_prepaid_order_is_confirmed_at_once_but_cannot_ship_until_paid(self):
@@ -113,8 +113,12 @@ class Lifecycle(OrderBase):
         self.phone(self.branch)
         data=dict(external_ref='W-77',customer=dict(name='Sara',phone='03211234567'),items=[self.item()]);o=oo.create(data)[0]
         with override_settings(ONLINE_API_KEY='k'):
-            r=self.client.get(reverse('api_online_order_status',args=['W-77']),HTTP_X_API_KEY='k');self.assertEqual(r.json()['stage'],'Not dispatched');self.assertEqual((r.json()['order_status'],r.json()['status']),('Confirmed','New'))
-            oo.dispatch(o,self.user,'TCS','T-1');oo.set_stage(o,self.user,'In Transit');r=self.client.get(reverse('api_online_order_status',args=['W-77']),HTTP_X_API_KEY='k');self.assertEqual((r.json()['stage'],r.json()['tracking']),('In Transit','T-1'))
+            get=lambda:self.client.get(reverse('api_online_order_status',args=['W-77']),HTTP_X_API_KEY='k').json()
+            self.assertEqual((get()['order_status'],get()['status'],get()['stage']),('Unconfirmed','New','Not dispatched'))
+            oo.confirm(o,self.user);self.assertEqual(get()['order_status'],'Confirmed')
+            oo.dispatch(o,self.user,'TCS','T-1');self.assertEqual((get()['order_status'],get()['tracking']),('Confirmed','T-1'))       # shipped, cash not yet collected: still unfulfilled
+            oo.set_stage(o,self.user,'In Transit');self.assertEqual(get()['stage'],'In Transit')
+            oo.deliver(o,self.user);self.assertEqual(get()['order_status'],'Fulfilled')                                                  # cash received + tracking = fulfilled
 
 
 class Consistency(OrderBase):

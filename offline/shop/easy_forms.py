@@ -54,7 +54,8 @@ class EasyEntryForm(forms.Form):
         self.fields['method']=forms.ChoiceField(label='Payment method',choices=[(x,x) for x in (config.payment_methods if config else [])],initial='Cash',required=False)
         self.fields['payment_reference']=forms.CharField(label='Bank / wallet transaction reference',required=False,max_length=180)
         capability='can_sell' if kind=='sale' else 'can_buy';staff=people.filter(**{capability:True})
-        self.fields['staff']=forms.ModelChoiceField(label='Sold by' if kind=='sale' else 'Bought by',queryset=staff,initial=staff.filter(user=user).first() or staff.first())
+        crew_here=staff.filter(crew=True).exists()      # a shop with staff must say who did it: no silent default
+        self.fields['staff']=forms.ModelChoiceField(label='Sold by' if kind=='sale' else 'Bought by',queryset=staff,initial=None if crew_here else (staff.filter(user=user).first() or staff.first()),empty_label='Choose who…' if crew_here else '---------')
         shift=services.active_shift(branch,user);handlers=people.filter(can_handle_payments=True)
         self.fields['handler']=forms.ModelChoiceField(label='Payment handled by',queryset=handlers,required=False,initial=shift.handler if shift else handlers.filter(user=user).first() or handlers.first())
         self.fields['posting_date']=forms.DateField(label='Date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))

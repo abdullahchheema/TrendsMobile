@@ -82,7 +82,8 @@ class OwnShopAnalytics(Base):
         self.assertNotIn('Stock Transfers',side);self.assertNotIn('Send phones',side)
         self.login(self.user);owner=self.client.get(reverse('dashboard')).content.decode().split('<aside',1)[1].split('</aside>',1)[0]
         for text in ('Shop Accounts','Chart of Accounts','Fixed Assets','Stock Transfers','All Shops Inventory'):self.assertIn(text,owner,text)
-        for text in ('Warehouses','Cash tills','Roles & permissions','Staff'):self.assertNotIn(text,owner,text)
+        for text in ('Warehouses','Cash tills','Roles & permissions'):self.assertNotIn(text,owner,text)
+        self.assertIn('Staff &amp; Commission',owner)          # the owner manages shop staff and their commission (people without logins)
 
 
 class Receipt(Base):

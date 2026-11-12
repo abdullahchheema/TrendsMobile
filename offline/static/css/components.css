@@ -75,3 +75,13 @@ label>input[type=checkbox],label>input[type=radio]{flex:none;margin:0;display:in
 .nav-badge[hidden]{display:none}
 .nav-badge.bump{transform:scale(1.25)}
 @media (prefers-reduced-motion:reduce){.nav-badge{transition:none}}
+
+/* IMEI camera scanning */
+.scan-btn{margin-inline-start:8px;padding:6px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--glass);color:var(--ink-2);font-size:13px;cursor:pointer;vertical-align:middle}
+.scan-btn:hover{background:var(--glass-2);color:var(--ink)}
+dialog.scan-dialog{width:min(92vw,520px);border:1px solid var(--line-2);border-radius:14px;background:var(--surface-2,#1b1d24);color:var(--ink);padding:16px}
+dialog.scan-dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog.scan-dialog h2{margin:0 0 10px;font-size:18px}
+dialog.scan-dialog video{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:10px;background:#000}
+dialog.scan-dialog p{margin:10px 0 0;font-size:14px;color:var(--ink-2)}
+.scan-actions{display:flex;justify-content:flex-end;margin-top:12px}

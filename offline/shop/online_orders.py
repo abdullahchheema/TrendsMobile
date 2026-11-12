@@ -15,9 +15,9 @@ from collections import defaultdict
 from decimal import ROUND_HALF_UP,Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q,Sum
 from django.utils import timezone
-from .models import Branch,Device,Document,Line,OnlineAllocation,OnlineOrder,OnlineOrderAck,OnlineOrderEvent,OnlineOrderLine,Party,Product,ShopSettings
+from .models import Branch,Device,Document,Line,OnlineAllocation,OnlineDeliveryRule,OnlineOrder,OnlineOrderAck,OnlineOrderEvent,OnlineOrderLine,OnlinePaymentAccount,OnlineSettings,Party,Product,ShopSettings
 from . import pricing,shopdefaults,services as s
 
 ZERO=Decimal('0.00')
@@ -196,7 +196,7 @@ def release(order):
 
 # ------------------------------------------------------------------ creating an order
 KNOWN_TOP={'external_ref','customer','payment_method','payment_status','payment_reference','delivery_fee','notes','items','expected_total','discount','shipping','shipping_method'}
-KNOWN_CUSTOMER={'name','phone','email','address','city','alt_phone','phone2','postal_code','zip'}
+KNOWN_CUSTOMER={'name','phone','email','address','city','alt_phone','phone2','postal_code','zip','province'}
 MAX_EXTRA=20000
 
 
@@ -239,7 +239,7 @@ def _int(value,label):
 
 
 @transaction.atomic
-def create(data,user=None,source='Website',credit=None):
+def create(data,user=None,source='Website',credit=None,strict=False):
     """Create an order from validated-looking input: {external_ref, customer{name,phone,email,address,city}, payment_method, payment_reference, delivery_fee,
     notes, items:[{product_id, condition, pta_status, device_type, price, quantity}], expected_total}. Returns (order, created)."""
     ref=str(data.get('external_ref') or '').strip()[:80] or None
@@ -258,6 +258,7 @@ def create(data,user=None,source='Website',credit=None):
     try:fee=s.payment_money(data.get('delivery_fee') or 0)
     except ValidationError:raise ValidationError('Delivery fee is not a valid amount.')
     if fee<0 or fee>100000:raise ValidationError('Delivery fee is outside the allowed range.')
+    if strict and method not in [o['method'] for o in payment_options()]:raise ValidationError(f'{method} is not available right now. Choose another payment method.')
     lines=[];seen=set()
     for item in items:
         if not isinstance(item,dict):raise ValidationError('Invalid item.')
@@ -287,6 +288,9 @@ def create(data,user=None,source='Website',credit=None):
         existing=OnlineOrder.objects.filter(external_ref=ref).first()
         if existing:return existing,False
     subtotal=sum((l['unit_price']*l['quantity'] for l in lines),ZERO)
+    if strict:
+        due=delivery_fee_for(subtotal,cust.get('province'))
+        if fee!=due:raise ValidationError(f'The delivery charge is now PKR {due:,.2f}, not PKR {fee:,.2f}. Prices or delivery changed; refresh and try again.')
     discount,code=_discount(data.get('discount'),subtotal);total=subtotal-discount+fee
     if data.get('expected_total') not in (None,'') and s.payment_money(data['expected_total'])!=total:
         raise ValidationError(f'The total is now PKR {total:,.2f}, not PKR {s.payment_money(data["expected_total"]):,.2f}. Prices or delivery changed; refresh and try again.')
@@ -295,10 +299,10 @@ def create(data,user=None,source='Website',credit=None):
         delivery_fee=fee,subtotal=subtotal,total=total,notes=str(data.get('notes') or '')[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit,
         alt_phone=str(cust.get('alt_phone') or cust.get('phone2') or '')[:40],postal_code=str(cust.get('postal_code') or cust.get('zip') or '')[:20],
         shipping_method=str((data.get('shipping') or {}).get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method') or '')[:100],discount_amount=discount,discount_code=code,extra=_extra(data,cust))
-    if getattr(user,'is_authenticated',False):order.seen_at=timezone.now();order.save(update_fields=['seen_at'])        # an order typed in by the team needs no badge
+    if getattr(user,'is_authenticated',False):order.seen_at=order.confirmed_at=timezone.now();order.confirmed_by=user;order.save(update_fields=['seen_at','confirmed_at','confirmed_by'])      # an order the team typed in after a call is already confirmed
     for l in lines:l['line']=OnlineOrderLine.objects.create(order=order,product=l['product'],condition=l['condition'],pta_status=l['pta_status'],device_type=l['device_type'],quantity=l['quantity'],unit_price=l['unit_price'])
     _reserve(order,plan(lines))
-    event(order,user,'Confirmed','','Not dispatched',f'{source} order · {len(lines)} line(s) · total {total}')
+    event(order,user,'Order placed','','Confirmed' if order.confirmed_at else 'Unconfirmed',f'{source} order · {len(lines)} line(s) · total {total}')
     if getattr(user,'is_authenticated',False):s.audit(user,'Online order created',None,order=order.code,total=str(total))
     return order,True
 
@@ -314,9 +318,88 @@ SHIPPED_STAGES = ('Dispatched', 'In Transit')
 FAILED = 'Delivery Failed'
 
 
+def is_fulfilled(order):
+    """Fulfilled = the payment has been received AND the item has been handed to the courier with a tracking number.
+    Cash on delivery therefore stays unfulfilled after dispatch (tracking added, money not yet collected) until the cash is received."""
+    return order.status in (OnlineOrder.DISPATCHED, OnlineOrder.DELIVERED) and bool(order.tracking) and order.payment_status == 'Paid'
+
+
 def order_status(order):
-    """The primary status: Confirmed or Cancelled."""
-    return 'Cancelled' if order.status == OnlineOrder.CANCELLED else 'Confirmed'
+    """The order's main status: Unconfirmed (just arrived, the customer has not been called yet), Confirmed, Fulfilled, Cancelled, or Returned
+    (a failed delivery that came back)."""
+    if order.status == OnlineOrder.CANCELLED:
+        return 'Cancelled'
+    if order.status == OnlineOrder.RETURNED:
+        return 'Returned'
+    if order.status == OnlineOrder.NEW and order.confirmed_at is None:
+        return 'Unconfirmed'
+    return 'Fulfilled' if is_fulfilled(order) else 'Confirmed'
+
+
+CANCEL_REASONS = (
+    'Customer did not answer the call',
+    'Customer changed their mind',
+    'Wrong or unreachable phone number',
+    'Duplicate order',
+    'Ordered by mistake',
+    'Delivery is not available in that area',
+    'Item no longer available (stock problem)',
+    'Customer disagreed with the price or total',
+    'Suspected fake order or fraud',
+    'Payment was not received in time',
+    'Other (write the reason)',
+)
+
+
+@transaction.atomic
+def confirm(order, user, note=''):
+    """The online manager called the customer and the customer confirmed the order. Only then may it be shipped."""
+    order = _lock(order)
+    if order.status != OnlineOrder.NEW:
+        raise ValidationError('Only a new order can be confirmed.')
+    if order.confirmed_at is not None:
+        return order
+    order.confirmed_at = timezone.now()
+    order.confirmed_by = user if getattr(user, 'is_authenticated', False) else None
+    order.seen_at = order.seen_at or order.confirmed_at
+    order.save(update_fields=['confirmed_at', 'confirmed_by', 'seen_at', 'modified'])
+    event(order, user, 'Confirmed by phone', 'Unconfirmed', 'Confirmed', note)
+    s.audit(user, 'Online order confirmed', None, order=order.code)
+    return order
+
+
+# ---- delivery pricing and payment accounts (set by the online manager)
+def delivery_fee_for(subtotal, province=''):
+    """What the website charges for delivery: free from the free-delivery amount, else the province's own fee, else the default fee."""
+    cfg = OnlineSettings.get()
+    if cfg.free_delivery_from is not None and subtotal >= cfg.free_delivery_from:
+        return ZERO
+    rule = OnlineDeliveryRule.objects.filter(province__iexact=' '.join(str(province or '').split())).first() if province else None
+    return rule.fee if rule else cfg.delivery_fee
+
+
+def payment_options():
+    """[{method, accounts:[{title, bank_name, account_number, iban, instructions}]}] that customers can choose today. Until the manager adds any
+    payment account, the four prepaid methods stay available without account details (how it worked before)."""
+    cfg = OnlineSettings.get()
+    out = [dict(method='Cash on Delivery', accounts=[])] if cfg.cod_enabled else []
+    accounts = list(OnlinePaymentAccount.objects.all())
+    if not accounts:
+        return out + [dict(method=m, accounts=[]) for m in OnlinePaymentAccount.METHODS]
+    for method in OnlinePaymentAccount.METHODS:
+        mine = [a for a in accounts if a.method == method and a.enabled]
+        if mine:
+            out.append(dict(method=method, accounts=[dict(title=a.title, bank_name=a.bank_name, account_number=a.account_number, iban=a.iban, instructions=a.instructions) for a in mine]))
+    return out
+
+
+def store_config():
+    """Everything the website needs to price delivery and show payment instructions."""
+    cfg = OnlineSettings.get()
+    money = lambda v: format(Decimal(v), '.2f')
+    return dict(delivery=dict(fee=money(cfg.delivery_fee), free_from=money(cfg.free_delivery_from) if cfg.free_delivery_from is not None else None,
+                              provinces=[dict(province=r.province, fee=money(r.fee)) for r in OnlineDeliveryRule.objects.all()]),
+                payment_methods=payment_options())
 
 
 def event(order, user, kind, frm='', to='', note=''):
@@ -411,13 +494,13 @@ def mark_seen(order, user=None):
 
 
 def unseen_count():
-    """Orders confirmed and not yet opened by the online team (the badge on Online Orders)."""
-    return OnlineOrder.objects.filter(status=OnlineOrder.NEW, seen_at__isnull=True).count()
+    """Orders waiting for the online manager to call the customer (the badge on Online Orders). It drops when the order is confirmed or cancelled."""
+    return OnlineOrder.objects.filter(status=OnlineOrder.NEW, confirmed_at__isnull=True).count()
 
 
 def shop_orders(branch):
     """Online orders that hold stock in this shop (to pack), newest first. A shop sees only what it must pack: no customer money, no other shop."""
-    return OnlineOrder.objects.filter(lines__allocations__branch=branch, status__in=(OnlineOrder.NEW, OnlineOrder.DISPATCHED)).distinct().order_by('-created')
+    return OnlineOrder.objects.filter(lines__allocations__branch=branch).filter(Q(status=OnlineOrder.NEW, confirmed_at__isnull=False) | Q(status=OnlineOrder.DISPATCHED)).distinct().order_by('-created')
 
 
 def shop_unseen_count(branch):
@@ -569,6 +652,7 @@ def dispatch(order,user,courier='',tracking='',notes=''):
     cash on delivery stays owing until delivery."""
     order=_lock(order)
     if order.status!=OnlineOrder.NEW:raise ValidationError('Only a new order can be dispatched.')
+    if order.confirmed_at is None:raise ValidationError('Call the customer and confirm the order before shipping it.')
     if order.payment_method!='Cash on Delivery' and order.payment_status!='Paid':raise ValidationError('Confirm that the payment arrived before dispatching.')
     allocations=list(OnlineAllocation.objects.select_for_update(of=('self',)).filter(line__order=order).select_related('line','product','device','branch'))
     if not allocations:raise ValidationError('This order has no reserved stock.')

@@ -319,7 +319,12 @@ def detail(request,pk):
         closing=doc.linked.filter(kind='POS Closing Entry',status='Submitted').first()
         reconciliation=closing.data.get('reconciliation') if closing else services.till_balance(doc)
     elif doc.kind=='POS Closing Entry' and doc.status=='Draft' and doc.reference_id:reconciliation=services.till_balance(doc.reference)
-    return render(request,'detail.html',dict(title=doc.code,doc=doc,reconciliation=reconciliation,lines=doc.lines.select_related('product','device','warehouse'),open_invoices=open_invoices,
+    staff_credit=None
+    if doc.status=='Submitted' and (doc.kind in services.SELL or doc.kind=='Purchase Receipt'):
+        field='seller' if doc.kind in services.SELL else 'buyer';person=getattr(doc,field);capability='can_sell' if field=='seller' else 'can_buy'
+        staff_credit=dict(label='Sold by' if field=='seller' else 'Bought by',current=doc.staff_names.get(field) or (person.name if person else '—'),
+            options=list(Staff.objects.filter(branch=doc.branch,enabled=True,**{capability:True}).order_by('name')) if request.user.is_superuser else [])
+    return render(request,'detail.html',dict(title=doc.code,doc=doc,staff_credit=staff_credit,reconciliation=reconciliation,lines=doc.lines.select_related('product','device','warehouse'),open_invoices=open_invoices,
         has_advance=doc.kind=='Payment Entry' and services.money(doc.data.get('unallocated'))>0,
         related=related,methods=config.payment_methods,cash_modes=services.cash_modes(doc.branch),cash_summary=services.cash_summary(doc),staff=Staff.objects.filter(branch=doc.branch,enabled=True,can_handle_payments=True),
         request_key=uuid.uuid4(),can_checkout=doc.kind in services.SELL and not doc.is_return,kind=doc.kind,
@@ -629,7 +634,7 @@ def pos(request):
     if request.GET.get('credit') and not all_shops:
         credit_doc=scoped(request.user).filter(pk=request.GET['credit'],is_return=True,kind__in=services.SELL,status='Submitted',branch=branch,outstanding__lt=0).select_related('customer').first()
     return render(request,'pos.html',dict(title='New Sale',items=items,credit_doc=credit_doc,credit_amount=(-credit_doc.outstanding if credit_doc else 0),customers=customers,stale_shift=stale_shift,prefill=(credit_doc.customer.name if credit_doc else request.GET.get('customer','')),add_device=request.GET.get('phone',''),all_shops=all_shops,
-        me=shopdefaults.person(request.user,branch),cash_modes=services.cash_modes(branch),
+        me=shopdefaults.person(request.user,branch),sellers=list(Staff.objects.filter(branch=branch,enabled=True,crew=True,can_sell=True).order_by('name')),cash_modes=services.cash_modes(branch),
         branch=branch,methods=methods,request_key=uuid.uuid4(),tax_rules=pricing.rules(branch),
         shift=shift,reconciliation=services.till_balance(shift) if shift else None))
 
@@ -647,8 +652,14 @@ def pos_checkout(request):
             phone=' '.join(str(data.get('customer_phone') or '').split())
             if phone and not customer.phone:
                 customer.phone=phone;customer.clean();customer.save(update_fields=['phone','modified'])
-            seller=shopdefaults.person(request.user,branch)       # whoever sells, the shop stands behind it
-            handler=shift.handler if shift and shift.till_id and shift.handler_id else seller       # an open till shift keeps its own cashier
+            counter=shopdefaults.person(request.user,branch)       # the shop's own login: takes the payments
+            seller=counter
+            team=Staff.objects.filter(branch=branch,enabled=True,crew=True,can_sell=True)
+            if team.exists():                                       # a shop with staff always records who made the sale
+                chosen=str(data.get('seller') or '')
+                if not chosen:raise ValidationError('Choose who made this sale.')
+                seller=counter if chosen==str(counter.pk) else get_object_or_404(team,pk=chosen)
+            handler=shift.handler if shift and shift.till_id and shift.handler_id else counter       # an open till shift keeps its own cashier
             doc=services.new_doc('POS Invoice' if shift and shift.till_id else 'Sales Invoice',branch,customer=customer,seller=seller)
             doc.notes=' '.join(str(data.get('note') or '').split())[:500]
             adjustments=data.get('adjustments',{})

@@ -72,6 +72,8 @@ class Staff(Record):
     default_warehouse=models.ForeignKey(Warehouse,on_delete=models.PROTECT,null=True,blank=True)
     user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True)
     designation=models.CharField(max_length=100,blank=True)
+    crew=models.BooleanField(default=False)      # a person without a login who serves customers and buys stock; every sale and purchase in the shop is credited to someone
+    commission_rate=models.DecimalField(max_digits=5,decimal_places=2,default=0)      # % of the net sales this person makes (paid by the owner, reported per person)
     enabled=models.BooleanField(default=True)
     manager=models.BooleanField(default=False)
     can_buy=models.BooleanField(default=False)
@@ -500,8 +502,48 @@ class OnlineOrder(Record):
     return_note=models.CharField(max_length=240,blank=True,default='')
     seen_at=models.DateTimeField(null=True,blank=True,db_index=True)      # empty until the online team opens the order: drives the new-order badge
     failed_reason=models.CharField(max_length=240,blank=True,default='')
+    confirmed_at=models.DateTimeField(null=True,blank=True,db_index=True)      # empty = Unconfirmed: the online manager has not yet called the customer
+    confirmed_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name='+')
     returned_on=models.DateField(null=True,blank=True)
     class Meta:ordering=['-created']
+
+
+class OnlineSettings(models.Model):
+    """The website's delivery pricing and whether cash on delivery is offered. One row, edited by the owner and the online manager."""
+    id=models.PositiveSmallIntegerField(primary_key=True,default=1)
+    delivery_fee=models.DecimalField(max_digits=12,decimal_places=2,default=250)
+    free_delivery_from=models.DecimalField(max_digits=12,decimal_places=2,null=True,blank=True,default=30000)      # empty = delivery is never free
+    cod_enabled=models.BooleanField(default=True)
+    modified=models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+
+class OnlineDeliveryRule(models.Model):
+    """A different delivery fee for one province (the default fee applies everywhere else)."""
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    province=models.CharField(max_length=60)
+    fee=models.DecimalField(max_digits=12,decimal_places=2)
+    class Meta:
+        constraints=[models.UniqueConstraint(fields=['province'],name='onlinedelivery_province')]
+        ordering=['province']
+
+
+class OnlinePaymentAccount(models.Model):
+    """An account customers can pay into (bank, Easypaisa, JazzCash…). The website shows it at checkout for that method."""
+    METHODS=('Bank Transfer','Easypaisa','JazzCash','Card')
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    method=models.CharField(max_length=30,choices=[(m,m) for m in ('Bank Transfer','Easypaisa','JazzCash','Card')])
+    title=models.CharField(max_length=120,help_text='Account title (the name on the account)')
+    bank_name=models.CharField(max_length=120,blank=True)
+    account_number=models.CharField(max_length=60,blank=True)
+    iban=models.CharField(max_length=40,blank=True)
+    instructions=models.CharField(max_length=300,blank=True)
+    enabled=models.BooleanField(default=True)
+    position=models.PositiveSmallIntegerField(default=0)
+    class Meta:ordering=['method','position','title']
 
 
 class OnlineOrderAck(models.Model):
