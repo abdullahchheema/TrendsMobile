@@ -9,7 +9,7 @@ grant usage on schema api to anon;
 do $$
 declare v text;
 begin
-  foreach v in array array['web_families','web_listings','web_variants','web_variant_stock','web_stock','web_phone_units','web_images'] loop
+  foreach v in array array['web_families','web_listings','web_variants','web_images'] loop
     if exists (select 1 from information_schema.views where table_schema = 'covison_app' and table_name = v) then
       execute format('create or replace view api.%I as select * from covison_app.%I', v, v);
       execute format('grant select on api.%I to anon', v);
@@ -19,3 +19,7 @@ begin
     end if;
   end loop;
 end $$;
+
+-- The per-shop views name the shops that hold stock. The public website must never learn that, so they are NOT exposed through the Data API
+-- (anyone holding the public key could read them). The website does not use them. Safe to run again.
+drop view if exists api.web_variant_stock, api.web_stock, api.web_phone_units;

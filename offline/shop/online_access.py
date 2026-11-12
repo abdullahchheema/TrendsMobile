@@ -13,7 +13,7 @@ from django.urls import Resolver404,resolve,reverse
 
 _active=ContextVar('covison_online_mode',default=False)
 
-PAGES={'online_dashboard','online_store','online_edit','online_photo_upload','online_photo_order','online_photo_update','online_photo_delete','product_image_file','online_orders','online_order',
+PAGES={'live_state','online_dashboard','online_store','online_edit','online_photo_upload','online_photo_order','online_photo_update','online_photo_delete','product_image_file','online_orders','online_order',
        'online_order_new','online_stock','online_accounts','online_money_in','online_money_out','online_expenses','online_customer_dues','online_cash_and_bank','online_history','logout','password','display_name','login'}
 PARTY_PAGES={'party_account'}                                          # a customer's account: only Online Store customers
 RECORD_PAGES={'return_sale','return_done','detail','receipt'}        # open one invoice, return or receipt: only if it belongs to an online order

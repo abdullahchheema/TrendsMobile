@@ -12,11 +12,12 @@
 <link rel="stylesheet" href="{% static 'css/layout.css' %}" data-turbo-track="reload">
 <link rel="stylesheet" href="{% static 'css/components.css' %}" data-turbo-track="reload">
 <link rel="stylesheet" href="{% static 'css/pages.css' %}" data-turbo-track="reload">
+<meta name="turbo-refresh-method" content="morph"><meta name="turbo-refresh-scroll" content="preserve">
 <script>try{if(sessionStorage.getItem('cov-shell'))document.documentElement.classList.add('shell-seen');else sessionStorage.setItem('cov-shell','1')}catch(e){}</script>
 <meta name="turbo-cache-control" content="no-cache">
 <script src="{% static 'vendor/turbo-8.0.13.js' %}" data-turbo-track="reload" defer></script>
 <script src="{% static 'page.js' %}" data-turbo-track="reload" defer></script>
-<script src="{% static 'offline.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'payments.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'shell.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'ui.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'words.js' %}" data-turbo-track="reload" defer></script>
+<script src="{% static 'offline.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'payments.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'shell.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'ui.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'live.js' %}" data-turbo-track="reload" defer></script><script src="{% static 'words.js' %}" data-turbo-track="reload" defer></script>
 </head>
 <body class="app">
 <a class="skip-link" href="#content">Skip to content</a>
@@ -50,7 +51,7 @@
 <aside id="main-navigation" class="sidebar" aria-label="Main navigation">
   <a href="{% url 'dashboard' %}" class="brand"><img src="{% static 'covison-logo-mark.png' %}" alt=""><span>Covison ERP<small>Mobile shop suite</small></span></a>
   <div class="quick"><a href="{% url 'pos' %}" class="primary-nav">New Sale</a><a href="{% url 'bulk_purchase' %}" class="primary-nav">New Purchase</a></div>
-  {% for section in menu %}{% if section.items %}<details{% if section.open %} open{% endif %}><summary><svg class="ico"><use href="#i-{{ section.icon }}"/></svg>{{ section.title }}</summary>{% for item in section.items %}<a href="{{ item.url }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}</details>{% else %}<a href="{{ section.url }}"><svg class="ico"><use href="#i-{{ section.icon }}"/></svg>{{ section.title }}</a>{% endif %}{% endfor %}
+  {% for section in menu %}{% if section.items %}<details{% if section.open %} open{% endif %}><summary><svg class="ico"><use href="#i-{{ section.icon }}"/></svg>{{ section.title }}{% if online_orders_path and section.title == 'Orders' or online_orders_path and section.title == 'Online Store' %}<span class="nav-badge" data-live-badge="online"{% if not online_badge %} hidden{% endif %}>{{ online_badge }}</span>{% endif %}</summary>{% for item in section.items %}<a href="{{ item.url }}"{% if item.current %} aria-current="page"{% endif %}>{{ item.label }}{% if online_orders_path and item.url == online_orders_path %}<span class="nav-badge" data-live-badge="online"{% if not online_badge %} hidden{% endif %}>{{ online_badge }}</span>{% endif %}</a>{% endfor %}</details>{% else %}<a href="{{ section.url }}"><svg class="ico"><use href="#i-{{ section.icon }}"/></svg>{{ section.title }}{% if shop_orders_path and section.url == shop_orders_path %}<span class="nav-badge" data-live-badge="shop"{% if not shop_badge %} hidden{% endif %}>{{ shop_badge }}</span>{% endif %}</a>{% endif %}{% endfor %}
 </aside>
 <main class="app-main" id="content" tabindex="-1">{% if request.resolver_match.url_name != 'dashboard' %}<div class="page-back"><button type="button" data-go-back aria-label="Go back to the previous page">← Back</button></div>{% endif %}{% block content %}{% endblock %}</main>
 <footer class="app-footer" role="contentinfo">

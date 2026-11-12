@@ -9,6 +9,13 @@ class ShopConfig(AppConfig):
         from django.db.models.signals import post_save
         from .models import Product
         post_save.connect(_new_variant,sender=Product,dispatch_uid='covison-live-pages')
+        # Anything that changes what the website shows (stock, prices, photos, orders, reservations) pings it, so it updates at once.
+        from django.db.models.signals import post_delete
+        from .models import Device,OnlineAllocation,OnlineOrder,ProductImage,StockMovement
+        from . import website_sync
+        for model in (Device,Product,ProductImage,StockMovement,OnlineOrder,OnlineAllocation):
+            post_save.connect(website_sync.notify,sender=model,dispatch_uid='covison-site-save-'+model.__name__)
+            post_delete.connect(website_sync.notify,sender=model,dispatch_uid='covison-site-delete-'+model.__name__)
 
 
 def _new_variant(sender,instance,created,raw=False,**kwargs):

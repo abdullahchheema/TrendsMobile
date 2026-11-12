@@ -32,9 +32,9 @@ def orders(request):
     _guard(request)
     q=request.GET.get('q','').strip();status=request.GET.get('status','')
     rows=OnlineOrder.objects.all().prefetch_related('lines__product','lines__allocations__branch')
-    counts={name:OnlineOrder.objects.filter(status=name).count() for name in ('New','Dispatched','Delivered','Cancelled')}
+    counts={name:OnlineOrder.objects.filter(status=name).count() for name in ('New','Dispatched','Delivered','Cancelled','Returned')}
     if status in counts:rows=rows.filter(status=status)
-    elif status=='history':rows=rows.filter(status__in=(OnlineOrder.DELIVERED,OnlineOrder.CANCELLED))
+    elif status=='history':rows=rows.filter(status__in=(OnlineOrder.DELIVERED,OnlineOrder.CANCELLED,OnlineOrder.RETURNED))
     elif status!='all':rows=rows.filter(status__in=(OnlineOrder.NEW,OnlineOrder.DISPATCHED)); status=''     # the working list: orders still to dispatch or on the way
     if q:
         digits=''.join(ch for ch in q if ch.isdigit())
@@ -43,7 +43,7 @@ def orders(request):
         rows=rows.filter(match)
     from .views import paginate
     page,pager=paginate(request,list(rows),40)
-    data=[dict(o=o,stage=oo.display_stage(o),items=', '.join(f'{l.product.name} × {l.quantity}' for l in o.lines.all())[:90],shops=sorted({a.branch.name for l in o.lines.all() for a in l.allocations.all()})) for o in page.object_list]
+    data=[dict(o=o,primary=oo.order_status(o),new=o.seen_at is None and o.status==OnlineOrder.NEW,stage=oo.display_stage(o),items=', '.join(f'{l.product.name} × {l.quantity}' for l in o.lines.all())[:90],shops=sorted({a.branch.name for l in o.lines.all() for a in l.allocations.all()})) for o in page.object_list]
     return render(request,'online_orders.html',dict(title='Online Orders',rows=data,page_obj=page,pager_query=pager,q=q,status=status,counts=counts))
 
 
@@ -66,7 +66,7 @@ def _candidates(order):
 
 @login_required
 def order(request,pk):
-    _guard(request);o=get_object_or_404(OnlineOrder.objects.select_related('exchange_credit'),pk=pk)
+    _guard(request);o=get_object_or_404(OnlineOrder.objects.select_related('exchange_credit'),pk=pk);oo.mark_seen(o,request.user)
     if request.method=='POST':
         action=request.POST.get('action')
         try:
@@ -81,6 +81,15 @@ def order(request,pk):
             elif action=='stage':oo.set_stage(o,request.user,request.POST.get('stage',''),request.POST.get('note',''));messages.success(request,'Order updated.')
             elif action=='shipment':oo.update_shipment(o,request.user,request.POST.get('courier',''),request.POST.get('tracking',''),request.POST.get('notes',''));messages.success(request,'Courier and tracking saved.')
             elif action=='return_request':oo.request_return(o,request.user,request.POST.get('note',''));messages.success(request,'Return request recorded. Nothing moves in stock until the phone is received and inspected.')
+            elif action=='delivery_failed':oo.delivery_failed(o,request.user,request.POST.get('reason',''));messages.success(request,'Failed delivery recorded. Nothing returns to stock until the phone is received back in a shop.')
+            elif action=='receive_returned':
+                from datetime import date as _date
+                from .models import Warehouse
+                warehouse=get_object_or_404(Warehouse,pk=request.POST.get('warehouse'),enabled=True)
+                charge=request.POST.get('courier_charge','').strip();category=None
+                if charge:category=get_object_or_404(Account,pk=request.POST.get('category'))
+                oo.receive_returned(o,request.user,warehouse,request.POST.get('condition',''),request.POST.get('resale','hold'),request.POST.get('note',''),charge or None,category,request.POST.get('method'),_date.today())
+                messages.success(request,'Returned phone received. The sale is reversed and the phone is back in that shop at its original cost.')
             elif action=='deliver':oo.deliver(o,request.user,request.POST.get('method','Cash'));messages.success(request,'Marked delivered; any cash on delivery is now recorded as received.')
             else:raise ValidationError('Unknown action.')
         except (ValidationError,IntegrityError,ValueError) as error:messages.error(request,_err(error))
@@ -94,9 +103,20 @@ def order(request,pk):
         if isinstance(v,list):return ', '.join(flat(x) for x in v)
         return str(v)
     extra_rows=[(str(k).replace('_',' ').capitalize(),flat(v)) for k,v in (o.extra or {}).items() if v not in ('',None,[],{})]
-    return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),events=list(o.events.select_related('user')),new_stages=oo.NEW_STAGES[1:],shipped_stages=oo.SHIPPED_STAGES,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
+    return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),primary=oo.order_status(o),events=list(o.events.select_related('user')),shipped_stages=oo.SHIPPED_STAGES,failed=oo.FAILED,receiving=_receiving(o),extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
         candidates=list(_candidates(o)) if o.status==OnlineOrder.NEW and not o.exchange_credit_id else [],prepaid=o.payment_method!='Cash on Delivery',
         outstanding=sum((i.outstanding for i in invoices if i.outstanding>0),Decimal(0))))
+
+
+def _receiving(o):
+    """What the 'phone came back' form needs: the shops that can receive it, the expense categories and the Online Store's payment methods."""
+    if o.status!=OnlineOrder.DISPATCHED or o.stage!=oo.FAILED:return None
+    from . import money_views
+    from .models import Warehouse
+    online=oo.online_branch()
+    return dict(warehouses=[(w.pk,w.branch.name) for w in Warehouse.objects.filter(enabled=True,branch__enabled=True,branch__is_online=False).select_related('branch').order_by('branch__name')],
+                categories=list(money_views._accounts('Expense',('COA-6950','COA-5200')).values_list('pk','name')) if Account.objects.filter(code='COA-6750').exists() else [],
+                methods=list(ShopSettings.objects.get(branch=online).payment_methods))
 
 
 def _key(v):return f"{v['product'].pk}~{v['condition']}~{v['pta_status']}~{v['device_type']}~{v['price']}"
@@ -215,7 +235,7 @@ def api_order_status(request,ref):
     if not _authorized(request):return JsonResponse({'error':'Invalid or missing API key.'},status=401)
     o=OnlineOrder.objects.filter(Q(external_ref=ref)|Q(code=ref)).first()
     if not o:return JsonResponse({'error':'Order not found.'},status=404)
-    return JsonResponse(dict(order=o.code,external_ref=o.external_ref,status=o.status,stage=oo.display_stage(o),payment_status=o.payment_status,courier=o.courier,tracking=o.tracking,total=str(o.total),
+    return JsonResponse(dict(order=o.code,external_ref=o.external_ref,status=o.status,order_status=oo.order_status(o),fulfilment=oo.display_stage(o),stage=oo.display_stage(o),failed_reason=o.failed_reason,payment_status=o.payment_status,courier=o.courier,tracking=o.tracking,total=str(o.total),
                              placed_on=str(o.placed_on),dispatched_on=str(o.dispatched_on) if o.dispatched_on else None,delivered_on=str(o.delivered_on) if o.delivered_on else None))
 
 
@@ -232,3 +252,45 @@ def _finance(view):
 def finance_views():
     from . import money_views as mv
     return dict(money_in=_finance(mv.money_in),money_out=_finance(mv.money_out),expenses=_finance(mv.expenses),customer_dues=_finance(mv.customer_dues),cash_and_bank=_finance(mv.cash_and_bank),history=_finance(mv.history_view))
+
+
+# ------------------------------------------------------------------ shops: what to pack (read only) and the live state every screen polls
+@login_required
+def shop_orders(request):
+    """A shop sees only the online orders that hold its own stock: what to pack, the phone codes and IMEIs, and the courier once dispatched. No customer, no money."""
+    from . import access
+    person=access.staff(request.user)
+    if person is None:return redirect('online_orders') if online_access.can_use_online(request.user) else redirect('dashboard')
+    branch=person.branch
+    if request.method=='POST':
+        order=get_object_or_404(oo.shop_orders(branch),pk=request.POST.get('order'));oo.acknowledge(order,branch,request.user);return redirect('shop_online_orders')
+    rows=[]
+    for o in oo.shop_orders(branch)[:100]:
+        mine=[a for l in o.lines.all() for a in l.allocations.all() if a.branch_id==branch.pk]
+        rows.append(dict(o=o,status=oo.order_status(o),fulfilment=oo.display_stage(o),acked=o.acks.filter(branch=branch).exists(),
+            items=[dict(name=a.product.name,detail=(a.device.code+''.join(' · IMEI '+i.number for i in a.device.imeis.all())) if a.device_id else f'× {a.quantity:.0f}') for a in mine]))
+    return render(request,'shop_online_orders.html',dict(title='Online orders to pack',rows=rows,branch=branch))
+
+
+@login_required
+def live_state(request):
+    """A cheap fingerprint of the data plus the badge counts. Screens poll it and reload themselves when it changes: nobody has to press refresh."""
+    import hashlib
+    from django.db.models import Count,Max
+    from . import access
+    from .models import OnlineOrderEvent,Product,StockMovement
+    parts=[]
+    for model in (Device,Document,OnlineOrder,Product):
+        r=model.objects.aggregate(n=Count('pk'),m=Max('modified'));parts.append(f'{model.__name__}:{r["n"]}:{r["m"]}')
+    parts.append('events:%s'%OnlineOrderEvent.objects.aggregate(n=Count('pk'),m=Max('at')))
+    from django.db.models import Sum
+    parts.append('stock:%s'%StockMovement.objects.aggregate(n=Count('pk'),q=Sum('quantity')))
+    parts.append('devices:%s'%sorted(Device.objects.values_list('status').annotate(n=Count('pk'))))      # queryset .update() calls do not touch 'modified', so count by status too
+    parts.append('live:%s'%Product.objects.filter(online_visible=True).count())
+    parts.append('orders:%s'%sorted(OnlineOrder.objects.values_list('status','stage').annotate(n=Count('pk'))))
+    out=dict(token=hashlib.sha1('|'.join(parts).encode()).hexdigest()[:16])
+    if online_access.can_use_online(request.user):out['online']=oo.unseen_count()
+    else:
+        person=access.staff(request.user)
+        if person is not None:out['shop']=oo.shop_unseen_count(person.branch)
+    resp=JsonResponse(out);resp['Cache-Control']='no-store';return resp

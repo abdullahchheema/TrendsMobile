@@ -92,6 +92,7 @@ def menu_for(user,visible,path=''):
     if owner:
         sections.append(('Shops','shops',r('setup'),[('All Shops',r('setup')),('Shop Accounts',r('users')),('Branch Information',r('settings'))]))
     sections.append(('Sales','sell-pos',r('pos'),[('New Sale',r('pos')),('Sales History',coll('Sales Invoice'))]))
+    if not owner:sections.append(('Online Orders to Pack','buy',r('shop_online_orders'),[]))
     sections.append(('Returns & Exchanges','exchanges',r('returns'),[('Sale Return / Exchange',r('returns')),('Return to Supplier',r('purchase_returns')),('Return History',r('return_history')),('Exchange History',coll('Mobile Exchange')),('Supplier Return History',coll('Purchase Return'))]))
     inventory=[('All Shops Inventory' if owner else 'My Shop Inventory',coll('Mobile Device'))]
     inventory.append(('Product and Model Management',coll('Item')) if owner else ('Add Stock',r('bulk_purchase')))
@@ -127,6 +128,25 @@ def menu_for(user,visible,path=''):
 
 
 def navigation(request):
+    """Template context for every page: the menu plus the live order badges."""
+    context=_navigation(request)
+    if context and request.user.is_authenticated:context.update(_badges(request.user))
+    return context
+
+
+def _badges(user):
+    """Counts shown on the sidebar. They come from the database on every page load and are refreshed by the live poll (static/live.js)."""
+    from django.urls import reverse
+    from . import online_orders
+    try:
+        if online_access.can_use_online(user):return dict(online_orders_path=reverse('online_orders'),online_badge=online_orders.unseen_count())
+        person=staff(user)
+        if person is not None:return dict(shop_orders_path=reverse('shop_online_orders'),shop_badge=online_orders.shop_unseen_count(person.branch))
+    except Exception:return {}
+    return {}
+
+
+def _navigation(request):
     if not request.user.is_authenticated:return {}
     if online_access.is_online(request.user):
         return dict(who_name=request.user.get_full_name().strip() or request.user.get_username(),who_shop='Online Store',menu=online_access.menu(request.get_full_path()),owner_company='')

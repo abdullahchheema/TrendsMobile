@@ -39,6 +39,7 @@ STORAGES={'default':{'BACKEND':'django.core.files.storage.FileSystemStorage'},
     'staticfiles':{'BACKEND':'whitenoise.storage.CompressedManifestStaticFilesStorage'}}
 if SUPABASE_AUTH_ENABLED:STORAGES['default']={'BACKEND':'shop.supabase_storage.SupabasePrivateStorage'}
 ONLINE_API_KEY=os.environ.get('ONLINE_API_KEY','')      # the website's secret for POST /api/online/orders/ ; empty = the order API is switched off
+WEBSITE_REVALIDATE_URL=os.environ.get('WEBSITE_REVALIDATE_URL','').strip()      # e.g. https://your-site.vercel.app/api/revalidate ; empty = the website just refreshes by its own cache
 MEDIA_ROOT='/data/uploads'
 MEDIA_URL='/media/'
 LOGIN_URL='/login/'

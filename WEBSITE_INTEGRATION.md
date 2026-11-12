@@ -35,23 +35,20 @@ export const sb = createClient(
 )
 ```
 
-Only the seven views below are readable. Everything else is private. A model appears **only when it has at least one photo and is not hidden** in the ERP; with no photo it is a draft and does not exist for the website.
+Only the four views below are readable (the per-shop views are deliberately not exposed: the storefront must never learn which shop holds a phone). Everything else is private. A model appears **only when it has at least one photo and is not hidden** in the ERP; with no photo it is a draft and does not exist for the website.
 
 | View | One row per | Columns |
 | --- | --- | --- |
 | `web_families` | page (phone model / accessory) | `family_slug, title, brand, category, description, specs, is_phone, price_from, price_to, discount_percent, stock_total, variant_count, cover_url` |
 | `web_listings` | colour/storage product on a page | `product_id, slug, family_slug, page_title, name, brand, model, storage, colour, category, description, specs, is_phone, discount_percent, price_from, price_to, stock_total, cover_url` |
 | `web_variants` | **sellable variant** (what a customer buys) | `product_id, condition, pta_status, device_type, price, compare_price, quantity, grade, battery_health, warranty_days` |
-| `web_variant_stock` | the same variants split **by shop** | `product_id, condition, pta_status, device_type, price, shop_id, shop_name, quantity` |
-| `web_stock` | product per shop | `product_id, shop_id, shop_name, quantity` |
-| `web_phone_units` | one available phone (no IMEI) | `unit_id, product_id, shop_id, shop_name, condition, grade, battery_health, pta_status, device_type, warranty_days, price, compare_price` |
 | `web_images` | photo | `image_id, family_slug, variant_product_id, product_id, url, alt, position` |
 
 ### How the data maps to the storefront
 * **Listing page:** `web_families` → one card per model (`title`, `brand`, `cover_url`, `price_from`–`price_to`, `stock_total`). Filter `stock_total > 0` to hide sold-out pages (or show them as "Out of stock").
 * **Model page** (`family_slug`): the model's colour/storage products are in `web_listings` (`storage`, `colour`, `product_id`). Their sellable variants are in `web_variants` (join on `product_id`). A variant = product + `condition` + `pta_status` + `device_type` + `price`. Offer storage/colour/condition as the option selectors.
 * **Price shown to the customer:** `price` (discounts already applied by the ERP). If `compare_price` is not null, show it crossed out ("was").
-* **Stock:** `quantity` per variant is the total over all shops. `web_variant_stock` tells you which shop holds how many (show "3 in stock" or "Available at Shop A"). Identical phones in several shops are already summed into one variant.
+* **Stock:** `quantity` per variant is the total over all shops. Show only *in stock* / *out of stock*: never a shop name. A colour/storage that is sold out stays listed in `web_listings`; show it as out of stock, never remove it. Identical phones in several shops are already summed into one variant.
 * **Photos:** `web_images` for the page (`family_slug`). Rows with `variant_product_id = null` belong to the whole page; a row with a `variant_product_id` belongs to that colour/storage only (show it when that variant is selected). Order by `position`; the first is the cover. Add the Supabase host to `images.remotePatterns` in `next.config.js` so the photo URLs load.
 * **Specifications:** `specs` (on `web_families` and `web_listings`) is a JSON object grouped for display: `{ "Display": { "Screen size": "6.9 inch" }, "Camera": { ... }, "Other": { "Launch year": "2025" } }`. Render each group as a titled table; group and field names are already display labels. It can be empty for accessories. Never hard-code the field list: show whatever is present.
 * **Out of stock** = the variant row disappears from `web_variants` (a phone sold in any shop or reserved by another order is removed at once).
@@ -60,9 +57,8 @@ Only the seven views below are readable. Everything else is private. A model app
 // model page
 const { data: listings } = await sb.from('web_listings').select('*').eq('family_slug', slug)
 const ids = (listings ?? []).map(l => l.product_id)
-const [{ data: variants }, { data: byShop }, { data: photos }] = await Promise.all([
+const [{ data: variants }, { data: photos }] = await Promise.all([
   sb.from('web_variants').select('*').in('product_id', ids),
-  sb.from('web_variant_stock').select('*').in('product_id', ids),
   sb.from('web_images').select('*').eq('family_slug', slug).order('position'),
 ])
 ```
@@ -142,3 +138,8 @@ Prices and totals are always recomputed by the ERP from its own data; the websit
 * Do not store orders, stock or prices in the website; always read them from the views.
 * Do not trust browser-side prices: send them only as the "expected" values the ERP compares.
 * Do not call the order API from the browser.
+
+## 7. Added later: instant updates, order status and fulfilment
+* **Instant stock:** set `WEBSITE_REVALIDATE_URL` in the ERP to `https://<website>/api/revalidate`. The ERP calls it (header `X-API-Key`, the same shared secret) after every stock, price, photo or order change; the website drops its cached catalogue at once. If a call is missed the cache expires within a minute: nothing can stay wrong.
+* **Order status for tracking pages** now also returns `order_status` (`Confirmed` or `Cancelled`), `fulfilment` (`Not dispatched`, `Dispatched`, `In Transit`, `Delivery Failed`, `Delivered`, `Returned to shop`, `Return Requested`, `Returned`, `Refunded`) and `failed_reason`. `status` keeps its old values for older websites.
+* **The order is only ever Confirmed or Cancelled.** Dispatch, courier, tracking and delivery are fulfilment information, not order statuses.

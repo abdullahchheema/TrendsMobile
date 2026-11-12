@@ -17,7 +17,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
-from .models import Branch,Device,Document,Line,OnlineAllocation,OnlineOrder,OnlineOrderEvent,OnlineOrderLine,Party,Product,ShopSettings
+from .models import Branch,Device,Document,Line,OnlineAllocation,OnlineOrder,OnlineOrderAck,OnlineOrderEvent,OnlineOrderLine,Party,Product,ShopSettings
 from . import pricing,shopdefaults,services as s
 
 ZERO=Decimal('0.00')
@@ -295,10 +295,10 @@ def create(data,user=None,source='Website',credit=None):
         delivery_fee=fee,subtotal=subtotal,total=total,notes=str(data.get('notes') or '')[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit,
         alt_phone=str(cust.get('alt_phone') or cust.get('phone2') or '')[:40],postal_code=str(cust.get('postal_code') or cust.get('zip') or '')[:20],
         shipping_method=str((data.get('shipping') or {}).get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method') or '')[:100],discount_amount=discount,discount_code=code,extra=_extra(data,cust))
-    order.stage='Confirmed' if (method=='Cash on Delivery' or order.payment_status=='Paid') else 'Pending';order.save(update_fields=['stage'])
+    if getattr(user,'is_authenticated',False):order.seen_at=timezone.now();order.save(update_fields=['seen_at'])        # an order typed in by the team needs no badge
     for l in lines:l['line']=OnlineOrderLine.objects.create(order=order,product=l['product'],condition=l['condition'],pta_status=l['pta_status'],device_type=l['device_type'],quantity=l['quantity'],unit_price=l['unit_price'])
     _reserve(order,plan(lines))
-    event(order,user,'Created','',order.stage,f'{source} order · {len(lines)} line(s) · total {total}')
+    event(order,user,'Confirmed','','Not dispatched',f'{source} order · {len(lines)} line(s) · total {total}')
     if getattr(user,'is_authenticated',False):s.audit(user,'Online order created',None,order=order.code,total=str(total))
     return order,True
 
@@ -307,14 +307,16 @@ def create(data,user=None,source='Website',credit=None):
 def _lock(order):return OnlineOrder.objects.select_for_update().get(pk=order.pk)
 
 
-# ------------------------------------------------------------------ stages and history
-# status = the coarse life (New, Dispatched, Delivered, Cancelled); stage = the step inside it. Stock is reserved from the moment the order exists
-# (that is the 'Reserved' step: every New order already holds its exact phones), so the stages the team moves through are:
-#   New:        Pending (waiting for a prepaid payment) -> Confirmed -> Processing -> Ready for Dispatch
-#   Dispatched: Dispatched -> In Transit
-#   After:      Return Requested (a customer asked to return); Returned / Refunded are read from the return documents
-NEW_STAGES = ('Pending', 'Confirmed', 'Processing', 'Ready for Dispatch')
+# ------------------------------------------------------------------ order status, fulfilment and history
+# The order itself is only ever CONFIRMED (stock reserved from the moment it exists) or CANCELLED. Everything after that is fulfilment
+# information that never changes the order status: not dispatched -> dispatched -> in transit -> delivered, or delivery failed -> returned to a shop.
 SHIPPED_STAGES = ('Dispatched', 'In Transit')
+FAILED = 'Delivery Failed'
+
+
+def order_status(order):
+    """The primary status: Confirmed or Cancelled."""
+    return 'Cancelled' if order.status == OnlineOrder.CANCELLED else 'Confirmed'
 
 
 def event(order, user, kind, frm='', to='', note=''):
@@ -327,15 +329,17 @@ def event(order, user, kind, frm='', to='', note=''):
 
 
 def display_stage(order):
-    """What the screens and the website show: the stage when there is one, else the status; Returned / Refunded when the return documents say so."""
-    returns = list(Document.objects.filter(online_order=order, is_return=True, kind__in=list(s.SELL), status='Submitted'))
+    """The fulfilment step shown on screens and on the website. A delivered order that was later returned by the customer shows Returned / Refunded."""
+    returns = [] if order.status == OnlineOrder.RETURNED else list(Document.objects.filter(online_order=order, is_return=True, kind__in=list(s.SELL), status='Submitted'))
     if returns:
         refunded = any((r.data.get('returns_flow') or {}).get('refunded') for r in returns)
         return 'Refunded' if refunded else 'Returned'
     if order.status == OnlineOrder.NEW:
-        return order.stage if order.stage in NEW_STAGES else 'Confirmed'
+        return 'Not dispatched'
     if order.status == OnlineOrder.DISPATCHED:
-        return order.stage if order.stage in SHIPPED_STAGES else 'Dispatched'
+        return order.stage if order.stage in SHIPPED_STAGES + (FAILED,) else 'Dispatched'
+    if order.status == OnlineOrder.RETURNED:
+        return 'Returned to shop'
     if order.stage == 'Return Requested':
         return 'Return Requested'
     return order.status
@@ -343,25 +347,21 @@ def display_stage(order):
 
 @transaction.atomic
 def set_stage(order, user, stage, note=''):
-    """Move an order along its steps: Confirmed / Processing / Ready for Dispatch while New; Dispatched / In Transit once it is on its way."""
+    """Fulfilment steps while the order is on its way: Dispatched, In Transit (also the way back after a failed delivery that is being retried)."""
     order = _lock(order)
     old = display_stage(order)
-    if order.status == OnlineOrder.NEW:
-        if stage not in NEW_STAGES or stage == 'Pending':
-            raise ValidationError('Choose Confirmed, Processing or Ready for Dispatch.')
-        if order.payment_method != 'Cash on Delivery' and order.payment_status != 'Paid':
-            raise ValidationError('Confirm that the payment arrived first.')
-    elif order.status == OnlineOrder.DISPATCHED:
-        if stage not in SHIPPED_STAGES:
-            raise ValidationError('A dispatched order can be Dispatched or In Transit.')
-    else:
-        raise ValidationError('This order is ' + order.status.lower() + '; its steps can no longer be changed.')
+    if order.status != OnlineOrder.DISPATCHED:
+        raise ValidationError('Fulfilment steps can only be changed while the order is dispatched.')
+    if stage not in SHIPPED_STAGES:
+        raise ValidationError('A dispatched order can be Dispatched or In Transit.')
     if stage == old:
         return order
     order.stage = stage
-    order.save(update_fields=['stage', 'modified'])
-    event(order, user, 'Stage', old, stage, note)
-    s.audit(user, 'Online order stage', None, order=order.code, stage=stage)
+    if old == FAILED:
+        order.failed_reason = ''
+    order.save(update_fields=['stage', 'failed_reason', 'modified'])
+    event(order, user, 'Fulfilment', old, stage, note)
+    s.audit(user, 'Online order fulfilment', None, order=order.code, stage=stage)
     return order
 
 
@@ -403,6 +403,107 @@ def request_return(order, user, note):
     return order
 
 
+def mark_seen(order, user=None):
+    """The online team opened the order: it stops counting as new."""
+    if order.seen_at is None:
+        OnlineOrder.objects.filter(pk=order.pk, seen_at__isnull=True).update(seen_at=timezone.now())
+        order.seen_at = timezone.now()
+
+
+def unseen_count():
+    """Orders confirmed and not yet opened by the online team (the badge on Online Orders)."""
+    return OnlineOrder.objects.filter(status=OnlineOrder.NEW, seen_at__isnull=True).count()
+
+
+def shop_orders(branch):
+    """Online orders that hold stock in this shop (to pack), newest first. A shop sees only what it must pack: no customer money, no other shop."""
+    return OnlineOrder.objects.filter(lines__allocations__branch=branch, status__in=(OnlineOrder.NEW, OnlineOrder.DISPATCHED)).distinct().order_by('-created')
+
+
+def shop_unseen_count(branch):
+    return shop_orders(branch).filter(status=OnlineOrder.NEW).exclude(acks__branch=branch).count()
+
+
+def acknowledge(order, branch, user):
+    OnlineOrderAck.objects.get_or_create(order=order, branch=branch, defaults=dict(user=user if getattr(user, 'is_authenticated', False) else None))
+
+
+@transaction.atomic
+def delivery_failed(order, user, reason):
+    """The courier could not deliver (refused, unreachable, wrong address). The order stays on record exactly as it was, with its tracking; nothing
+    is restored to stock until the phone is physically back in a shop and has been checked (receive_returned)."""
+    order = _lock(order)
+    if order.status != OnlineOrder.DISPATCHED:
+        raise ValidationError('Only a dispatched order can have a failed delivery.')
+    if not str(reason or '').strip():
+        raise ValidationError('Write why the delivery failed (customer refused, not reachable, wrong address…).')
+    old = display_stage(order)
+    order.stage = FAILED
+    order.failed_reason = str(reason).strip()[:240]
+    order.save(update_fields=['stage', 'failed_reason', 'modified'])
+    event(order, user, 'Delivery failed', old, FAILED, order.failed_reason)
+    s.audit(user, 'Online delivery failed', None, order=order.code, reason=order.failed_reason)
+    return order
+
+
+@transaction.atomic
+def receive_returned(order, user, warehouse, condition, resale='hold', note='', courier_charge=None, expense_account=None, method=None, when=None):
+    """A failed delivery came back to a shop. Posts the sales return (revenue, receivable and cost of goods sold are reversed; the phone goes into the
+    chosen shop at its ORIGINAL cost, in Holding), then applies the inspection result:
+      approve  -> the phone is available for sale again      hold -> stays in Holding until a manager accepts it
+      damaged  -> not for sale (Unavailable); its value stays on the books until the owner writes it off
+    The supplier's invoice is never touched. Courier return charges are recorded as a separate online expense."""
+    from . import returns
+    order = _lock(order)
+    if order.status != OnlineOrder.DISPATCHED or order.stage != FAILED:
+        raise ValidationError('Record the failed delivery first; only then can the returned phone be received.')
+    if resale not in ('approve', 'hold', 'damaged'):
+        raise ValidationError('Choose what happens to the phone: approve for resale, keep on hold, or mark damaged.')
+    if not str(condition or '').strip():
+        raise ValidationError('Write the condition of the returned phone.')
+    if warehouse is None or not warehouse.enabled or warehouse.branch.is_online or not warehouse.branch.enabled:
+        raise ValidationError('Choose the shop that received the phone.')
+    invoice = Document.objects.select_for_update().filter(online_order=order, kind__in=list(s.SELL), is_return=False, status='Submitted').first()
+    if invoice is None:
+        raise ValidationError('This order has no sales invoice to return.')
+    lines = returns.sale_lines(invoice)
+    device_ids = [str(l.device_id) for l in lines if l.device_id]
+    quantities = {str(l.pk): l.quantity for l in lines if not l.device_id}
+    credit = s.submit(returns.create(invoice, user, device_ids, condition, order.failed_reason or 'Delivery failed', quantities or None, warehouse=warehouse), user)
+    invoice.refresh_from_db()
+    owed = min(invoice.outstanding, -credit.outstanding)
+    if owed > 0:
+        returns.apply_credit(credit, owed, user)
+    for d in Device.objects.select_for_update(of=('self',)).filter(pk__in=device_ids):
+        d.details = dict(d.details or {}, inspection_notes=f'Returned delivery {order.code}: {condition}' + (f' · {note}' if note else ''))
+        if resale == 'approve':
+            d.status = 'Available'
+            d.inspection_status = 'Passed'
+            d.inspection_date = timezone.localdate()
+        elif resale == 'damaged':
+            d.status = 'Unavailable'
+            d.inspection_status = 'Failed'
+            d.inspection_date = timezone.localdate()
+        d.save()
+        s.audit(user, 'Returned delivery inspected', None, order=order.code, device=d.code, result=resale)
+    if courier_charge not in (None, '', 0, '0'):
+        from . import money, money_views
+        amount = s.payment_money(courier_charge)
+        if amount > 0:
+            if expense_account is None or not method:
+                raise ValidationError('Choose the expense category and the payment method for the courier charge.')
+            money_views._ensure_chart(user)
+            money.record_voucher(user, online_branch(), 'expense', expense_account, amount, method, when or timezone.localdate(), f'Courier return charges {order.code}')
+    old = display_stage(order)
+    order.status = OnlineOrder.RETURNED
+    order.stage = 'Returned'
+    order.returned_on = timezone.localdate()
+    order.save(update_fields=['status', 'stage', 'returned_on', 'modified'])
+    event(order, user, 'Returned to shop', old, 'Returned to shop', f'{warehouse.branch.name} · {condition} · {resale}' + (f' · {note}' if note else '') + f' · credit {credit.code}')
+    return credit
+
+
+
 def order_lines(order):
     rows=[]
     for l in order.lines.select_related('product').prefetch_related('allocations__branch','allocations__device'):
@@ -436,9 +537,7 @@ def mark_paid(order,user,reference=''):
     if order.payment_method=='Cash on Delivery':raise ValidationError('Cash on delivery is collected when the order is delivered.')
     if order.status!=OnlineOrder.NEW:raise ValidationError('Payment can only be confirmed before dispatch.')
     order.payment_status='Paid';order.payment_reference=str(reference or order.payment_reference)[:180]
-    old=display_stage(order)
-    if order.stage=='Pending':order.stage='Confirmed'
-    order.save(update_fields=['payment_status','payment_reference','stage','modified']);event(order,user,'Payment confirmed',old,display_stage(order),order.payment_reference)
+    order.save(update_fields=['payment_status','payment_reference','modified']);event(order,user,'Payment confirmed','','',order.payment_reference)
     s.audit(user,'Online payment confirmed',None,order=order.code,method=order.payment_method);return order
 
 
@@ -511,6 +610,7 @@ def deliver(order,user,method='Cash'):
     """Delivered. Cash on delivery is collected now into the chosen Online Store account."""
     order=_lock(order)
     if order.status!=OnlineOrder.DISPATCHED:raise ValidationError('Only a dispatched order can be marked delivered.')
+    if order.stage==FAILED:raise ValidationError('This delivery failed. Mark it In Transit again if the courier retries, or receive the returned phone.')
     for inv in Document.objects.select_for_update().filter(online_order=order,kind__in=list(s.SELL),is_return=False,status='Submitted'):
         if inv.outstanding>0:
             conf=ShopSettings.objects.filter(branch=inv.branch).first()

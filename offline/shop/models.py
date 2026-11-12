@@ -465,8 +465,8 @@ class OnlineStaff(models.Model):
 class OnlineOrder(Record):
     """A customer order from the website (or typed in by the online team). Stock is reserved from whichever shops hold it; when the order is
     dispatched one sales invoice is posted in each shop that supplied stock, so every shop's stock and books stay right."""
-    NEW,DISPATCHED,DELIVERED,CANCELLED='New','Dispatched','Delivered','Cancelled'
-    status=models.CharField(max_length=12,default='New',db_index=True,choices=[(s,s) for s in ('New','Dispatched','Delivered','Cancelled')])
+    NEW,DISPATCHED,DELIVERED,CANCELLED,RETURNED='New','Dispatched','Delivered','Cancelled','Returned'      # New = confirmed and reserved; Returned = a failed delivery that came back to a shop
+    status=models.CharField(max_length=12,default='New',db_index=True,choices=[(s,s) for s in ('New','Dispatched','Delivered','Cancelled','Returned')])
     source=models.CharField(max_length=12,default='Website',choices=[('Website','Website'),('Manual','Manual')])
     external_ref=models.CharField(max_length=80,unique=True,null=True,blank=True)
     customer_name=models.CharField(max_length=180)
@@ -498,7 +498,20 @@ class OnlineOrder(Record):
     stage=models.CharField(max_length=24,blank=True,default='')      # Pending, Confirmed, Processing, Ready for Dispatch (New); Dispatched, In Transit; Return Requested. Empty on old orders
     dispatch_notes=models.TextField(blank=True,default='')
     return_note=models.CharField(max_length=240,blank=True,default='')
+    seen_at=models.DateTimeField(null=True,blank=True,db_index=True)      # empty until the online team opens the order: drives the new-order badge
+    failed_reason=models.CharField(max_length=240,blank=True,default='')
+    returned_on=models.DateField(null=True,blank=True)
     class Meta:ordering=['-created']
+
+
+class OnlineOrderAck(models.Model):
+    """A shop has seen an order it has to pack (drives that shop's badge). One row per order and shop."""
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    order=models.ForeignKey(OnlineOrder,on_delete=models.CASCADE,related_name='acks')
+    branch=models.ForeignKey(Branch,on_delete=models.CASCADE,related_name='+')
+    at=models.DateTimeField(default=timezone.now)
+    user=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True,related_name='+')
+    class Meta:constraints=[models.UniqueConstraint(fields=['order','branch'],name='onlineack_order_branch')]
 
 
 class OnlineOrderEvent(models.Model):
