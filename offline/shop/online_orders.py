@@ -204,8 +204,8 @@ def _discount(value,subtotal):
     """An order-level discount the website applied (a coupon): a number, or {amount, code}. Never more than the items."""
     if value in (None,'',0,'0'):return ZERO,''
     code=''
-    if isinstance(value,dict):code=str(value.get('code') or '')[:60];value=value.get('amount')
-    amount=s.payment_money(value)
+    if isinstance(value,dict):code=_text(value.get('code'),'the discount code')[:60];value=value.get('amount')
+    amount=_amount(value)
     if amount<0:raise ValidationError('The discount cannot be negative.')
     if amount>subtotal:raise ValidationError('The discount cannot be more than the items total.')
     return amount,code
@@ -227,35 +227,62 @@ def _extra(data,cust):
 
 
 def _clean_phone(value):
-    digits=''.join(ch for ch in str(value or '') if ch.isdigit() or ch=='+')
+    digits=''.join(ch for ch in _text(value,'the customer phone number') if (ch.isascii() and ch.isdigit()) or ch=='+')
     if len(digits.replace('+',''))<10:raise ValidationError('Enter the customer phone number (at least 10 digits).')
     return digits[:20]
 
 
 def _int(value,label):
-    try:n=int(value)
-    except (TypeError,ValueError):raise ValidationError(f'{label} must be a whole number.')
-    return n
+    """A whole number: 2, '2' or 2.0. Never True, 1.5, '1.0', Infinity or a list (int() would quietly accept or crash on those)."""
+    if isinstance(value,bool):raise ValidationError(f'{label} must be a whole number.')
+    if isinstance(value,int):return value
+    if isinstance(value,float) and value==value and abs(value)<1e9 and value==int(value):return int(value)
+    if isinstance(value,str) and value.strip().isascii() and value.strip().lstrip('-').isdigit() and len(value.strip())<=9:return int(value.strip())
+    raise ValidationError(f'{label} must be a whole number.')
+
+
+def _amount(value):
+    """Money sent by the website. A JSON number that went through binary floating point (269997.30000000005) is the same money as
+    269997.30 and is read as that; a real third decimal is still refused, and so is anything that is not a number."""
+    if isinstance(value,(bool,list,dict)):raise ValidationError('Enter a valid amount.')
+    if isinstance(value,float):
+        if value!=value or abs(value)>9999999999999:raise ValidationError('Enter a valid amount.')
+        if abs(value-round(value,2))<1e-6:value=format(round(value,2),'.2f')
+    return s.payment_money(value)
+
+
+def _text(value,label,required=False):
+    """Text from the website or a form: a string or a plain number, never an object or a list (which would be stored as its Python spelling)."""
+    if value is None or value=='':
+        if required:raise ValidationError(f'Enter {label}.')
+        return ''
+    if isinstance(value,bool) or not isinstance(value,(str,int,float)):raise ValidationError(f'{label[0].upper()+label[1:]} must be text.')
+    return str(value)
 
 
 @transaction.atomic
 def create(data,user=None,source='Website',credit=None,strict=False):
     """Create an order from validated-looking input: {external_ref, customer{name,phone,email,address,city}, payment_method, payment_reference, delivery_fee,
     notes, items:[{product_id, condition, pta_status, device_type, price, quantity}], expected_total}. Returns (order, created)."""
-    ref=str(data.get('external_ref') or '').strip()[:80] or None
+    ref=_text(data.get('external_ref'),'the order reference').strip()[:80] or None
     if ref:
         existing=OnlineOrder.objects.filter(external_ref=ref).first()
         if existing:return existing,False
-    cust=data.get('customer') or {}
-    name=' '.join(str(cust.get('name') or '').split())[:180]
+    cust=data.get('customer')
+    if cust is None:cust={}
+    if not isinstance(cust,dict):raise ValidationError('Send the customer as an object with a name and a phone number.')
+    name=' '.join(_text(cust.get('name'),'the customer name').split())[:180]
     if not name:raise ValidationError('Enter the customer name.')
     phone=_clean_phone(cust.get('phone'))
-    method=str(data.get('payment_method') or 'Cash on Delivery')
+    text={k:_text(cust.get(k),'the customer '+k.replace('_',' ')) for k in ('email','address','city','alt_phone','phone2','postal_code','zip','province')}
+    notes=_text(data.get('notes'),'the order notes');pay_ref=_text(data.get('payment_reference'),'the payment reference')
+    method=data.get('payment_method') or 'Cash on Delivery'
+    if not isinstance(method,str):raise ValidationError('Payment method must be one of: '+', '.join(METHODS)+'.')
     if method not in METHODS:raise ValidationError('Payment method must be one of: '+', '.join(METHODS)+'.')
     items=data.get('items')
     if not isinstance(items,list) or not items:raise ValidationError('The order has no items.')
     if len(items)>MAX_LINES:raise ValidationError(f'At most {MAX_LINES} lines per order.')
-    try:fee=s.payment_money(data.get('delivery_fee') or 0)
+    try:fee=_amount(data.get('delivery_fee') or 0)
     except ValidationError:raise ValidationError('Delivery fee is not a valid amount.')
     if fee<0 or fee>100000:raise ValidationError('Delivery fee is outside the allowed range.')
     if strict and method not in [o['method'] for o in payment_options()]:raise ValidationError(f'{method} is not available right now. Choose another payment method.')
@@ -267,14 +294,14 @@ def create(data,user=None,source='Website',credit=None,strict=False):
         if source=='Website' and not product.online_visible:raise ValidationError(f'{product.name} is not for sale online.')
         qty=_int(item.get('quantity'),'Quantity')
         if not 1<=qty<=MAX_QTY:raise ValidationError(f'Quantity must be between 1 and {MAX_QTY}.')
-        cond=str(item.get('condition') or '');pta=str(item.get('pta_status') or '');kind=str(item.get('device_type') or '')
+        cond=_text(item.get('condition'),'the condition');pta=_text(item.get('pta_status'),'the PTA status');kind=_text(item.get('device_type'),'the device type')
         if product.serialized:
             if not (cond and pta and kind):raise ValidationError(f'Choose the condition, PTA status and type of {product.name}.')
             if item.get('price') in (None,''):raise ValidationError(f'The price of {product.name} is required.')
-            price=s.payment_money(item.get('price'))
+            price=_amount(item.get('price'))
         else:
             cond=pta=kind='';price=product_price(product)
-            if item.get('price') not in (None,'') and s.payment_money(item.get('price'))!=price:raise ValidationError(f'The price of {product.name} changed to PKR {price:,.2f}. Refresh and try again.')
+            if item.get('price') not in (None,'') and _amount(item.get('price'))!=price:raise ValidationError(f'The price of {product.name} changed to PKR {price:,.2f}. Refresh and try again.')
         key=(str(product.pk),cond,pta,kind,price)
         if key in seen:raise ValidationError('The same item appears twice. Combine it into one line with a quantity.')
         seen.add(key)
@@ -289,16 +316,16 @@ def create(data,user=None,source='Website',credit=None,strict=False):
         if existing:return existing,False
     subtotal=sum((l['unit_price']*l['quantity'] for l in lines),ZERO)
     if strict:
-        due=delivery_fee_for(subtotal,cust.get('province'))
+        due=delivery_fee_for(subtotal,text['province'])
         if fee!=due:raise ValidationError(f'The delivery charge is now PKR {due:,.2f}, not PKR {fee:,.2f}. Prices or delivery changed; refresh and try again.')
     discount,code=_discount(data.get('discount'),subtotal);total=subtotal-discount+fee
-    if data.get('expected_total') not in (None,'') and s.payment_money(data['expected_total'])!=total:
-        raise ValidationError(f'The total is now PKR {total:,.2f}, not PKR {s.payment_money(data["expected_total"]):,.2f}. Prices or delivery changed; refresh and try again.')
-    order=OnlineOrder.objects.create(code=s.code('OL'),source=source,external_ref=ref,customer_name=name,customer_phone=phone,customer_email=str(cust.get('email') or '')[:180],address=str(cust.get('address') or '')[:500],
-        city=str(cust.get('city') or '')[:100],payment_method=method,payment_status='Paid' if (data.get('payment_status')=='Paid' and method!='Cash on Delivery') else 'Unpaid',payment_reference=str(data.get('payment_reference') or '')[:180],
-        delivery_fee=fee,subtotal=subtotal,total=total,notes=str(data.get('notes') or '')[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit,
-        alt_phone=str(cust.get('alt_phone') or cust.get('phone2') or '')[:40],postal_code=str(cust.get('postal_code') or cust.get('zip') or '')[:20],
-        shipping_method=str((data.get('shipping') or {}).get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method') or '')[:100],discount_amount=discount,discount_code=code,extra=_extra(data,cust))
+    if data.get('expected_total') not in (None,'') and _amount(data['expected_total'])!=total:
+        raise ValidationError(f'The total is now PKR {total:,.2f}, not PKR {_amount(data["expected_total"]):,.2f}. Prices or delivery changed; refresh and try again.')
+    order=OnlineOrder.objects.create(code=s.code('OL'),source=source,external_ref=ref,customer_name=name,customer_phone=phone,customer_email=text['email'][:180],address=text['address'][:500],
+        city=text['city'][:100],payment_method=method,payment_status='Paid' if (data.get('payment_status')=='Paid' and method!='Cash on Delivery') else 'Unpaid',payment_reference=pay_ref[:180],
+        delivery_fee=fee,subtotal=subtotal,total=total,notes=notes[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit,
+        alt_phone=(text['alt_phone'] or text['phone2'])[:40],postal_code=(text['postal_code'] or text['zip'])[:20],
+        shipping_method=_text(data['shipping'].get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method'),'the shipping method')[:100],discount_amount=discount,discount_code=code,extra=_extra(data,cust))
     if getattr(user,'is_authenticated',False):order.seen_at=order.confirmed_at=timezone.now();order.confirmed_by=user;order.save(update_fields=['seen_at','confirmed_at','confirmed_by'])      # an order the team typed in after a call is already confirmed
     for l in lines:l['line']=OnlineOrderLine.objects.create(order=order,product=l['product'],condition=l['condition'],pta_status=l['pta_status'],device_type=l['device_type'],quantity=l['quantity'],unit_price=l['unit_price'])
     _reserve(order,plan(lines))
@@ -557,6 +584,7 @@ def receive_returned(order, user, warehouse, condition, resale='hold', note='', 
     owed = min(invoice.outstanding, -credit.outstanding)
     if owed > 0:
         returns.apply_credit(credit, owed, user)
+    cancel_uncollected_charges(Document.objects.select_for_update().get(pk=invoice.pk), order, user)
     for d in Device.objects.select_for_update(of=('self',)).filter(pk__in=device_ids):
         d.details = dict(d.details or {}, inspection_notes=f'Returned delivery {order.code}: {condition}' + (f' · {note}' if note else ''))
         if resale == 'approve':
@@ -585,6 +613,35 @@ def receive_returned(order, user, warehouse, condition, resale='hold', note='', 
     event(order, user, 'Returned to shop', old, 'Returned to shop', f'{warehouse.branch.name} · {condition} · {resale}' + (f' · {note}' if note else '') + f' · credit {credit.code}')
     return credit
 
+
+def cancel_uncollected_charges(invoice, order, user):
+    """After the whole parcel is back, anything still owed on its invoice is a charge that is not stock (the delivery charge) and that the
+    customer will never pay: they refused the parcel. Take it back out of income (and output tax) and off the customer's account, so a
+    refused cash-on-delivery order leaves no debt and no revenue. A charge that was already paid (a prepaid order) is not touched."""
+    rows = [line.snapshot.get('pricing') or {} for line in invoice.lines.select_related('product') if not line.product.stock_item]
+    net = sum((s.money(r.get('net')) for r in rows), ZERO)
+    tax = sum((s.money(r.get('tax')) for r in rows), ZERO)
+    amount = min(invoice.outstanding, net + tax)
+    if amount <= 0:
+        return None
+    tax_part = s.money(amount * tax / (net + tax)) if tax else ZERO
+    doc = s.new_doc('Journal Entry', invoice.branch, customer=invoice.customer, reference=invoice, posted_by=user, channel='Online', online_order=order,
+                    notes=f'Delivery charge of online order {order.code} cancelled: the parcel was not delivered', data=dict(charge_cancelled=str(invoice.pk), amount=str(amount)))
+    s.open_date(doc)
+    s.entry(doc, 'sales', debit=amount - tax_part)
+    if tax_part:
+        s.entry(doc, pricing.tax_account(invoice), debit=tax_part)
+    s.entry(doc, 'receivable', credit=amount, party=invoice.customer, reference=invoice)
+    invoice.outstanding -= amount
+    invoice.data.setdefault('charges_cancelled', []).append(dict(amount=str(amount), journal=str(doc.pk), date=str(doc.posting_date)))
+    invoice.save(update_fields=['outstanding', 'data', 'modified'])
+    doc.total = amount
+    doc.status = 'Submitted'
+    doc.save()
+    s.balanced(doc)
+    s.audit(user, 'Online delivery charge cancelled', doc, order=order.code, amount=str(amount))
+    event(order, user, 'Delivery charge cancelled', note=f'PKR {amount:,.2f} that was never collected')
+    return doc
 
 
 def order_lines(order):
@@ -627,7 +684,11 @@ def mark_paid(order,user,reference=''):
 def party_for(branch,order):
     """The online customer, in the Online Store's own customer list (found by phone, else created). Shops never see them."""
     if order.exchange_credit_id and order.exchange_credit.branch_id==branch.pk and order.exchange_credit.customer_id:return order.exchange_credit.customer
-    found=Party.objects.filter(branch=branch,kind='Customer',phone=order.customer_phone).first()
+    mine=Party.objects.filter(branch=branch,kind='Customer')
+    found=mine.filter(phone=order.customer_phone).first()
+    if not found:                                             # 0300 1234567 and +92 300 1234567 are one person: compare the last ten digits
+        tail=''.join(ch for ch in order.customer_phone if ch.isdigit())[-10:]
+        if len(tail)==10:found=mine.filter(phone__endswith=tail).order_by('created').first()
     if found:return found
     name=order.customer_name
     if Party.objects.filter(branch=branch,kind='Customer',name=name).exists():name=f'{name} ({order.customer_phone})'[:180]
@@ -654,6 +715,7 @@ def dispatch(order,user,courier='',tracking='',notes=''):
     if order.status!=OnlineOrder.NEW:raise ValidationError('Only a new order can be dispatched.')
     if order.confirmed_at is None:raise ValidationError('Call the customer and confirm the order before shipping it.')
     if order.payment_method!='Cash on Delivery' and order.payment_status!='Paid':raise ValidationError('Confirm that the payment arrived before dispatching.')
+    list(Product.objects.select_for_update().filter(pk__in=OnlineOrderLine.objects.filter(order=order).values('product_id')).order_by('pk'))      # an arriving order waits here, so it never counts this order's accessories as both reserved and still on the shelf
     allocations=list(OnlineAllocation.objects.select_for_update(of=('self',)).filter(line__order=order).select_related('line','product','device','branch'))
     if not allocations:raise ValidationError('This order has no reserved stock.')
     for d in Device.objects.select_for_update().filter(pk__in=[a.device_id for a in allocations if a.device_id]):

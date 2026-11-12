@@ -103,6 +103,10 @@ class Migrations(TransactionTestCase):
     """The data migration splits shared customers per shop and keeps exactly one login per shop."""
     def migrate(self,target):
         executor=MigrationExecutor(connection);executor.migrate(target);return executor.loader.project_state(target).apps
+    def tearDown(self):
+        # Back to the current schema, whatever happened above. Left on an old migration, every database test that runs after this one
+        # (all the concurrency tests) would meet tables without their newer columns.
+        executor=MigrationExecutor(connection);executor.migrate(executor.loader.graph.leaf_nodes())
     def test_shared_party_is_cloned_per_shop_and_extra_logins_are_deactivated(self):
         before=self.migrate([('shop','0018_advanced_accounting')])
         Branch=before.get_model('shop','Branch');Party=before.get_model('shop','Party');Document=before.get_model('shop','Document');Staff=before.get_model('shop','Staff');User=before.get_model('auth','User')

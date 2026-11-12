@@ -46,7 +46,7 @@ def create(bill,user,device_ids,accessory_qty,reason):
     doc=s.new_doc('Purchase Return',bill.branch,supplier=bill.supplier,reference=bill,warehouse=receipt.warehouse,status='Submitted',posted_by=user,notes=str(reason).strip()[:240],data={'reason':str(reason).strip()[:240]})
     s.open_date(doc)
     left_by_line={a['line'].pk:a['left'] for a in returnable(bill)[1]}
-    total=ZERO;count=0
+    total=ZERO;relieved=ZERO;count=0          # total: what the supplier credits us; relieved: the value that leaves our stock
     for device_id in device_ids:
         device=Device.objects.select_for_update().get(pk=device_id)
         source=receipt.lines.filter(device=device).first()
@@ -59,7 +59,7 @@ def create(bill,user,device_ids,accessory_qty,reason):
         device.details=dict(device.details,returned_to_supplier=doc.code,**({'released_imeis':released} if released else {}))
         device.imeis.all().delete()                                   # frees the IMEI if the phone is re-bought elsewhere
         device.status=RETURNED;device.warehouse=None;device.save()
-        total+=cost;count+=1
+        total+=cost;relieved+=cost;count+=1
     for line_id,qty in (accessory_qty or {}).items():
         qty=s.quantity(qty)
         source=receipt.lines.select_related('product').filter(pk=line_id,device__isnull=True).first()
@@ -67,14 +67,21 @@ def create(bill,user,device_ids,accessory_qty,reason):
         left=left_by_line.get(source.pk,ZERO)
         if qty>left:raise ValidationError(f'Only {left:g} of {source.product.name} can still be returned.')
         place=source.warehouse or receipt.warehouse
-        available,_value=s.on_hand(source.product,place)
+        s.Product.objects.select_for_update().get(pk=source.product_id)      # one stock decision at a time per product, like a sale
+        available,on_value=s.on_hand(source.product,place)
         if qty>available:raise ValidationError(f'Only {available:g} of {source.product.name} is in stock to return.')
+        s.not_held_online(source.product,place,qty,'returned')
         value=s.money(qty*source.rate)
-        Line.objects.create(document=doc,product=source.product,warehouse=place,quantity=qty,rate=source.rate,cost=source.rate)
-        StockMovement.objects.create(document=doc,posting_date=doc.posting_date,product=source.product,warehouse=place,quantity=-qty,value=-value)
-        total+=value;count+=1
+        # Accessories sit on the shelf at their average cost, which is not always what this supplier charged. The shelf gives up its average
+        # (all that is left when the last units go); the supplier credits the price paid; the difference is a purchase price difference.
+        out=on_value if qty==available else s.money(on_value*qty/available)
+        Line.objects.create(document=doc,product=source.product,warehouse=place,quantity=qty,rate=source.rate,cost=s.money(out/qty))
+        StockMovement.objects.create(document=doc,posting_date=doc.posting_date,product=source.product,warehouse=place,quantity=-qty,value=-out)
+        total+=value;relieved+=out;count+=1
     if not count or total<=0:raise ValidationError('Choose at least one phone or item to return.')
-    s.entry(doc,'payable',debit=total,party=bill.supplier,reference=bill);s.entry(doc,'inventory',credit=total)
+    s.entry(doc,'payable',debit=total,party=bill.supplier,reference=bill);s.entry(doc,'inventory',credit=relieved)
+    if total>relieved:s.entry(doc,'cogs',credit=total-relieved)        # credited more than the shelf value: lowers the cost of goods sold
+    elif relieved>total:s.entry(doc,'cogs',debit=relieved-total)
     doc.total=total;doc.save()
     Document.objects.filter(pk=bill.pk).update(outstanding=bill.outstanding-total)
     s.balanced(doc);s.audit(user,'Purchase return',doc,bill=bill.code,amount=str(total),reason=doc.notes)

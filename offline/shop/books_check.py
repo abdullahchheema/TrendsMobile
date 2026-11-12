@@ -61,6 +61,16 @@ def no_negative_stock():
     return out
 
 
+def empty_shelf_has_no_value():
+    """Accessories are valued at their average cost, so a shelf with nothing on it is worth nothing, and stock is never worth less than nothing."""
+    out=[]
+    for r in StockMovement.objects.filter(product__serialized=False).values('warehouse__branch__name','product__name').annotate(q=Sum('quantity'),v=Sum('value')):
+        q=r['q'] or ZERO;v=r['v'] or ZERO
+        if q==0 and abs(v)>=CENT:out.append(f"{r['warehouse__branch__name']}: {r['product__name']} has no stock but a stock value of {v}")
+        elif q>0 and v<=-CENT:out.append(f"{r['warehouse__branch__name']}: {r['product__name']} has {q:g} in stock with a negative value of {v}")
+    return out
+
+
 def valuation_vs_ledger():
     out=[]
     for config in ShopSettings.objects.select_related('branch'):
@@ -225,7 +235,7 @@ def _party_ledger(branch,account,key):
 
 
 CHECKS=[('Ledger balances for every document',ledger_balanced_per_document),('Ledger balances for every shop',ledger_balanced_per_shop),('Trial balance balances',trial_balance_balanced),
-    ('Every phone: status vs stock movements vs location',device_stock_vs_movements),('No negative stock',no_negative_stock),('Stock value equals inventory ledger',valuation_vs_ledger),
+    ('Every phone: status vs stock movements vs location',device_stock_vs_movements),('No negative stock',no_negative_stock),('An empty shelf carries no value',empty_shelf_has_no_value),('Stock value equals inventory ledger',valuation_vs_ledger),
     ('Customer/supplier balances equal their invoices',party_balances_vs_invoices),('Invoice totals equal the ledger',document_totals_vs_ledger),('Invoice lines add up to totals',line_sums_vs_totals),
     ('Sold / available phones agree with sales',sold_and_available_devices),('IMEIs are valid',imei_integrity),('Customers and suppliers stay in their own shop',shop_ownership),
     ('No unclassified accounts with balances',unclassified_accounts),('Cancelled documents net to zero',cancelled_documents_net_zero),('Dashboard/P&L equal the ledger; total equals shops',reports_vs_ledger),

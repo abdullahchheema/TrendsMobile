@@ -97,6 +97,7 @@ def _transfer(doc,user,target):
             moved=money(qty*cost)
         else:
             if line.device_id:raise ValidationError('Accessory transfers cannot reference a phone.')
+            not_held_online(product,source,qty,'moved')
             moved=money(value if qty==available else value*qty/available)
         if moved<0 or moved>value:raise ValidationError('Source valuation does not cover this stock transfer.')
         movement=stock(doc,line,-qty,cost,source)
@@ -173,6 +174,16 @@ def stock(doc,line,qty,cost,warehouse=None):
 def on_hand(product,warehouse):
     result=StockMovement.objects.filter(product=product,warehouse=warehouse).aggregate(q=Sum('quantity'),v=Sum('value'))
     return result['q'] or ZERO,result['v'] or ZERO
+
+def not_held_online(product,place,qty,doing):
+    """Accessory units promised to new online orders are counted, not set aside one by one, so anything that takes units off the shelf must
+    leave enough behind for them. `qty` is what is about to leave `place` (a warehouse)."""
+    if product.serialized or not product.stock_item:return
+    from .online_orders import reserved_qty
+    held=reserved_qty(product,place.branch)
+    if not held:return
+    available,_=on_hand(product,place)
+    if qty>available-held:raise ValidationError(f'{held:g} of {product.name} are held for online orders, so only {max(available-held,ZERO):g} can be {doing}. Cancel those online orders or supply them from another shop first.')
 
 def snapshot(device):
     return dict(device=device.code,condition=device.condition,battery=device.battery if device.battery_checked else None,
@@ -292,6 +303,7 @@ def _adjust(doc):
             on_hand_qty,on_hand_value=on_hand(product,place)
             if qty<0:
                 if -qty>on_hand_qty:raise ValidationError(f'Only {on_hand_qty:g} of {product.name} in stock there; cannot remove {-qty:g}.')
+                not_held_online(product,place,-qty,'removed')
                 value=-on_hand_value if -qty==on_hand_qty else -money(-qty*(on_hand_value/on_hand_qty))
             else:
                 unit=(on_hand_value/on_hand_qty) if on_hand_qty>0 else money(line.rate)
@@ -413,14 +425,17 @@ def _sale(doc):
             from .online_orders import reserved_qty
             if qty>available-reserved_qty(line.product,(line.warehouse or doc.warehouse).branch):raise ValidationError('Insufficient accessory or spare-part stock (some units are held for online orders).')
             cost=money(value/available)
+        out=money(qty*cost)                                   # the value that leaves the stock
         if line.product.stock_item:
-            stock(doc,line,-qty,cost)
+            movement=stock(doc,line,-qty,cost)
+            if not line.product.serialized and qty==available and out!=value:      # the last units take exactly what is left, so an empty shelf never keeps a rounding paisa
+                out=value;movement.value=-out;movement.save(update_fields=['value'])
             if doc.branch.is_online:
                 where=(line.warehouse or doc.warehouse)
                 if where is None or where.branch_id==doc.branch_id or where.branch.is_online:raise ValidationError('An online sale must take its stock from a shop.')
-                supplied[where.branch_id]=supplied.get(where.branch_id,ZERO)+money(qty*cost)
+                supplied[where.branch_id]=supplied.get(where.branch_id,ZERO)+out
         line.snapshot['pricing']=allocations[line.pk]
-        line.cost=cost;line.save();total+=money(qty*line.rate);total_cost+=money(qty*cost)
+        line.cost=cost;line.save();total+=money(qty*line.rate);total_cost+=out
     doc.data['pricing']=invoice_totals
     doc.total=money(invoice_totals['grand_total']);doc.outstanding=doc.total
     entry(doc,'receivable',debit=doc.total,party=doc.customer,reference=doc);entry(doc,'sales',credit=invoice_totals['net_total'])
@@ -804,6 +819,7 @@ def cancel(doc,user):
             Product.objects.select_for_update().get(pk=line.product_id)
             available,_=on_hand(line.product,line.warehouse or doc.warehouse)
             if available<line.quantity:raise ValidationError('Purchased stock has already been used.')
+            if not line.device_id:not_held_online(line.product,line.warehouse or doc.warehouse,line.quantity,'taken back out')
             if line.device:
                 device=Device.objects.select_for_update().get(pk=line.device_id)
                 if device.status!='Available' or device.warehouse_id!=(line.warehouse_id or doc.warehouse_id):raise ValidationError('Phone has subsequent stock activity.')
@@ -821,10 +837,31 @@ def cancel(doc,user):
                 if line.quantity>0:
                     available,_=on_hand(product,line.warehouse or doc.warehouse)
                     if available<line.quantity:raise ValidationError('Added stock has already been used.')
+                    not_held_online(product,line.warehouse or doc.warehouse,line.quantity,'taken back out')
     elif doc.kind=='Mobile Intake':
         receipt=Document.objects.get(pk=doc.data['purchase_receipt']);cancel(receipt,user)
     elif doc.kind=='Stock Entry':raise ValidationError('Create a reverse stock transfer to preserve its movement history.')
     reversal=new_doc('Journal Entry',doc.branch,reference=doc,posted_by=user,notes='Cancellation reversal of '+doc.code,demo_batch=doc.demo_batch,status='Submitted')
     for original in doc.ledger.all():entry(reversal,original.account,debit=original.credit,credit=original.debit,party=original.party,reference=original.reference)
+    # Accessories that came in on this document and now go out again must leave at the average cost of the shelf (everything that is left when
+    # the last units go), which is not always the price they came in at. The reversal itself stays an exact mirror; the difference is booked
+    # separately as a cost difference, so an empty shelf never keeps (or owes) value.
+    leaving={}
+    if doc.kind in ('Purchase Receipt','Stock Adjustment'):
+        for movement in doc.stock.select_related('product','warehouse').filter(quantity__gt=0,device__isnull=True):
+            key=(movement.product_id,movement.warehouse_id)
+            if key not in leaving:leaving[key]=[movement.product,movement.warehouse,ZERO,ZERO,on_hand(movement.product,movement.warehouse)]
+            leaving[key][2]+=movement.quantity;leaving[key][3]+=movement.value
     for movement in doc.stock.all():StockMovement.objects.create(document=reversal,posting_date=reversal.posting_date,product=movement.product,device=movement.device,warehouse=movement.warehouse,quantity=-movement.quantity,value=-movement.value)
+    differences=[]
+    for product,place,qty,came_in_at,(available,on_value) in leaving.values():
+        relief=on_value if qty>=available else money(on_value*qty/available)
+        if came_in_at!=relief:differences.append((product,place,came_in_at-relief))
+    if differences:
+        fix=new_doc('Journal Entry',doc.branch,reference=doc,posted_by=user,notes='Average cost difference on cancelling '+doc.code,demo_batch=doc.demo_batch,status='Submitted',data={'average_cost_difference':str(doc.pk)})
+        for product,place,amount in differences:
+            StockMovement.objects.create(document=fix,posting_date=fix.posting_date,product=product,warehouse=place,quantity=0,value=amount)      # value only: the quantity already left on the reversal
+            if amount>0:entry(fix,'inventory',debit=amount);entry(fix,'cogs',credit=amount)
+            else:entry(fix,'cogs',debit=-amount);entry(fix,'inventory',credit=-amount)
+        fix.total=sum((abs(amount) for _,_,amount in differences),ZERO);fix.save();balanced(fix)
     doc.status='Cancelled';doc.outstanding=ZERO;doc.save();balanced(reversal);audit(user,'Cancel',doc,reversal=str(reversal.pk));return doc

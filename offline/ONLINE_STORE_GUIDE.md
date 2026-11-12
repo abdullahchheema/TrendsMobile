@@ -29,6 +29,10 @@ Each shop has its own books, so online sales cannot simply be posted in whicheve
 * **Dispatch** posts one invoice in the Online Store's books; the stock leaves the shops. **Delivered** collects cash on delivery into the Online Store.
 * A phone sold in a shop disappears from the website at once; an online order takes it out of the shop's stock.
 * **Refund / exchange:** on the order, *Return / exchange* on the invoice. Choose which **shop takes the stock back** (default: the shop it came from). The phone goes to *Holding* there; the refund comes out of the Online Store's money. An exchange creates a replacement order paid by the credit and can be supplied by any shop.
+* **A parcel that was not delivered** (*Delivery failed*, then *Returned phone received*): the sale is reversed and the phone is back in the chosen shop at its original cost. For cash on delivery the customer then owes nothing: the delivery charge that was never collected is cancelled as well (a small journal in the Online Store's books, shown in the order history). For a prepaid order the price of the goods becomes a credit to refund; the delivery that was paid for and attempted is kept.
+* **Accessory units held for online orders stay on the shelf:** a shop cannot sell them, write them off, send them back to the supplier, cancel their purchase or move them while a new online order holds them. The message says how many are held; cancel the order or supply it from another shop first.
+* **One customer, one account:** `0300 1234567` and `+92 300 1234567` are the same online customer (matched on the last ten digits).
+* **Check at any time:** `python manage.py online_check` (orders against stock, including a phone that is Reserved with nothing holding it) and `python manage.py verify_books` (every books check, including that an empty accessory shelf carries no value).
 * The online-store **login** (Settings → Shop accounts → Online store logins) sees only these screens. Shops cannot see them.
 
 ## 4. Order API (website → ERP)

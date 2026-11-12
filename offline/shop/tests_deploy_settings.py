@@ -56,9 +56,17 @@ class VercelSpacedUrlEndToEnd(TestCase):
         user=get_user_model().objects.create_superuser('wsgi-owner',password='Unrelated-test-password-729!');self.client.force_login(user)
         environ={'REQUEST_METHOD':'GET'};setup_testing_defaults(environ);environ['PATH_INFO']='/records/Purchase%20Receipt/';environ['HTTP_COOKIE']='sessionid='+self.client.cookies['sessionid'].value
         seen=[]
-        with patch.dict(os.environ,{'VERCEL':'1'} if vercel else {}):
-            if not vercel:os.environ.pop('VERCEL',None)
-            list(application(environ,lambda status,headers,exc=None:seen.append(status)))
+        # Calling the WSGI application directly fires Django's request signals, which close a database connection older than CONN_MAX_AGE:
+        # the very connection this test's transaction lives on. The test client switches that off for the same reason; so does this.
+        from django.core import signals
+        from django.db import close_old_connections
+        signals.request_started.disconnect(close_old_connections);signals.request_finished.disconnect(close_old_connections)
+        try:
+            with patch.dict(os.environ,{'VERCEL':'1'} if vercel else {}):
+                if not vercel:os.environ.pop('VERCEL',None)
+                list(application(environ,lambda status,headers,exc=None:seen.append(status)))
+        finally:
+            signals.request_started.connect(close_old_connections);signals.request_finished.connect(close_old_connections)
         return seen[0]
     def test_runtime_passing_an_encoded_path_now_reaches_the_page(self):
         self.assertTrue(self.call(True).startswith('200'))

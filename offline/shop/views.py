@@ -617,10 +617,10 @@ def pos(request):
     for place in places:
         warehouse=shopdefaults.warehouse(place)
         for p in Product.objects.filter(enabled=True,serialized=False):
-            qty,_=services.on_hand(p,warehouse)
+            qty,held_value=services.on_hand(p,warehouse);on_shelf=qty      # the average cost is the value of everything on the shelf over everything on the shelf, reserved units included
             if p.stock_item:qty-=online_orders.reserved_qty(p,place)
             if qty>0 or not p.stock_item:items.append(dict(product=str(p.pk),device='',warehouse=str(warehouse.pk),branch=str(place.pk),shop=place.name,code=p.code,name=p.name,rate=str(p.selling_price),stock=str(qty),stock_item=p.stock_item,barcode=' '.join(p.barcodes),barcodes=p.barcodes,serialized=False,brand=p.brand,model=p.name,storage='',colour=p.colour,condition='',kind='Accessory',category=p.group,
-                cost=(str(services.on_hand(p,warehouse)[1]/qty) if see_cost and qty>0 else None),notes=''))
+                cost=(str(services.money(held_value/on_shelf)) if see_cost and on_shelf>0 else None),notes=''))
     shift=services.active_shift(branch,request.user) if not all_shops else None
     if all_shops:
         seen={};[seen.setdefault(p.name.casefold(),dict(name=p.name,phone=p.phone)) for p in access.scoped_parties(request.user).filter(kind='Customer',enabled=True).order_by('name')[:3000]]

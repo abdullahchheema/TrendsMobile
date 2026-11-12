@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied,ValidationError
-from django.db import IntegrityError,transaction
+from django.db import DataError,IntegrityError,transaction
 from django.db.models import Q
 from django.http import Http404,JsonResponse
 from django.shortcuts import get_object_or_404,redirect,render
@@ -59,7 +59,7 @@ def _candidates(order):
     for l in order.lines.select_related('product'):
         have={}
         if l.product.serialized:
-            for d in Device.objects.filter(product=l.product,status='Available',branch__enabled=True,condition=l.condition,pta_status=l.pta_status,device_type=l.device_type,warehouse__isnull=False):
+            for d in Device.objects.filter(product=l.product,status='Available',branch__enabled=True,branch__is_online=False,condition=l.condition,pta_status=l.pta_status,device_type=l.device_type,warehouse__isnull=False):
                 if oo.device_price(d,l.product)==l.unit_price:have[d.branch_id]=have.get(d.branch_id,0)+1
         else:have={b:int(q) for b,q in oo.accessory_pool(l.product).items()}
         for (line_id,b),n in mine.items():
@@ -228,11 +228,12 @@ def api_order(request):
     """POST /api/online/orders/  (header X-API-Key). Creates the order and reserves the stock; sending the same external_ref again returns the same order."""
     if not _authorized(request):return JsonResponse({'error':'Invalid or missing API key.'},status=401)
     try:data=json.loads(request.body or b'{}')
-    except ValueError:return JsonResponse({'error':'Send JSON.'},status=400)
+    except (ValueError,RecursionError):return JsonResponse({'error':'Send JSON.'},status=400)      # RecursionError: a body nested thousands of levels deep
     if not isinstance(data,dict):return JsonResponse({'error':'Send a JSON object.'},status=400)
+    if b'\\u0000' in request.body or b'\x00' in request.body:return JsonResponse({'error':'The order contains a character that cannot be stored (NUL). Remove it and try again.'},status=400)
     try:
         with transaction.atomic():order,created=oo.create(data,None,'Website',strict=True)
-    except (ValidationError,IntegrityError,ValueError) as error:
+    except (ValidationError,IntegrityError,DataError,ValueError,TypeError,AttributeError,OverflowError) as error:      # whatever shape the body has, the answer is a 4xx and nothing is reserved
         text=_err(error);conflict=any(w in text for w in ('no longer','total is now','Only ','does not exist any more','not for sale online','changed to PKR','delivery charge is now','is not available right now'))
         return JsonResponse({'error':text},status=409 if conflict else 400)
     return JsonResponse(dict(order=order.code,external_ref=order.external_ref,status=order.status,subtotal=str(order.subtotal),delivery_fee=str(order.delivery_fee),total=str(order.total),created=created),status=201 if created else 200)

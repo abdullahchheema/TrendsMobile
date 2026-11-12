@@ -62,3 +62,6 @@ node_modules
 **/.vitepress/dist
 **/.vitepress/cache
 offline/product_images_local/
+
+# The website (storefront) is its own repository (mobileshop-ecom). It only sits in this folder; it is never part of the ERP repository.
+Online-Ecom/
