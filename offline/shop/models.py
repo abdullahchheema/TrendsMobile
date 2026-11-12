@@ -145,6 +145,7 @@ class Product(Record):
     discount_percent=models.DecimalField(max_digits=5,decimal_places=2,null=True,blank=True,help_text='Percentage taken off the online price.')
     compare_price=models.DecimalField(max_digits=18,decimal_places=2,null=True,blank=True,help_text='The old price shown crossed out next to the online price. Empty = the price before the percentage off.')
     online_hidden=models.BooleanField(default=False,help_text='Keep this product off the website even if it has photos.')
+    specs=models.JSONField(default=dict,blank=True,help_text='Specifications shown on the website: {"display_size": "6.9 inch", ...}. Shared by every variant on the page.')
     web_title=models.CharField(max_length=200,blank=True,help_text='The page this product is shown on in the website. Products with the same page title are variants of one page. Empty = the model name (phones) or the product name.')
     family_slug=models.SlugField(max_length=200,blank=True,db_index=True)
     def clean(self):
@@ -487,6 +488,12 @@ class OnlineOrder(Record):
     delivered_on=models.DateField(null=True,blank=True)
     cancel_reason=models.CharField(max_length=240,blank=True)
     created_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,null=True,blank=True)
+    alt_phone=models.CharField(max_length=40,blank=True)
+    postal_code=models.CharField(max_length=20,blank=True)
+    shipping_method=models.CharField(max_length=100,blank=True)
+    discount_amount=models.DecimalField(max_digits=18,decimal_places=2,default=0)
+    discount_code=models.CharField(max_length=60,blank=True)
+    extra=models.JSONField(default=dict,blank=True,help_text='Everything else the website sent with the order (billing address, delivery notes, source, …).')
     exchange_credit=models.ForeignKey(Document,on_delete=models.PROTECT,null=True,blank=True,related_name='+',help_text='A return credit from an earlier online sale that pays for this replacement order.')
     class Meta:ordering=['-created']
 

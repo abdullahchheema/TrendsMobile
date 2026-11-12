@@ -4,7 +4,8 @@ The ERP is the control room for the website. Photos, prices, discounts, orders a
 
 ## 1. The catalogue (Products & Photos)
 * **One line per brand and model**, with its variants (storage, colour, condition) and **where each variant is in stock** (every shop, with quantities). Stock of identical phones in several shops is one variant with the total.
-* **Photos are added here only.** Add a photo to a model and the whole page goes **live** on the website. A page with no photo exists only as a **draft** here. The owner can also hide a page. A new colour added to a page that already has photos goes live by itself.
+* **A page goes live when it has a photo and, for phones, its required specifications** (screen size, chipset, RAM, main camera, battery, operating system). Until then it is a **draft** here; the page shows what is still missing. The owner can also hide a page.
+* **Specifications:** about 40 fields in groups (Display, Performance, Camera, Battery, Connectivity, Body, In the box) plus your own extra lines. They are saved once per model, shared by every variant, and reach the website in the `specs` column. A new colour added to a page that already has photos goes live by itself.
 * Photos are for the page (shared by every variant) or for one colour/storage only. JPG, PNG or WebP, 5 MB, 12 per page; big photos are resized in the browser. Stored in the public Supabase bucket `product-images` (created on the first upload).
 * **Prices:** the shop price (set when stock is bought; the POS uses it) is never changed here. Per variant you can set an **online price**, a **percentage off** and a **compare price** (the crossed-out "was" price). Price the customer pays = online price (or shop price) minus the percentage off; the compare price must be higher than that. "Percentage off for every variant" puts the whole page on sale in one step.
 
@@ -47,8 +48,8 @@ Set `ONLINE_API_KEY` in Vercel to a long random secret (without it the API is of
 ## 5. Read-only database views for the website
 | View | Rows |
 | --- | --- |
-| `web_families` | one per page: title, brand, category, description, price range, discount_percent, total stock, variant count, cover |
-| `web_listings` | one per colour/storage: page_title, family_slug, price range, stock |
+| `web_families` | one per page: title, brand, category, description, `specs`, price range, discount_percent, total stock, variant count, cover |
+| `web_listings` | one per colour/storage: page_title, family_slug, `specs`, price range, stock |
 | `web_variants` | one per sellable variant: product_id, condition, pta_status, device_type, **price**, **compare_price**, quantity, grade, battery_health, warranty_days |
 | `web_variant_stock` | the same variants split by shop |
 | `web_stock`, `web_phone_units`, `web_images` | per product per shop; per phone (no IMEI); photos (page-wide, or `variant_product_id` for one variant) |
@@ -57,4 +58,13 @@ They contain no cost, IMEI, supplier or customer data. Quantities exclude phones
 
 **Where they live.** The ERP's tables and these views are in the private `covison_app` schema, which the Supabase Data API and the `anon` key cannot reach. To let the website read them, run `supabase/hosted/web-views.sql` once in the Supabase SQL editor (after `update-database.ps1`). It creates read-only copies in the `api` schema and grants `SELECT` on them to `anon`. In Supabase, Project Settings → Data API → *Exposed schemas* must include `api`. The website then reads them with `createClient(url, anonKey, { db: { schema: 'api' } })`.
 
-If a later ERP migration drops and recreates the `covison_app.web_*` views, drop the `api.web_*` views first (or re-run `web-views.sql` afterwards); the release notes will say so.
+**When a release changes these views** (the release notes say so; this release does, because it adds `specs`): run `supabase/hosted/web-views-drop.sql` in the SQL editor first, then `update-database.ps1`, then `supabase/hosted/web-views.sql` again. The update stops with a clear message if the first step was forgotten. The website cannot read the catalogue for the minute in between.
+
+## 6. Online finance (the same screens a shop has)
+Online Finance (owner and online login): Money In, Money Out, Online Expenses, Customer Dues (cash on delivery still to collect), Cash and Bank (including moving money between the Online Store's own accounts), Transaction History, and Online Accounts & Profit (sales, returns, profit, what is owed to each shop, paying a shop). All of it is the Online Store's own books; shops cannot open these screens.
+
+## 7. What an order carries
+Everything the website sends is kept and shown on the order: customer name, phone, other phone, email, address, city, postal code, shipping method, coupon discount and code, payment method and reference, delivery charge, notes, and any other field (billing address, source, campaign, ...) exactly as received. A coupon discount is applied to the invoice, so the books match what the customer paid.
+
+## 8. Demo data
+`supabase/hosted/seed-online-store.ps1` (asks only for the database password) gives phones that have no selling price a price of cost + 15 % (rounded to PKR 500), fills typical specifications for the demo models, and adds generated illustrations as photos so the pages are live. It never overwrites anything that already exists. Replace the illustrations with real photos at any time.

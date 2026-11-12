@@ -1,42 +1,80 @@
 {% extends 'base.html' %}{% load static %}{% block content %}
-<div class="page-head"><div><small>{{ anchor.model.brand|default:anchor.brand }}</small><h1>{{ page_title }}</h1><p><span class="badge {% if status == 'Live' %}ok{% elif status == 'Draft' %}warn{% endif %}">{{ status }}</span> {% if status == 'Draft' %}· add a photo to make it live on the website{% elif status == 'Hidden' %}· kept off the website{% endif %} · {{ stock|floatformat:"-0" }} in stock across all shops</p></div><a href="{% url 'online_store' %}">All products</a></div>
-<div class="online-grid">
-<div class="online-main">
-<section class="panel" id="online-media" data-upload="{% url 'online_photo_upload' anchor.pk %}" data-order="{% url 'online_photo_order' anchor.pk %}" data-update="{% url 'online_photo_update' anchor.pk %}" data-delete="{% url 'online_photo_delete' anchor.pk %}" data-max="{{ max_photos }}" data-max-mb="{{ max_mb }}">
-<h2 style="margin-top:0">Photos for this page</h2>
-<p class="muted">Shared by every variant. The first photo is the cover. Drag to reorder. JPG, PNG or WebP, up to {{ max_mb }} MB each, {{ max_photos }} at most; large photos are resized automatically. <strong>As soon as there is one photo this page is live on the website.</strong></p>
-<div class="media-drop" id="media-drop" tabindex="0" role="button" aria-label="Add photos"><strong>Add photos</strong><span>Drop photos here, or click to choose them</span><input type="file" id="media-input" accept="image/jpeg,image/png,image/webp" multiple hidden></div>
-<ul class="media-grid" id="media-grid" aria-label="Page photos"></ul>
-<p class="error" id="media-error" role="alert"></p>
+<form method="post" id="page-form" class="sh">{% csrf_token %}
+<header class="sh-bar">
+  <div class="sh-title"><a class="sh-crumb" href="{% url 'online_store' %}">‹ Products</a><h1>{{ page_title }}</h1>
+    <span class="badge {% if status == 'Live' %}ok{% elif status == 'Draft' %}warn{% endif %}">{{ status }}</span><span class="sh-meta">{{ stock|floatformat:"-0" }} in stock across all shops</span></div>
+  <div class="sh-actions"><button class="primary" type="submit">Save</button></div>
+</header>
+<div class="sh-grid">
+<div class="sh-main">
+
+<section class="sh-card"><h2>Title &amp; description</h2>
+  <div class="sh-field"><label for="web_title">Page title</label><input id="web_title" name="web_title" maxlength="200" value="{{ anchor.web_title }}" placeholder="{{ page_title }}"><small>Products with the same page title are variants of one page. Leave empty to use “{{ page_title }}”.</small></div>
+  <div class="sh-field"><label for="description">Description <span class="opt">optional</span></label><textarea id="description" name="description" rows="5" maxlength="5000" placeholder="Condition, what is in the box, anything a buyer should know. Shared by every variant.">{{ anchor.description }}</textarea></div>
 </section>
-<form method="post" class="panel">{% csrf_token %}
-<h2 style="margin-top:0">Website page</h2>
-<div class="form-grid"><div class="field"><label for="web_title">Page title</label><input id="web_title" name="web_title" maxlength="200" value="{{ anchor.web_title }}" placeholder="{{ page_title }}"><small class="muted">Products with the same page title are variants of one page. Leave empty to use “{{ page_title }}”.</small></div>
-<div class="field"><label for="discount_all">Percentage off for every variant</label><input id="discount_all" name="discount_all" type="number" min="0" max="90" step="0.01" inputmode="decimal" placeholder="e.g. 10"><small class="muted">Fill this to put the whole page on sale. Or set it per variant below.</small></div></div>
-<div class="field"><label for="description">Description (shared by every variant)</label><textarea id="description" name="description" rows="6" maxlength="5000" placeholder="What customers read: condition, what is in the box, warranty.">{{ anchor.description }}</textarea></div>
-<h2>Variants, prices and where the stock is</h2>
-<div class="table-scroll"><table class="variant-table"><thead><tr><th>Variant</th><th class="num">Shop price</th><th class="num">Online price</th><th class="num">% off</th><th class="num">Compare price</th><th>Stock by shop</th></tr></thead><tbody>
-{% for v in variants %}<tr><td><strong>{{ v.p.storage }} {{ v.p.colour }}{% if not v.p.storage and not v.p.colour %}{{ v.p.name }}{% endif %}</strong>{% if v.p.slug %}<small class="muted"> {{ v.p.slug }}</small>{% endif %}
- {% if v.photos %}<div class="variant-photos">{% for i in v.photos %}<span class="vphoto"><img src="{{ i.url }}" alt="" loading="lazy"><button type="button" data-remove-photo="{{ i.pk }}" aria-label="Remove this photo">×</button></span>{% endfor %}</div>{% endif %}
- <label class="button small" style="margin-top:6px">Add a photo for this variant only<input type="file" accept="image/jpeg,image/png,image/webp" data-variant-photo="{{ v.p.pk }}" hidden></label></td>
-<td class="num">{% for r in v.rows %}<div>{{ r.condition|default:"" }} {{ r.price|floatformat:"0g" }}</div>{% empty %}{% if v.p.selling_price %}{{ v.p.selling_price|floatformat:"0g" }}{% else %}—{% endif %}{% endfor %}</td>
-<td class="num"><input name="online_price_{{ v.p.pk }}" type="number" min="0.01" step="0.01" inputmode="decimal" value="{% if v.p.online_price %}{{ v.p.online_price|stringformat:'.2f' }}{% endif %}" placeholder="same as shop" style="width:120px"></td>
-<td class="num"><input name="discount_{{ v.p.pk }}" type="number" min="0" max="90" step="0.01" inputmode="decimal" value="{% if v.p.discount_percent %}{{ v.p.discount_percent|stringformat:'.2f' }}{% endif %}" style="width:80px"></td>
-<td class="num"><input name="compare_{{ v.p.pk }}" type="number" min="0.01" step="0.01" inputmode="decimal" value="{% if v.p.compare_price %}{{ v.p.compare_price|stringformat:'.2f' }}{% endif %}" placeholder="auto" style="width:120px"></td>
-<td>{% for r in v.rows %}{% for name,n in r.shops %}<span class="chip">{{ name }}: {{ n }}</span> {% endfor %}{% empty %}<span class="muted">No stock</span>{% endfor %}</td></tr>{% endfor %}</tbody></table></div>
-<p class="muted">Online price is empty by default: the website then uses the shop price. “% off” lowers the online price and the website shows the price before the discount crossed out. A compare price shows your own “was” price instead (it must be higher than the selling price).</p>
-<h2>Visibility</h2>
-<label class="check"><input type="checkbox" name="online_hidden" {% if anchor.online_hidden %}checked{% endif %}> Hide this page from the website even though it has photos</label>
-<div class="form-actions"><button class="primary" type="submit">Save</button></div>
+
+<section class="sh-card" id="online-media" data-upload="{% url 'online_photo_upload' anchor.pk %}" data-order="{% url 'online_photo_order' anchor.pk %}" data-update="{% url 'online_photo_update' anchor.pk %}" data-delete="{% url 'online_photo_delete' anchor.pk %}" data-max="{{ max_photos }}" data-max-mb="{{ max_mb }}">
+  <h2>Media</h2>
+  <div class="media-drop" id="media-drop" tabindex="0" role="button" aria-label="Add photos"><strong>Add photos</strong><span>Drop photos here, or click to choose them</span><input type="file" id="media-input" accept="image/jpeg,image/png,image/webp" multiple hidden></div>
+  <ul class="media-grid" id="media-grid" aria-label="Page photos"></ul>
+  <p class="sh-hint">Shared by every variant. The first photo is the cover; drag to reorder. JPG, PNG or WebP, up to {{ max_mb }} MB, {{ max_photos }} at most; large photos are resized automatically.</p>
+  <p class="error" id="media-error" role="alert"></p>
+</section>
+
+<section class="sh-card"><h2>Specifications</h2>
+  <p class="sh-hint">Shown on the website's product page. For phones the fields marked <span class="req">required</span> must be filled before the page can go live. Fill as many as you can; every field is shown to customers.</p>
+  {% for g in spec_groups %}<details class="sh-spec" {% if forloop.first or g.title == 'Performance' or g.title == 'Camera' or g.title == 'Battery' %}open{% endif %}><summary>{{ g.title }}</summary>
+    <div class="sh-spec-grid">{% for f in g.fields %}<div class="sh-field"><label for="spec_{{ f.key }}">{{ f.label }}{% if f.required %} <span class="req">required</span>{% endif %}</label><input id="spec_{{ f.key }}" name="spec_{{ f.key }}" maxlength="300" value="{{ f.value }}" placeholder="{{ f.hint }}"></div>{% endfor %}</div></details>{% endfor %}
+  <details class="sh-spec" {% if spec_custom %}open{% endif %}><summary>Other (your own lines)</summary>
+    <div id="custom-specs">{% for c in spec_custom %}<div class="sh-spec-row"><input name="other_label_{{ forloop.counter }}" value="{{ c.label }}" placeholder="Name" maxlength="80"><input name="other_value_{{ forloop.counter }}" value="{{ c.value }}" placeholder="Value" maxlength="300"></div>{% endfor %}
+      <div class="sh-spec-row"><input name="other_label_{{ spec_custom|length|add:1 }}" placeholder="Name, e.g. Launch year" maxlength="80"><input name="other_value_{{ spec_custom|length|add:1 }}" placeholder="Value" maxlength="300"></div>
+      <div class="sh-spec-row"><input name="other_label_{{ spec_custom|length|add:2 }}" placeholder="Name" maxlength="80"><input name="other_value_{{ spec_custom|length|add:2 }}" placeholder="Value" maxlength="300"></div></div>
+    <button type="button" class="sh-link" id="add-spec-row">+ Add another line</button></details>
+</section>
+
+<section class="sh-card"><h2>Variants &amp; prices</h2>
+  <div class="table-scroll"><table class="sh-table"><thead><tr><th>Variant</th><th class="num">Shop price</th><th class="num">Online price</th><th class="num">% off</th><th class="num">Compare at</th><th>In stock</th></tr></thead><tbody>
+  {% for v in variants %}<tr><td class="sh-variant"><strong>{{ v.p.storage }} {{ v.p.colour }}{% if not v.p.storage and not v.p.colour %}{{ v.p.name }}{% endif %}</strong>
+    {% for r in v.rows %}<div class="sh-sub">{% if r.condition %}{{ r.condition }} · {{ r.pta_status }}{% endif %}</div>{% endfor %}
+    {% if v.photos %}<div class="variant-photos">{% for i in v.photos %}<span class="vphoto"><img src="{{ i.url }}" alt="" loading="lazy"><button type="button" data-remove-photo="{{ i.pk }}" aria-label="Remove this photo">×</button></span>{% endfor %}</div>{% endif %}
+    <label class="sh-link small">+ Photo for this variant only<input type="file" accept="image/jpeg,image/png,image/webp" data-variant-photo="{{ v.p.pk }}" hidden></label></td>
+  <td class="num">{% for r in v.rows %}<div>{% if r.shop_price %}{{ r.shop_price|floatformat:"0g" }}{% else %}<span class="warn-text">not set</span>{% endif %}</div>{% empty %}{% if v.p.selling_price %}{{ v.p.selling_price|floatformat:"0g" }}{% else %}—{% endif %}{% endfor %}</td>
+  <td class="num"><input class="sh-num" name="online_price_{{ v.p.pk }}" type="number" min="0.01" step="0.01" inputmode="decimal" value="{% if v.p.online_price %}{{ v.p.online_price|stringformat:'.2f' }}{% endif %}" placeholder="Shop price" aria-label="Online price"></td>
+  <td class="num"><input class="sh-num sm" name="discount_{{ v.p.pk }}" type="number" min="0" max="90" step="0.01" inputmode="decimal" value="{% if v.p.discount_percent %}{{ v.p.discount_percent|stringformat:'.2f' }}{% endif %}" placeholder="0" aria-label="Percentage off"></td>
+  <td class="num"><input class="sh-num" name="compare_{{ v.p.pk }}" type="number" min="0.01" step="0.01" inputmode="decimal" value="{% if v.p.compare_price %}{{ v.p.compare_price|stringformat:'.2f' }}{% endif %}" placeholder="Auto" aria-label="Compare at price"></td>
+  <td>{% for r in v.rows %}<div class="sh-sub">{% for name,n in r.shops %}<span class="chip">{{ name }}: {{ n }}</span> {% endfor %}</div>{% empty %}<span class="muted">No stock</span>{% endfor %}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="sh-hint">Online price empty = the website uses the shop price. “% off” lowers the online price and the website shows the price before the discount crossed out. “Compare at” shows your own “was” price (it must be higher than what the customer pays).</p>
+</section>
+
+<section class="sh-card" id="where-stock"><h2>Where the stock is</h2>
+  <div class="table-scroll"><table class="sh-table"><thead><tr><th>Variant</th><th>Condition</th><th class="num">Price</th><th class="num">Total</th>{% for b in shop_list %}<th class="num">{{ b.name }}</th>{% endfor %}</tr></thead><tbody>
+  {% for m in matrix %}<tr><td><strong>{{ m.label }}</strong></td><td>{{ m.detail|default:"—" }}</td><td class="num">{% if m.compare and m.compare > m.price %}<s class="muted">{{ m.compare|floatformat:"0g" }}</s> {% endif %}{{ m.price|floatformat:"0g" }}</td><td class="num"><strong>{{ m.total }}</strong></td>{% for n in m.cells %}<td class="num">{{ n|default:"—" }}</td>{% endfor %}</tr>
+  {% empty %}<tr><td colspan="{{ shop_list|length|add:4 }}" class="empty-state">No stock of this model in any shop.</td></tr>{% endfor %}
+  {% if matrix %}<tr class="sh-total"><td colspan="3">Total</td><td class="num">{{ stock|floatformat:"-0" }}</td>{% for n in shop_totals %}<td class="num">{{ n }}</td>{% endfor %}</tr>{% endif %}</tbody></table></div>
+  <p class="sh-hint">New stock of this model bought in any shop joins this page automatically, with the same photos and specifications. A new storage or colour appears here as a new variant.</p>
+</section>
+</div>
+
+<aside class="sh-side">
+  <section class="sh-card"><h2>Status</h2>
+    <p><span class="badge {% if status == 'Live' %}ok{% elif status == 'Draft' %}warn{% endif %}">{{ status }}</span></p>
+    <ul class="sh-check">
+      <li class="{% if need.photo %}done{% endif %}">{% if need.photo %}✓{% else %}○{% endif %} At least one photo</li>
+      {% if need.phone %}<li class="{% if not need.missing %}done{% endif %}">{% if not need.missing %}✓{% else %}○{% endif %} Required specifications{% if need.missing %}<small>Missing: {{ need.missing|join:", " }}</small>{% endif %}</li>{% endif %}
+    </ul>
+    <p class="sh-hint">{% if status == 'Live' %}This page is live on the website.{% elif status == 'Hidden' %}Hidden from the website.{% else %}It goes live as soon as everything above is done.{% endif %}</p>
+    <label class="check"><input type="checkbox" name="online_hidden" {% if anchor.online_hidden %}checked{% endif %}> Hide from the website</label>
+  </section>
+  <section class="sh-card"><h2>Sale</h2>
+    <div class="sh-field"><label for="discount_all">Percentage off for every variant</label><input id="discount_all" name="discount_all" type="number" min="0" max="90" step="0.01" inputmode="decimal" placeholder="e.g. 10"><small>Fill this to put the whole page on sale. Or set it per variant.</small></div>
+  </section>
+  <section class="sh-card"><h2>Organisation</h2>
+    <dl class="sh-dl"><dt>Brand</dt><dd>{{ anchor.model.brand|default:anchor.brand|default:"—" }}</dd><dt>Category</dt><dd>{{ anchor.group|default:"—" }}</dd><dt>Variants</dt><dd>{{ variants|length }}</dd>{% if anchor.slug %}<dt>Website handle</dt><dd><code>{{ anchor.slug }}</code></dd>{% endif %}</dl>
+  </section>
+  <section class="sh-card"><h2>How it works</h2><ul class="sh-hint-list"><li>Prices at the shops never change from here.</li><li>When any shop sells a variant, the website stock drops at once.</li><li>An online order takes stock from whichever shop holds it.</li></ul></section>
+</aside>
+</div>
 </form>
-</div>
-<aside class="online-side"><section class="panel"><h2 style="margin-top:0">How it works</h2><ul class="attention"><li>Photos on this page make it live. No photo means a draft.</li><li>Prices at the shops never change from here.</li><li>When any shop sells a variant, the website stock drops at once.</li><li>An online order takes stock from whichever shop holds it.</li></ul></section></aside>
-</div>
-<section class="panel table-scroll" id="where-stock"><h2 style="margin-top:0">Where the stock is</h2>
-<table><thead><tr><th>Variant</th><th>Condition</th><th class="num">Price</th><th class="num">Total</th>{% for b in shop_list %}<th class="num">{{ b.name }}</th>{% endfor %}</tr></thead><tbody>
-{% for m in matrix %}<tr><td><strong>{{ m.label }}</strong></td><td>{{ m.detail|default:"—" }}</td><td class="num">{% if m.compare and m.compare > m.price %}<s class="muted">{{ m.compare|floatformat:"0g" }}</s> {% endif %}{{ m.price|floatformat:"0g" }}</td><td class="num"><strong>{{ m.total }}</strong></td>{% for n in m.cells %}<td class="num">{{ n|default:"—" }}</td>{% endfor %}</tr>
-{% empty %}<tr><td colspan="{{ shop_list|length|add:4 }}" class="empty-state">No stock of this model in any shop.</td></tr>{% endfor %}
-{% if matrix %}<tr><td colspan="3"><strong>Total</strong></td><td class="num"><strong>{{ stock|floatformat:"-0" }}</strong></td>{% for n in shop_totals %}<td class="num"><strong>{{ n }}</strong></td>{% endfor %}</tr>{% endif %}</tbody></table>
-<p class="muted">New stock of this model bought in any shop joins this page automatically, with the same photos. A new storage or colour appears here as a new variant.</p></section>
 <script type="application/json" id="online-images">{{ images|safe }}</script>
 {% endblock %}{% block scripts %}<script src="{% static 'online.js' %}" defer></script>{% endblock %}

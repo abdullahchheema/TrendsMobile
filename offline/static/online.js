@@ -81,6 +81,10 @@
   reload();}));
  document.querySelectorAll('[data-remove-photo]').forEach(button=>button.addEventListener('click',()=>{
   if(!window.confirm('Remove this photo?'))return;json(deleteUrl(button.dataset.removePhoto),{}).then(reload).catch(e=>say(e.message));}));
+ const addRow=document.getElementById('add-spec-row');
+ if(addRow)addRow.addEventListener('click',()=>{const box=document.getElementById('custom-specs');const n=box.querySelectorAll('.sh-spec-row').length+1;
+  const row=document.createElement('div');row.className='sh-spec-row';
+  const a=document.createElement('input');a.name='other_label_'+n;a.placeholder='Name';a.maxLength=80;const b=document.createElement('input');b.name='other_value_'+n;b.placeholder='Value';b.maxLength=300;row.append(a,b);box.append(row);a.focus();});
  drop.addEventListener('click',()=>input.click());
  drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
  input.addEventListener('change',()=>{add([...input.files]);input.value='';});

@@ -119,15 +119,15 @@ def variants(published_only=True):
     qs=Product.objects.filter(enabled=True)
     if published_only:qs=qs.filter(online_visible=True)
     products={p.pk:p for p in qs.select_related('model')};rows=[]
-    groups=defaultdict(lambda:defaultdict(int));base_of={}
+    groups=defaultdict(lambda:defaultdict(int));base_of={};shop_of={}
     for d in Device.objects.filter(product_id__in=[pk for pk,p in products.items() if p.serialized],status='Available',branch__enabled=True,branch__is_online=False,warehouse__isnull=False):
-        p=products[d.product_id];key=(p.pk,d.condition,d.pta_status,d.device_type,device_price(d,p));groups[key][d.branch_id]+=1;base_of[key]=device_base(d,p)
+        p=products[d.product_id];key=(p.pk,d.condition,d.pta_status,d.device_type,device_price(d,p));groups[key][d.branch_id]+=1;base_of[key]=device_base(d,p);shop_of[key]=min(shop_of.get(key,d.asking_price),d.asking_price)
     for (pid,cond,pta,kind,price),per in groups.items():
-        p=products[pid];rows.append(dict(product=p,condition=cond,pta_status=pta,device_type=kind,price=price,compare=compare_price(p,base_of[(pid,cond,pta,kind,price)]),per_shop=dict(per),quantity=sum(per.values())))
+        p=products[pid];rows.append(dict(product=p,condition=cond,pta_status=pta,device_type=kind,price=price,compare=compare_price(p,base_of[(pid,cond,pta,kind,price)]),shop_price=shop_of[(pid,cond,pta,kind,price)],per_shop=dict(per),quantity=sum(per.values())))
     acc={}
     for (pid,b),q in accessory_free([pk for pk,p in products.items() if not p.serialized and p.stock_item]).items():acc.setdefault(pid,{})[b]=int(q)
     for pid,per in acc.items():
-        p=products[pid];rows.append(dict(product=p,condition='',pta_status='',device_type='',price=product_price(p),compare=compare_price(p,product_base(p)),per_shop=per,quantity=sum(per.values())))
+        p=products[pid];rows.append(dict(product=p,condition='',pta_status='',device_type='',price=product_price(p),compare=compare_price(p,product_base(p)),shop_price=p.selling_price,per_shop=per,quantity=sum(per.values())))
     return rows
 
 
@@ -195,6 +195,37 @@ def release(order):
 
 
 # ------------------------------------------------------------------ creating an order
+KNOWN_TOP={'external_ref','customer','payment_method','payment_status','payment_reference','delivery_fee','notes','items','expected_total','discount','shipping','shipping_method'}
+KNOWN_CUSTOMER={'name','phone','email','address','city','alt_phone','phone2','postal_code','zip'}
+MAX_EXTRA=20000
+
+
+def _discount(value,subtotal):
+    """An order-level discount the website applied (a coupon): a number, or {amount, code}. Never more than the items."""
+    if value in (None,'',0,'0'):return ZERO,''
+    code=''
+    if isinstance(value,dict):code=str(value.get('code') or '')[:60];value=value.get('amount')
+    amount=s.payment_money(value)
+    if amount<0:raise ValidationError('The discount cannot be negative.')
+    if amount>subtotal:raise ValidationError('The discount cannot be more than the items total.')
+    return amount,code
+
+
+def _extra(data,cust):
+    """Everything else the website sent (billing address, delivery notes, source, …) is kept with the order exactly as received."""
+    import json
+    extra={k:v for k,v in data.items() if k not in KNOWN_TOP}
+    more={k:v for k,v in cust.items() if k not in KNOWN_CUSTOMER}
+    if more:extra['customer_details']=more
+    if isinstance(data.get('shipping'),dict):
+        rest={k:v for k,v in data['shipping'].items() if k!='method'}
+        if rest:extra['shipping_details']=rest
+    try:text=json.dumps(extra,default=str)
+    except (TypeError,ValueError):raise ValidationError('The extra order details could not be read.')
+    if len(text)>MAX_EXTRA:raise ValidationError('The extra order details are too large.')
+    return json.loads(text)
+
+
 def _clean_phone(value):
     digits=''.join(ch for ch in str(value or '') if ch.isdigit() or ch=='+')
     if len(digits.replace('+',''))<10:raise ValidationError('Enter the customer phone number (at least 10 digits).')
@@ -252,12 +283,15 @@ def create(data,user=None,source='Website',credit=None):
         if price<=0:raise ValidationError(f'{product.name} has no price.')
         lines.append(dict(product=product,condition=cond,pta_status=pta,device_type=kind,unit_price=price,quantity=qty))
     list(Product.objects.select_for_update().filter(pk__in={l['product'].pk for l in lines}).order_by('pk'))      # one order at a time per product, so the last unit cannot be promised twice
-    subtotal=sum((l['unit_price']*l['quantity'] for l in lines),ZERO);total=subtotal+fee
+    subtotal=sum((l['unit_price']*l['quantity'] for l in lines),ZERO)
+    discount,code=_discount(data.get('discount'),subtotal);total=subtotal-discount+fee
     if data.get('expected_total') not in (None,'') and s.payment_money(data['expected_total'])!=total:
         raise ValidationError(f'The total is now PKR {total:,.2f}, not PKR {s.payment_money(data["expected_total"]):,.2f}. Prices or delivery changed; refresh and try again.')
     order=OnlineOrder.objects.create(code=s.code('OL'),source=source,external_ref=ref,customer_name=name,customer_phone=phone,customer_email=str(cust.get('email') or '')[:180],address=str(cust.get('address') or '')[:500],
         city=str(cust.get('city') or '')[:100],payment_method=method,payment_status='Paid' if (data.get('payment_status')=='Paid' and method!='Cash on Delivery') else 'Unpaid',payment_reference=str(data.get('payment_reference') or '')[:180],
-        delivery_fee=fee,subtotal=subtotal,total=total,notes=str(data.get('notes') or '')[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit)
+        delivery_fee=fee,subtotal=subtotal,total=total,notes=str(data.get('notes') or '')[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit,
+        alt_phone=str(cust.get('alt_phone') or cust.get('phone2') or '')[:40],postal_code=str(cust.get('postal_code') or cust.get('zip') or '')[:20],
+        shipping_method=str((data.get('shipping') or {}).get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method') or '')[:100],discount_amount=discount,discount_code=code,extra=_extra(data,cust))
     for l in lines:l['line']=OnlineOrderLine.objects.create(order=order,product=l['product'],condition=l['condition'],pta_status=l['pta_status'],device_type=l['device_type'],quantity=l['quantity'],unit_price=l['unit_price'])
     _reserve(order,plan(lines))
     if getattr(user,'is_authenticated',False):s.audit(user,'Online order created',None,order=order.code,total=str(total))
@@ -344,7 +378,7 @@ def dispatch(order,user,courier='',tracking=''):
     method=shop_method(branch,order) if order.payment_method!='Cash on Delivery' else None
     doc=s.new_doc('Sales Invoice',branch,customer=party_for(branch,order),seller=person,channel='Online',online_order=order,notes=f'Online order {order.code}'+(f' · {order.notes}' if order.notes else ''),
                   data=dict(channel='Online',online_order=order.code))
-    pricing.inputs(doc,'amount','0','','');doc.save()
+    pricing.inputs(doc,'amount',str(order.discount_amount or 0),'','');doc.save()
     for a in allocations:
         if a.device_id:Line.objects.create(document=doc,product=a.product,device=a.device,warehouse=a.device.warehouse,quantity=1,rate=a.line.unit_price)
         else:Line.objects.create(document=doc,product=a.product,warehouse=shopdefaults.warehouse(a.branch),quantity=a.quantity,rate=a.line.unit_price)

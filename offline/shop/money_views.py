@@ -17,6 +17,9 @@ def _guard(request):
 
 
 def _scope(request):
+    if getattr(request,'online_finance',False):          # the Online Store's own books (see online_views)
+        from . import online_orders
+        online=online_orders.online_branch();return [online],online,online
     """(shops to read, shop to post in). A shop login is always its own shop; the owner may pick one or see all."""
     from .views import selected_branch
     value=request.POST.get('branch') or request.GET.get('branch')

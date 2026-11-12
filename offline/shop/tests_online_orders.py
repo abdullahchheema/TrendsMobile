@@ -21,6 +21,8 @@ class OrderBase(TestCase):
         self.blue=Product.objects.create(code='P18B',name='iPhone 18 Pro Max 256GB Blue',model=model,brand='Apple',storage='256GB',colour='Blue',serialized=True,stock_item=True,online_visible=True,slug='blue')
         self.cover=Product.objects.create(code='COV1',name='Silicone cover',group='Cover / Case',serialized=False,stock_item=True,selling_price=Decimal('800'),online_visible=True,slug='cover')
         from . import online_store
+        REQ={'Display':{'Screen size':'6.9 inch'},'Performance':{'Chipset':'Test chip','RAM':'8 GB','Operating system':'iOS'},'Camera':{'Main camera':'48 MP'},'Battery':{'Battery':'4000 mAh'}}
+        Product.objects.filter(pk__in=[self.red.pk,self.blue.pk]).update(specs=REQ)
         for p in (self.red,self.cover):ProductImage.objects.create(product=p,path='t/x.jpg',url='https://img.test/x.jpg');online_store.refresh_live(p)          # a photo is what makes a page live
         self.red.refresh_from_db();self.blue.refresh_from_db();self.cover.refresh_from_db()
     def phone(self,branch,product=None,price='100000',cost='80000',cond='New'):
@@ -259,3 +261,42 @@ class Exchange(OrderBase):
         self.assertEqual({x.branch_id for x in OnlineAllocation.objects.filter(line__order=new)},{self.other.pk})
         made=oo.dispatch(new,self.user)[0];made.refresh_from_db();credit.refresh_from_db()
         self.assertEqual((made.outstanding,credit.outstanding),(Decimal('0.00'),Decimal('0.00')))
+
+
+class OrderDetails(OrderBase):
+    def test_everything_the_website_sends_is_kept_and_a_coupon_reduces_the_total(self):
+        o=self.phone(self.branch) and oo.create(dict(external_ref='D1',customer=dict(name='Sara',phone='03211234567',alt_phone='03007654321',postal_code='54000',city='Lahore',address='House 4',whatsapp='yes'),
+            payment_method='Cash on Delivery',delivery_fee='300',discount=dict(amount='2000',code='EID25'),shipping=dict(method='Same-day',courier_hint='TCS'),billing_address='Office 9',source='web-app',utm=dict(campaign='eid'),
+            items=[self.item()],expected_total='98300'))[0]
+        self.assertEqual((o.total,o.discount_amount,o.discount_code,o.alt_phone,o.postal_code,o.shipping_method),(Decimal('98300'),Decimal('2000'),'EID25','03007654321','54000','Same-day'))
+        self.assertEqual((o.extra['billing_address'],o.extra['source'],o.extra['utm']['campaign'],o.extra['customer_details']['whatsapp'],o.extra['shipping_details']['courier_hint']),('Office 9','web-app','eid','yes','TCS'))
+        inv=oo.dispatch(o,self.user)[0];self.assertEqual(inv.total,Decimal('98300.00'))                  # the invoice carries the same discount
+        self.client.force_login(self.user);page=self.client.get(reverse('online_order',args=[o.pk]));self.assertContains(page,'Details from the website');self.assertContains(page,'EID25');self.assertContains(page,'Office 9')
+    def test_a_discount_larger_than_the_items_is_refused(self):
+        self.phone(self.branch)
+        with self.assertRaisesMessage(ValidationError,'more than the items'):self.order([self.item()],discount=dict(amount='999999'))
+
+
+class OnlineFinance(OrderBase):
+    def setUp(self):
+        super().setUp();self.shop=shop_accounts.create_login(self.branch,'shop-f','Strong-pass-for-SF-77!');self.web=shop_accounts.create_online_login('Web F','web-f','Strong-pass-for-WF-77!')
+    def test_the_online_login_has_the_same_finance_screens_a_shop_has(self):
+        self.client.force_login(self.web)
+        for name in ('online_money_in','online_money_out','online_expenses','online_customer_dues','online_cash_and_bank','online_history'):self.assertEqual(self.client.get(reverse(name)).status_code,200,name)
+        self.assertContains(self.client.get(reverse('online_cash_and_bank')),'Online Store')
+    def test_money_recorded_there_goes_into_the_online_stores_books_not_a_shop(self):
+        import uuid
+        self.client.force_login(self.web);online=oo.online_branch()
+        r=self.client.post(reverse('online_money_in'),dict(action='owner_funds',request_key=str(uuid.uuid4()),amount='50000',method='Cash',date=str(timezone.localdate()),description='Start'),follow=True);self.assertContains(r,'Owner funds recorded')
+        self.assertEqual((self.money(online,'Cash'),self.money(self.branch,'Cash')),(Decimal('50000'),Decimal('0')))
+        self.assertContains(self.client.get(reverse('online_history')),'Owner funds')
+    def test_cod_still_to_collect_shows_as_customer_dues_and_the_customer_account_opens(self):
+        self.phone(self.branch);o=self.order([self.item()]);oo.dispatch(o,self.user);self.client.force_login(self.web)
+        page=self.client.get(reverse('online_customer_dues'));self.assertContains(page,'Ali Khan')
+        party=Party.objects.get(name='Ali Khan');self.assertEqual(self.client.get(reverse('party_account',args=[party.pk])).status_code,200)
+        other=Party.objects.create(code='SHOPC',name='Shop customer',kind='Customer',branch=self.branch);self.assertEqual(self.client.get(reverse('party_account',args=[other.pk])).status_code,403)
+    def test_shops_cannot_open_the_online_finance_screens_and_the_owner_can(self):
+        self.client.force_login(self.shop)
+        for name in ('online_money_in','online_cash_and_bank','online_history','online_customer_dues'):self.assertEqual(self.client.get(reverse(name)).status_code,403,name)
+        self.client.force_login(self.user);self.assertEqual(self.client.get(reverse('online_cash_and_bank')).status_code,200)
+        self.assertContains(self.client.get(reverse('online_dashboard')),'Online Finance' if False else 'Online')

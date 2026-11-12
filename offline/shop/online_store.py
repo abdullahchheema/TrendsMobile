@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404,redirect,render
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from .models import Branch,Device,Product,ProductImage,StockMovement
-from . import product_media as media,online_access,online_orders as oo
+from . import product_media as media,online_access,online_orders as oo,specs as specmod
 
 ZERO=Decimal('0.00')
 MAX_SHARED=12
@@ -53,15 +53,27 @@ def make_slug(product):
     return slug
 
 
+def readiness(family):
+    """What a page still needs before it can go live: a photo, and (phones) the required specifications."""
+    has_photo=ProductImage.objects.filter(product__in=[p.pk for p in family]).exists()
+    phone=any(p.serialized for p in family)
+    source=next((p.specs for p in family if p.specs),{})
+    missing=specmod.missing_required(source) if phone else []
+    return dict(photo=has_photo,missing=missing,phone=phone,ok=has_photo and not missing,hidden=any(p.online_hidden for p in family))
+
+
 def refresh_live(product):
-    """A page is live exactly when it has a photo and is not hidden. Called whenever photos or the page change, and when a new variant is added
-    to a page that already has photos, so nothing needs publishing by hand."""
+    """A page is live exactly when it has a photo, (for phones) the required specifications, and is not hidden. Called whenever photos or the page
+    change, and when a new variant is added to a page, so nothing needs publishing by hand. A new variant inherits the page's text and specifications."""
     product=Product.objects.select_related('model').get(pk=product.pk)
     family=list(family_of(product).select_related('model'))
-    has=ProductImage.objects.filter(product__in=[p.pk for p in family]).exists()
+    ready=readiness(family)['ok']
     page=slugify(title_of(product))[:150] or (product.slug or 'product')
+    source=next((p for p in family if p.specs),None);text=next((p.description for p in family if p.description),'')
     for p in family:
-        want=bool(has and p.enabled and not p.online_hidden);changes={}
+        want=bool(ready and p.enabled and not p.online_hidden);changes={}
+        if source is not None and not p.specs:changes['specs']=source.specs
+        if text and not p.description:changes['description']=text
         if want and not p.slug:changes['slug']=make_slug(p)
         if p.family_slug!=page:changes['family_slug']=page
         if p.online_visible!=want:changes['online_visible']=want
@@ -105,6 +117,7 @@ def catalog(q=''):
         fam['low']=min(prices) if prices else None;fam['high']=max(prices) if prices else None
         fam['anchor']=sorted(fam['products'],key=lambda p:(p.storage,p.colour,p.name))[0]
         fam['status']='Hidden' if fam['hidden'] else 'Live' if fam['live'] else 'Draft'
+        ready=readiness(fam['products']);fam['reasons']=([] if ready['photo'] else ['no photo'])+(['specifications missing'] if ready['missing'] else [])
         fam['sale']=any((r['compare'] or 0)>r['price'] for r in fam['rows'])
         if q and q.lower() not in (fam['title']+' '+fam['brand']+' '+' '.join(p.name for p in fam['products'])).lower():continue
         rows.append(fam)
@@ -153,6 +166,7 @@ def edit(request,pk):
             with transaction.atomic():
                 locked={p.pk:p for p in Product.objects.select_for_update().select_related('model').filter(pk__in=[p.pk for p in family])}
                 title=' '.join(request.POST.get('web_title','').split())[:200];desc=request.POST.get('description','').strip()[:5000];hidden=request.POST.get('online_hidden')=='on'
+                page_specs=specmod.parse(request.POST) if any(k.startswith(('spec_','other_label_')) for k in request.POST) else None      # a post without any specification field leaves them as they are
                 all_pct=_money(request.POST.get('discount_all'),'the percentage off')
                 for p in family:
                     p=locked[p.pk]
@@ -164,7 +178,8 @@ def edit(request,pk):
                     if compare is not None and compare<=0:raise ValidationError(f'{p.name}: the compare price must be more than zero, or empty.')
                     p.online_price=price;p.discount_percent=(pct if pct else None);p.compare_price=compare
                     p.description=desc;p.online_hidden=hidden;p.web_title=title
-                    p.save(update_fields=['online_price','discount_percent','compare_price','description','online_hidden','web_title','modified'])
+                    if page_specs is not None:p.specs=page_specs
+                    p.save(update_fields=['online_price','discount_percent','compare_price','description','online_hidden','web_title','specs','modified'])
                 for p in family:
                     fresh=Product.objects.select_related('model').get(pk=p.pk)
                     for v in oo.variants(published_only=False):
@@ -188,9 +203,11 @@ def edit(request,pk):
         for r in v['rows']:matrix.append(dict(label=(f"{v['p'].storage} {v['p'].colour}".strip() or v['p'].name),detail=(f"{r['condition']} · {r['pta_status']}" if r['condition'] else ''),price=r['price'],compare=r['compare'],total=r['quantity'],cells=[r['per_shop'].get(b.pk,0) for b in shop_list]))
     shop_totals=[sum(m['cells'][i] for m in matrix) for i in range(len(shop_list))]
     live=any(p.online_visible for p in family)
+    spec_groups,spec_custom=specmod.form_groups(next((p.specs for p in family if p.specs),{}))
+    need=readiness(family)
     return render(request,'online_edit.html',dict(title=title_of(anchor),page_title=title_of(anchor),anchor=anchor,product=anchor,variants=variants,images=json.dumps(_payload(shared)),
         status='Hidden' if anchor.online_hidden else 'Live' if live else 'Draft',live=live,max_photos=MAX_SHARED,max_mb=media.MAX_BYTES//1048576,
-        stock=sum(r['quantity'] for rows in rows_by_product.values() for r in rows),matrix=matrix,shop_list=shop_list,shop_totals=shop_totals))
+        stock=sum(r['quantity'] for rows in rows_by_product.values() for r in rows),spec_groups=spec_groups,spec_custom=spec_custom,need=need,required_labels=[specmod.LABEL[k] for k in specmod.REQUIRED],matrix=matrix,shop_list=shop_list,shop_totals=shop_totals))
 
 
 def _family_ids(product):return list(family_of(Product.objects.select_related('model').get(pk=product.pk)).values_list('pk',flat=True))

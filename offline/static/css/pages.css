@@ -228,3 +228,23 @@ a.cov-kpi:hover{text-decoration:none;border-color:var(--line-3)}
 .variant-row>td{padding-top:0}.variant-row details summary{cursor:pointer;color:var(--accent-text);font-size:13px}.variant-table{width:100%;margin-top:var(--s2)}
 .variant-photos{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}.vphoto{position:relative;display:inline-block}.vphoto img{width:44px;height:44px;border-radius:8px;object-fit:cover;display:block;border:1px solid var(--line-2)}.vphoto button{position:absolute;top:-6px;right:-6px;width:18px;height:18px;min-height:0;padding:0;border-radius:999px;font-size:12px;line-height:1;cursor:pointer}
 label.button.small{display:inline-block;padding:3px 10px;font-size:12px;cursor:pointer}
+
+/* Online product page (Shopify-style admin layout) */
+.sh{display:block}.sh-bar{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s4)}
+.sh-title{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;min-width:0}.sh-title h1{margin:0;font-size:24px;overflow-wrap:anywhere}.sh-crumb{width:100%;font-size:13px;color:var(--ink-3)}.sh-meta{color:var(--ink-3);font-size:13px}
+.sh-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:var(--s4);align-items:start}.sh-main,.sh-side{min-width:0;display:grid;gap:var(--s4)}
+@media(max-width:1100px){.sh-grid{grid-template-columns:minmax(0,1fr)}}
+.sh-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5);min-width:0}.sh-card h2{margin:0 0 var(--s4);font-size:16px}
+.sh-field{display:flex;flex-direction:column;gap:6px;margin-bottom:var(--s4);min-width:0}.sh-field:last-child{margin-bottom:0}.sh-field label{font-size:13px;font-weight:600;color:var(--ink-2)}
+.sh-field input,.sh-field textarea,.sh-field select{width:100%;min-width:0;box-sizing:border-box}.sh-field small,.sh-hint{color:var(--ink-3);font-size:12.5px;line-height:1.45}.sh-hint{margin:var(--s3) 0 0}
+.opt{font-weight:400;color:var(--ink-3);font-size:12px}.req{display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:rgba(229,161,74,.16);color:#e5a14a;font-size:11px;font-weight:600}
+.sh-spec{border:1px solid var(--line-2);border-radius:var(--r-md);margin-bottom:var(--s3);background:var(--surface-2)}.sh-spec>summary{cursor:pointer;padding:10px 14px;font-weight:600;font-size:14px}.sh-spec[open]>summary{border-bottom:1px solid var(--line-2)}
+.sh-spec-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s3) var(--s4);padding:var(--s4)}@media(max-width:700px){.sh-spec-grid{grid-template-columns:1fr}}
+#custom-specs{padding:var(--s4) var(--s4) 0}.sh-spec-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:var(--s3);margin-bottom:var(--s3)}.sh-spec-row input{width:100%;min-width:0;box-sizing:border-box}
+.sh-link{background:none;border:0;color:var(--accent-text);cursor:pointer;padding:8px 14px;font-size:13px;min-height:0}.sh-link.small{display:inline-block;padding:4px 0;font-size:12.5px}
+.sh-table{width:100%;border-collapse:collapse}.sh-table th{text-align:left;font-size:12px;color:var(--ink-3);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap}.sh-table th.num,.sh-table td.num{text-align:right}
+.sh-table td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}.sh-table .sh-total td{font-weight:700;border-bottom:0}.sh-sub{font-size:12px;color:var(--ink-3);margin-top:2px}.sh-variant{min-width:150px}
+.sh-num{width:100px;max-width:100%;box-sizing:border-box;text-align:right}.sh-num.sm{width:70px}.warn-text{color:#e5a14a;font-size:12px}
+.sh-check{list-style:none;margin:0 0 var(--s3);padding:0;display:grid;gap:8px}.sh-check li{color:var(--ink-3);font-size:14px}.sh-check li.done{color:var(--ok,#4ade80)}.sh-check small{display:block;font-size:12px;color:#e5a14a;margin-left:18px}
+.sh-dl{display:grid;grid-template-columns:auto 1fr;gap:6px var(--s4);margin:0;font-size:14px}.sh-dl dt{color:var(--ink-3)}.sh-dl dd{margin:0;text-align:right;overflow-wrap:anywhere}.sh-hint-list{margin:0;padding-left:18px;color:var(--ink-3);font-size:13px;display:grid;gap:6px}
+.media-drop{padding:var(--s5) var(--s4)}.media-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}

@@ -82,7 +82,12 @@ def order(request,pk):
     lines=oo.order_lines(o);invoices=list(oo.invoices(o))
     returns=list(Document.objects.filter(online_order=o,is_return=True,kind__in=list(s.SELL)).exclude(status='Cancelled').select_related('branch').order_by('created'))
     methods=sorted({m for b in {i.branch for i in invoices} for m in (ShopSettings.objects.filter(branch=b).first().payment_methods if ShopSettings.objects.filter(branch=b).exists() else {})}) or ['Cash']
-    return render(request,'online_order.html',dict(title=o.code,o=o,lines=lines,invoices=invoices,returns=returns,methods=methods,
+    def flat(v):
+        if isinstance(v,dict):return ', '.join(f'{k}: {flat(x)}' for k,x in v.items())
+        if isinstance(v,list):return ', '.join(flat(x) for x in v)
+        return str(v)
+    extra_rows=[(str(k).replace('_',' ').capitalize(),flat(v)) for k,v in (o.extra or {}).items() if v not in ('',None,[],{})]
+    return render(request,'online_order.html',dict(title=o.code,o=o,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
         candidates=list(_candidates(o)) if o.status==OnlineOrder.NEW and not o.exchange_credit_id else [],prepaid=o.payment_method!='Cash on Delivery',
         outstanding=sum((i.outstanding for i in invoices if i.outstanding>0),Decimal(0))))
 
@@ -204,3 +209,18 @@ def api_order_status(request,ref):
     if not o:return JsonResponse({'error':'Order not found.'},status=404)
     return JsonResponse(dict(order=o.code,external_ref=o.external_ref,status=o.status,payment_status=o.payment_status,courier=o.courier,tracking=o.tracking,total=str(o.total),
                              placed_on=str(o.placed_on),dispatched_on=str(o.dispatched_on) if o.dispatched_on else None,delivered_on=str(o.delivered_on) if o.delivered_on else None))
+
+
+# ------------------------------------------------------------------ the Online Store's finance screens (the same ones a shop has, on the Online Store's books)
+def _finance(view):
+    from functools import wraps
+    @wraps(view)
+    def inner(request,*args,**kwargs):
+        _guard(request);request.online_finance=True
+        return view(request,*args,**kwargs)
+    return login_required(inner)
+
+
+def finance_views():
+    from . import money_views as mv
+    return dict(money_in=_finance(mv.money_in),money_out=_finance(mv.money_out),expenses=_finance(mv.expenses),customer_dues=_finance(mv.customer_dues),cash_and_bank=_finance(mv.cash_and_bank),history=_finance(mv.history_view))

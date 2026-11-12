@@ -25,6 +25,8 @@ class OnlineBase(TestCase):
         self.__dict__.update(fixtures());self.client.force_login(self.user);self.today=timezone.localdate()
         self.make('Blue',6000);self.make('Red',6100)
         self.product=Device.objects.filter(imeis__number=imei(6000)).first().product;self.red=Device.objects.filter(imeis__number=imei(6100)).first().product
+        self.REQ={'Display':{'Screen size':'6.1 inch'},'Performance':{'Chipset':'Test chip','RAM':'6 GB','Operating system':'iOS'},'Camera':{'Main camera':'12 MP'},'Battery':{'Battery':'3000 mAh'}}
+        Product.objects.filter(model__name__icontains='iPhone 13').update(specs=self.REQ)      # phones need their required specifications before a page can go live
     def make(self,colour,base,n=3):
         rows=[dict(brand='Apple',model='iPhone 13',storage='128GB',colour=colour,quantity=1,condition='Good',device_type='Used',grade='8',pta_status='PTA',cost='100000',cost_mode='each',asking_price='120000',imeis=imei(base+i),notes='') for i in range(n)]
         data=dict(branch=self.branch,party_name='S',warehouse=self.warehouse,posting_date=self.today,staff=self.buyer,payment_status='unpaid',method='Cash',handler=self.handler)
@@ -152,3 +154,40 @@ class OnePagePerModel(OnlineBase):
         self.assertEqual(online_store.family_of(self.product).count(),before);self.assertEqual(ProductImage.objects.count(),1)
         self.make('Green',6400,1);page=self.client.get(reverse('online_edit',args=[self.product.pk]))       # a new colour: a new variant on the same page, live at once
         self.assertIn('128GB Green',[x['label'] for x in page.context['matrix']]);green=Device.objects.filter(imeis__number=imei(6400)).first().product;self.assertTrue(Product.objects.get(pk=green.pk).online_visible)
+
+
+class Specs(OnlineBase):
+    def test_a_phone_page_needs_its_required_specifications_to_go_live(self):
+        from . import specs as specmod
+        Product.objects.update(specs={})
+        self.upload();self.assertEqual(self.live(self.product,self.red),[False,False])            # photo alone is not enough for a phone
+        page=self.client.get(reverse('online_edit',args=[self.product.pk]));self.assertContains(page,'Missing:');self.assertEqual(set(page.context['need']['missing']),set(specmod.LABEL[k] for k in specmod.REQUIRED))
+        data={f'spec_{k}':v for k,v in dict(display_size='6.9 inch',chipset='A19',ram='12 GB',main_camera='48 MP',battery='4800 mAh',os='iOS 26').items()};data['description']='x'
+        self.client.post(reverse('online_edit',args=[self.product.pk]),data);self.assertEqual(self.live(self.product,self.red),[True,True])
+        self.assertEqual(Product.objects.get(pk=self.red.pk).specs['Display']['Screen size'],'6.9 inch')                # saved for every variant on the page
+    def test_custom_specification_lines_and_limits(self):
+        data={'description':'x','spec_ram':'8 GB','other_label_1':'Launch year','other_value_1':'2025','other_label_2':'','other_value_2':''}
+        self.client.post(reverse('online_edit',args=[self.product.pk]),data);self.assertEqual(Product.objects.get(pk=self.product.pk).specs['Other'],{'Launch year':'2025'})
+        r=self.client.post(reverse('online_edit',args=[self.product.pk]),{'description':'x','other_label_1':'Only a name','other_value_1':''},follow=True);self.assertContains(r,'needs both a name and a value')
+        r=self.client.post(reverse('online_edit',args=[self.product.pk]),{'description':'x','spec_ram':'8 GB','other_label_1':'RAM','other_value_1':'1'},follow=True);self.assertContains(r,'already has its own field')
+    def test_specs_reach_the_website_views_and_an_empty_post_keeps_them(self):
+        self.upload();self.client.post(reverse('online_edit',args=[self.product.pk]),dict(description='y'))                   # no spec fields at all: unchanged
+        fam=self.rows('web_families');self.assertEqual(len(fam),1);specs=fam[0]['specs'];specs=json.loads(specs) if isinstance(specs,str) else specs
+        self.assertEqual(specs['Performance']['RAM'],'6 GB');self.assertTrue(json.loads(self.rows('web_listings')[0]['specs']) if isinstance(self.rows('web_listings')[0]['specs'],str) else True)
+    def test_the_product_page_is_laid_out_like_a_shop_admin(self):
+        page=self.client.get(reverse('online_edit',args=[self.product.pk]))
+        for text in ('Title &amp; description','Media','Specifications','Variants &amp; prices','Where the stock is','Status','Sale','Organisation','required'):self.assertContains(page,text)
+
+
+class Seeding(OnlineBase):
+    def test_seed_sets_prices_specs_and_photos_once_and_never_overwrites(self):
+        from . import seed_online
+        Product.objects.update(specs={});Device.objects.filter(product=self.product).update(asking_price=0)
+        done=seed_online.run(write=lambda *a:None);self.assertEqual(done['prices'],3);self.assertGreater(done['photos'],0)
+        self.assertEqual(set(Device.objects.filter(product=self.product).values_list('asking_price',flat=True)),{Decimal('115000')})           # 100000 cost + 15 %
+        self.assertTrue(Product.objects.get(pk=self.product.pk).online_visible);self.assertTrue(Product.objects.get(pk=self.red.pk).specs['Performance']['RAM'])
+        before=(ProductImage.objects.count(),Device.objects.filter(product=self.red).first().asking_price)
+        again=seed_online.run(write=lambda *a:None);self.assertEqual((again['prices'],again['specs'],again['photos']),(0,0,0));self.assertEqual((ProductImage.objects.count(),Device.objects.filter(product=self.red).first().asking_price),before)
+    def test_generated_photos_are_real_pngs_in_the_variants_colour(self):
+        from . import seed_online,product_media
+        raw=seed_online.phone_png(seed_online.colour_rgb('Sierra Blue'),size=96);self.assertEqual(product_media.sniff(raw),'image/png');self.assertEqual(seed_online.colour_rgb('Natural Titanium'),(176,168,157))

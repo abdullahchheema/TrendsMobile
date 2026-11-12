@@ -33,6 +33,7 @@ def branches(user,include_online=False):
 def scoped_parties(user):
     """Customers and suppliers the user may see: the owner sees every one, a shop sees only its own shop's."""
     from .models import Party
+    if not user.is_superuser and online_access.active() and online_access.is_online(user):return Party.objects.filter(branch__is_online=True)      # the online login sees online customers only
     return Party.objects.all() if user.is_superuser else Party.objects.filter(branch__in=branches(user))
 
 def visible_accounts(user):
@@ -98,6 +99,7 @@ def menu_for(user,visible,path=''):
     sections.append(('Inventory','stock',coll('Mobile Device'),inventory))
     sections.append(('Purchases','buy',r('bulk_purchase'),[('Buy Phones (one or many)',r('bulk_purchase')),('Buy Accessories',r('accessory_buy')),('Purchase History',coll('Purchase Invoice'))]))
     if owner:sections.append(('Online Store','sell-pos',r('online_dashboard'),[('Online Dashboard',r('online_dashboard')),('Online Orders',r('online_orders')),('New Online Order',r('online_order_new')),('Online Stock',r('online_stock')),('Online Accounts',r('online_accounts')),('Products & Photos',r('online_store')),('Drafts (need a photo)',r('online_store')+'?show=Draft')]))
+    if owner:sections.append(('Online Finance','payments-expenses',r('online_money_in'),[('Money In',r('online_money_in')),('Money Out',r('online_money_out')),('Online Expenses',r('online_expenses')),('Customer Dues (COD)',r('online_customer_dues')),('Cash and Bank',r('online_cash_and_bank')),('Transaction History',r('online_history')),('Online Accounts & Profit',r('online_accounts'))]))
     if owner:sections.append(('Stock Transfers','exchanges',r('stock_transfer'),[('All Transfers',r('stock_transfer')),('Pending Transfers',r('stock_transfer')+'?state=Open'),('Transfer History',r('stock_transfer')+'?state=Received')]))
     sections.append(('Customers','customers-suppliers',coll('Customer'),[('Customer Directory',coll('Customer')),('Customer Dues & Advances',r('customer_dues')),('Customer Payment History',r('customer_payments'))]))
     sections.append(('Suppliers','buy',coll('Supplier'),[('Supplier Directory',coll('Supplier')),('Supplier Dues & Advances',r('supplier_dues')),('Supplier Payment History',r('supplier_payments'))]))
