@@ -283,6 +283,9 @@ def create(data,user=None,source='Website',credit=None):
         if price<=0:raise ValidationError(f'{product.name} has no price.')
         lines.append(dict(product=product,condition=cond,pta_status=pta,device_type=kind,unit_price=price,quantity=qty))
     list(Product.objects.select_for_update().filter(pk__in={l['product'].pk for l in lines}).order_by('pk'))      # one order at a time per product, so the last unit cannot be promised twice
+    if ref:                                                  # a twin request with the same reference may have finished while this one waited for the lock
+        existing=OnlineOrder.objects.filter(external_ref=ref).first()
+        if existing:return existing,False
     subtotal=sum((l['unit_price']*l['quantity'] for l in lines),ZERO)
     discount,code=_discount(data.get('discount'),subtotal);total=subtotal-discount+fee
     if data.get('expected_total') not in (None,'') and s.payment_money(data['expected_total'])!=total:

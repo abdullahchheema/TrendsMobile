@@ -197,7 +197,8 @@ def api_order(request):
     try:
         with transaction.atomic():order,created=oo.create(data,None,'Website')
     except (ValidationError,IntegrityError,ValueError) as error:
-        return JsonResponse({'error':_err(error)},status=409 if 'no longer' in _err(error) or 'total is now' in _err(error) or 'Only ' in _err(error) else 400)
+        text=_err(error);conflict=any(w in text for w in ('no longer','total is now','Only ','does not exist any more','not for sale online','changed to PKR'))
+        return JsonResponse({'error':text},status=409 if conflict else 400)
     return JsonResponse(dict(order=order.code,external_ref=order.external_ref,status=order.status,subtotal=str(order.subtotal),delivery_fee=str(order.delivery_fee),total=str(order.total),created=created),status=201 if created else 200)
 
 
