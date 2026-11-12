@@ -53,10 +53,8 @@ Set `ONLINE_API_KEY` in Vercel to a long random secret (without it the API is of
 | `web_variant_stock` | the same variants split by shop |
 | `web_stock`, `web_phone_units`, `web_images` | per product per shop; per phone (no IMEI); photos (page-wide, or `variant_product_id` for one variant) |
 
-They contain no cost, IMEI, supplier or customer data. Quantities exclude phones that are reserved, sold or in transit. Give the website a read-only role (run once in the Supabase SQL editor, with your own password):
-```sql
-create role web_reader login password 'CHANGE-ME';
-grant usage on schema public to web_reader;
-grant select on web_families, web_listings, web_variants, web_variant_stock, web_stock, web_phone_units, web_images to web_reader;
-```
-Never give the website the ERP's own database login. If a later migration changes a column these views use, drop and recreate the views in that migration.
+They contain no cost, IMEI, supplier or customer data. Quantities exclude phones that are reserved, sold or in transit.
+
+**Where they live.** The ERP's tables and these views are in the private `covison_app` schema, which the Supabase Data API and the `anon` key cannot reach. To let the website read them, run `supabase/hosted/web-views.sql` once in the Supabase SQL editor (after `update-database.ps1`). It creates read-only copies in the `api` schema and grants `SELECT` on them to `anon`. In Supabase, Project Settings → Data API → *Exposed schemas* must include `api`. The website then reads them with `createClient(url, anonKey, { db: { schema: 'api' } })`.
+
+If a later ERP migration drops and recreates the `covison_app.web_*` views, drop the `api.web_*` views first (or re-run `web-views.sql` afterwards); the release notes will say so.
