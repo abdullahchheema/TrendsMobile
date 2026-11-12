@@ -135,3 +135,20 @@ class MandatoryPrice(TestCase):
     def test_online_price_cannot_be_zero(self):
         p=Product(code='X2',name='Cover',stock_item=True,serialized=False,selling_price=Decimal('500'),online_price=Decimal('0'))
         with self.assertRaisesMessage(ValidationError,'online price'):p.clean()
+
+
+class OnePagePerModel(OnlineBase):
+    def test_online_stock_shows_each_model_once_with_totals_per_shop(self):
+        page=self.client.get(reverse('online_stock'));html=page.content.decode()
+        self.assertEqual(html.count('iPhone 13</strong>'),1)                    # two colours, three phones each: still one line
+        rows=[r for r in page.context['rows'] if r['title']=='Apple iPhone 13'];self.assertEqual(len(rows),1);self.assertEqual((rows[0]['stock'],rows[0]['cells']),(6,[6]))
+    def test_the_model_page_lists_variants_and_where_the_stock_is(self):
+        page=self.client.get(reverse('online_edit',args=[self.product.pk]));self.assertContains(page,'Where the stock is')
+        m=page.context['matrix'];self.assertEqual(sorted((x['label'],x['total']) for x in m),[('128GB Blue',3),('128GB Red',3)]);self.assertEqual(page.context['shop_totals'],[6])
+    def test_a_phone_bought_later_joins_the_existing_page_and_photos(self):
+        self.upload();before=online_store.family_of(self.product).count()
+        self.make('Blue',6300,2)                                                # same model and colour again: more stock, same page
+        page=self.client.get(reverse('online_edit',args=[self.product.pk]));m={x['label']:x['total'] for x in page.context['matrix']};self.assertEqual(m['128GB Blue'],5)
+        self.assertEqual(online_store.family_of(self.product).count(),before);self.assertEqual(ProductImage.objects.count(),1)
+        self.make('Green',6400,1);page=self.client.get(reverse('online_edit',args=[self.product.pk]))       # a new colour: a new variant on the same page, live at once
+        self.assertIn('128GB Green',[x['label'] for x in page.context['matrix']]);green=Device.objects.filter(imeis__number=imei(6400)).first().product;self.assertTrue(Product.objects.get(pk=green.pk).online_visible)

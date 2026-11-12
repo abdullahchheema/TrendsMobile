@@ -125,19 +125,17 @@ def order_new(request):
 # ------------------------------------------------------------------ online stock
 @login_required
 def stock(request):
-    """Everything the website can sell, one row per variant, with the quantity in each shop."""
+    """Everything the website can sell, one line per phone model (never one per variant), with the quantity in each shop. Open a model for its variants."""
     _guard(request)
-    shops=list(Branch.objects.filter(enabled=True).order_by('name'));q=request.GET.get('q','').strip().lower()
+    from . import online_store
+    shops=oo.shops();q=request.GET.get('q','').strip()
     rows=[]
-    for v in oo.variants(published_only=False):
-        p=v['product']
-        if q and q not in (p.name+' '+v['condition']+' '+p.colour).lower():continue
-        rows.append(dict(v,title=(p.web_title or (f'{p.model.brand} {p.model.name}' if p.model_id else p.name)),live=p.online_visible,cells=[v['per_shop'].get(b.pk,0) for b in shops]))
-    rows.sort(key=lambda r:(r['title'],r['product'].storage,r['product'].colour,r['condition']))
+    for fam in online_store.catalog(q):
+        per=dict(fam['per_shop'])
+        rows.append(dict(fam,cells=[per.get(b.name,0) for b in shops],variant_count=len({(r['product'].pk) for r in fam['rows']})))
     from .views import paginate
     page,pager=paginate(request,rows,60)
-    return render(request,'online_stock.html',dict(title='Online Stock',rows=page.object_list,page_obj=page,pager_query=pager,shops=shops,q=q,
-        total=sum(r['quantity'] for r in rows)))
+    return render(request,'online_stock.html',dict(title='Online Stock',rows=page.object_list,page_obj=page,pager_query=pager,shops=shops,q=q,total=sum(r['stock'] for r in rows)))
 
 
 @login_required

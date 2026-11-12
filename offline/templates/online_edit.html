@@ -32,5 +32,11 @@
 </div>
 <aside class="online-side"><section class="panel"><h2 style="margin-top:0">How it works</h2><ul class="attention"><li>Photos on this page make it live. No photo means a draft.</li><li>Prices at the shops never change from here.</li><li>When any shop sells a variant, the website stock drops at once.</li><li>An online order takes stock from whichever shop holds it.</li></ul></section></aside>
 </div>
+<section class="panel table-scroll" id="where-stock"><h2 style="margin-top:0">Where the stock is</h2>
+<table><thead><tr><th>Variant</th><th>Condition</th><th class="num">Price</th><th class="num">Total</th>{% for b in shop_list %}<th class="num">{{ b.name }}</th>{% endfor %}</tr></thead><tbody>
+{% for m in matrix %}<tr><td><strong>{{ m.label }}</strong></td><td>{{ m.detail|default:"—" }}</td><td class="num">{% if m.compare and m.compare > m.price %}<s class="muted">{{ m.compare|floatformat:"0g" }}</s> {% endif %}{{ m.price|floatformat:"0g" }}</td><td class="num"><strong>{{ m.total }}</strong></td>{% for n in m.cells %}<td class="num">{{ n|default:"—" }}</td>{% endfor %}</tr>
+{% empty %}<tr><td colspan="{{ shop_list|length|add:4 }}" class="empty-state">No stock of this model in any shop.</td></tr>{% endfor %}
+{% if matrix %}<tr><td colspan="3"><strong>Total</strong></td><td class="num"><strong>{{ stock|floatformat:"-0" }}</strong></td>{% for n in shop_totals %}<td class="num"><strong>{{ n }}</strong></td>{% endfor %}</tr>{% endif %}</tbody></table>
+<p class="muted">New stock of this model bought in any shop joins this page automatically, with the same photos. A new storage or colour appears here as a new variant.</p></section>
 <script type="application/json" id="online-images">{{ images|safe }}</script>
 {% endblock %}{% block scripts %}<script src="{% static 'online.js' %}" defer></script>{% endblock %}

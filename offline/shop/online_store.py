@@ -182,10 +182,15 @@ def edit(request,pk):
     own={}
     for i in ProductImage.objects.filter(product_id__in=ids,variant_only=True).order_by('position','created'):own.setdefault(i.product_id,[]).append(i)
     variants=[dict(p=p,rows=[dict(r,shops=sorted((names.get(b,'?'),n) for b,n in r['per_shop'].items())) for r in rows_by_product[p.pk]],photos=own.get(p.pk,[])) for p in family]
+    shop_list=oo.shops()
+    matrix=[]                                  # where the stock is: one line per variant, one column per shop
+    for v in variants:
+        for r in v['rows']:matrix.append(dict(label=(f"{v['p'].storage} {v['p'].colour}".strip() or v['p'].name),detail=(f"{r['condition']} · {r['pta_status']}" if r['condition'] else ''),price=r['price'],compare=r['compare'],total=r['quantity'],cells=[r['per_shop'].get(b.pk,0) for b in shop_list]))
+    shop_totals=[sum(m['cells'][i] for m in matrix) for i in range(len(shop_list))]
     live=any(p.online_visible for p in family)
     return render(request,'online_edit.html',dict(title=title_of(anchor),page_title=title_of(anchor),anchor=anchor,product=anchor,variants=variants,images=json.dumps(_payload(shared)),
         status='Hidden' if anchor.online_hidden else 'Live' if live else 'Draft',live=live,max_photos=MAX_SHARED,max_mb=media.MAX_BYTES//1048576,
-        stock=sum(r['quantity'] for rows in rows_by_product.values() for r in rows)))
+        stock=sum(r['quantity'] for rows in rows_by_product.values() for r in rows),matrix=matrix,shop_list=shop_list,shop_totals=shop_totals))
 
 
 def _family_ids(product):return list(family_of(Product.objects.select_related('model').get(pk=product.pk)).values_list('pk',flat=True))
