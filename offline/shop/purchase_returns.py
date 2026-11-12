@@ -37,7 +37,7 @@ def returnable(bill):
 @transaction.atomic
 def create(bill,user,device_ids,accessory_qty,reason):
     if not _allowed(user):raise PermissionDenied('A manager or accountant must return stock to a supplier.')
-    bill=Document.objects.select_for_update().select_related('branch','supplier','reference').get(pk=bill.pk)
+    bill=Document.objects.select_for_update(of=('self',)).select_related('branch','supplier','reference').get(pk=bill.pk)
     access.require(user,bill.branch)
     if bill.kind!='Purchase Invoice' or bill.status!='Submitted' or bill.is_return or not bill.reference_id or not bill.supplier_id:raise ValidationError('Choose a posted supplier bill that received stock.')
     if not str(reason or '').strip():raise ValidationError('Explain why the stock is being returned.')

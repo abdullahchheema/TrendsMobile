@@ -101,7 +101,7 @@ def depreciation_due(asset,through):
 
 @transaction.atomic
 def depreciate(user,asset,through):
-    asset=FixedAsset.objects.select_for_update().select_related('branch','expense_account','accumulated_account').get(pk=asset.pk);_guard(user,asset.branch)
+    asset=FixedAsset.objects.select_for_update(of=('self',)).select_related('branch','expense_account','accumulated_account').get(pk=asset.pk);_guard(user,asset.branch)
     if through>timezone.localdate():raise ValidationError('Depreciation cannot be run for a future date.')
     amount,end=depreciation_due(asset,through)
     if end is None:return None
@@ -123,7 +123,7 @@ def depreciate_all(user,branch,through):
 
 @transaction.atomic
 def dispose_asset(user,asset,on,proceeds,mode,reference=''):
-    asset=FixedAsset.objects.select_for_update().select_related('branch','asset_account','accumulated_account').get(pk=asset.pk);_guard(user,asset.branch)
+    asset=FixedAsset.objects.select_for_update(of=('self',)).select_related('branch','asset_account','accumulated_account').get(pk=asset.pk);_guard(user,asset.branch)
     if asset.status!='Active':raise ValidationError('This asset has already been disposed of.')
     proceeds=cents(proceeds or 0)
     if proceeds<0:raise ValidationError('Proceeds cannot be negative.')
@@ -183,7 +183,7 @@ def release_due(item,through):
 
 @transaction.atomic
 def release(user,item,through):
-    item=Deferral.objects.select_for_update().select_related('branch','expense_account','balance_account').get(pk=item.pk);_guard(user,item.branch)
+    item=Deferral.objects.select_for_update(of=('self',)).select_related('branch','expense_account','balance_account').get(pk=item.pk);_guard(user,item.branch)
     if through>timezone.localdate():raise ValidationError('Cannot release for a future date.')
     amount,end=release_due(item,through)
     if end is None:return None
@@ -198,7 +198,7 @@ def release(user,item,through):
 
 @transaction.atomic
 def reverse_accrual(user,item,today=None):
-    item=Deferral.objects.select_for_update().select_related('branch','expense_account','balance_account').get(pk=item.pk);_guard(user,item.branch)
+    item=Deferral.objects.select_for_update(of=('self',)).select_related('branch','expense_account','balance_account').get(pk=item.pk);_guard(user,item.branch)
     today=today or timezone.localdate()
     if item.kind!='Accrual' or item.status!='Open':return None
     if item.reverse_on>today:raise ValidationError(f'This accrual reverses on {item.reverse_on:%d %b %Y}.')
@@ -237,7 +237,7 @@ def suggested_interest(loan):return cents(loan.outstanding*loan.annual_rate/1200
 
 @transaction.atomic
 def repay_loan(user,loan,on,principal,interest,mode,reference=''):
-    loan=Loan.objects.select_for_update().select_related('branch','liability_account','interest_account').get(pk=loan.pk);_guard(user,loan.branch)
+    loan=Loan.objects.select_for_update(of=('self',)).select_related('branch','liability_account','interest_account').get(pk=loan.pk);_guard(user,loan.branch)
     principal=cents(principal or 0);interest=cents(interest or 0)
     if principal<0 or interest<0 or principal+interest<=0:raise ValidationError('Enter the principal and/or interest being paid.')
     if principal>loan.outstanding:raise ValidationError(f'Only PKR {loan.outstanding:,.2f} of principal is still owed.')

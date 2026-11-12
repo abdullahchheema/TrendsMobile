@@ -89,7 +89,7 @@ def online_branch():
 def phone_pool(product,condition,pta,kind,price,lock=False):
     """{branch: [available devices of this exact variant, oldest first]}."""
     qs=Device.objects.filter(product=product,status='Available',branch__enabled=True,branch__is_online=False,condition=condition,pta_status=pta,device_type=kind,warehouse__isnull=False)
-    if lock:qs=qs.select_for_update()
+    if lock:qs=qs.select_for_update(of=('self',))
     pool=defaultdict(list)
     for d in qs.select_related('branch','product').order_by('received_on','code'):
         if device_price(d)==price:pool[d.branch_id].append(d)
@@ -186,7 +186,7 @@ def _reserve(order,planned):
 
 def release(order):
     """Give the reserved stock back to the shops."""
-    allocations=list(OnlineAllocation.objects.select_for_update().filter(line__order=order).select_related('device'))
+    allocations=list(OnlineAllocation.objects.select_for_update(of=('self',)).filter(line__order=order).select_related('device'))
     for a in allocations:
         if a.device_id and a.device.status=='Reserved':
             d=Device.objects.select_for_update().get(pk=a.device_id)
@@ -370,7 +370,7 @@ def dispatch(order,user,courier='',tracking=''):
     order=_lock(order)
     if order.status!=OnlineOrder.NEW:raise ValidationError('Only a new order can be dispatched.')
     if order.payment_method!='Cash on Delivery' and order.payment_status!='Paid':raise ValidationError('Confirm that the payment arrived before dispatching.')
-    allocations=list(OnlineAllocation.objects.select_for_update().filter(line__order=order).select_related('line','product','device','branch'))
+    allocations=list(OnlineAllocation.objects.select_for_update(of=('self',)).filter(line__order=order).select_related('line','product','device','branch'))
     if not allocations:raise ValidationError('This order has no reserved stock.')
     for d in Device.objects.select_for_update().filter(pk__in=[a.device_id for a in allocations if a.device_id]):
         if d.status!='Reserved':raise ValidationError(f'{d.code} is no longer reserved for this order. Cancel the order and create it again.')

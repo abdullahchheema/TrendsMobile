@@ -164,7 +164,7 @@ def edit(request,pk):
     if request.method=='POST':
         try:
             with transaction.atomic():
-                locked={p.pk:p for p in Product.objects.select_for_update().select_related('model').filter(pk__in=[p.pk for p in family])}
+                locked={p.pk:p for p in Product.objects.select_for_update(of=('self',)).select_related('model').filter(pk__in=[p.pk for p in family])}
                 title=' '.join(request.POST.get('web_title','').split())[:200];desc=request.POST.get('description','').strip()[:5000];hidden=request.POST.get('online_hidden')=='on'
                 page_specs=specmod.parse(request.POST) if any(k.startswith(('spec_','other_label_')) for k in request.POST) else None      # a post without any specification field leaves them as they are
                 all_pct=_money(request.POST.get('discount_all'),'the percentage off')
