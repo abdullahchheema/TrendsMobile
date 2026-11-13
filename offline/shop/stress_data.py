@@ -125,7 +125,7 @@ class Story:
                 lines.append(n+(' '+luhn_imei(self.rng,self.used) if self.rng.random()<.35 else ''))       # a third of the phones are dual-IMEI
             unit=round_to(pick['cost']*D(self.rng.uniform(.97,1.04)),500)
             rows.append(dict(_pick=pick,brand=pick['brand'],model=pick['model'],storage=pick['storage'],colour=pick['colour'],quantity=qty,condition=pick['condition'],device_type=pick['kind'],
-                             grade=self.rng.choice(['',8,9,10]) if pick['kind']!='New' else '',pta_status=self.rng.choice(['PTA','PTA','PTA','Non-PTA']),cost=str(unit),cost_mode='each',imeis='\n'.join(lines),
+                             grade=self.rng.choice(['',8,9,10]) if pick['kind']!='New' else '',pta_status=self.rng.choice(['PTA','PTA','PTA','Non-PTA']),cost=str(unit),asking_price=str(round_to(unit*D('1.12'),500)),cost_mode='each',imeis='\n'.join(lines),
                              notes=self.rng.choice(['','','battery changed','display replaced','box and charger included','minor scratches on frame'])));total+=unit*qty
             if sum(r['quantity'] for r in rows)>=size:break
         status=self.rng.choices(['full','part','unpaid'],[.5,.3,.2])[0];method=self.rng.choices(METHODS,[.55,.25,.08,.08,.04])[0]

@@ -68,7 +68,7 @@ def sales_summary(name,shops,start,end):
 
 def expense_report(shops,start,end):
     classes=financial_reports.classifications();cogs=cogs_accounts();totals=defaultdict(lambda:ZERO)
-    for r in LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[start,end]).values('account_id','branch__name').annotate(d=Sum('debit'),c=Sum('credit')):
+    for r in financial_reports.pre_closing(LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[start,end])).values('account_id','branch__name').annotate(d=Sum('debit'),c=Sum('credit')):      # not the year-end closing entries: they move profit into equity
         account,root=classes[r['account_id']]
         if root=='Expense' and not is_cogs(account,cogs):totals[(account.code,account.name,r['branch__name'])]+=(r['d'] or ZERO)-(r['c'] or ZERO)
     return [{'Account code':c,'Account':n,'Shop':sh,'Amount':a} for (c,n,sh),a in sorted(totals.items()) if a]
@@ -124,7 +124,7 @@ def span_totals(shops,spans):
     for i,(a,b) in enumerate(spans):
         notes[f'd{i}']=Sum('debit',filter=Q(posting_date__range=[a,b]));notes[f'c{i}']=Sum('credit',filter=Q(posting_date__range=[a,b]))
     low=min(a for a,_ in spans);high=max(b for _,b in spans)
-    for r in LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[low,high]).values('account_id').annotate(**notes):
+    for r in financial_reports.pre_closing(LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[low,high])).values('account_id').annotate(**notes):      # activity of the period, so not the year-end closing entries
         account,root=classes[r['account_id']]
         if root not in ('Income','Expense'):continue
         for i in range(len(spans)):
@@ -140,7 +140,7 @@ def span_totals(shops,spans):
 def branch_comparison(shops,start,end):
     shops=list(shops);classes=financial_reports.classifications();cogs=cogs_accounts()
     per=defaultdict(lambda:defaultdict(lambda:ZERO))
-    for r in LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[start,end]).values('branch_id','account_id').annotate(d=Sum('debit'),c=Sum('credit')):
+    for r in financial_reports.pre_closing(LedgerEntry.objects.filter(branch__in=shops,posting_date__range=[start,end])).values('branch_id','account_id').annotate(d=Sum('debit'),c=Sum('credit')):      # activity of the period, so not the year-end closing entries
         account,root=classes[r['account_id']];net=(r['d'] or ZERO)-(r['c'] or ZERO)
         if root=='Income':per[r['branch_id']]['income']-=net
         elif root=='Expense':per[r['branch_id']]['cogs' if is_cogs(account,cogs) else 'expense']+=net

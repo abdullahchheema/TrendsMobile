@@ -1,8 +1,9 @@
 {% extends 'base.html' %}{% block content %}
 <div class="page-head"><div><h1>Online orders to pack</h1><p>Online orders that hold stock in {{ branch.name }}. Pack these exact phones and hand them to the courier. You do not need to do anything else.</p></div></div>
-<section class="panel table-scroll"><table><thead><tr><th>Order</th><th>Placed</th><th>What to pack</th><th>Status</th><th>Courier</th><th></th></tr></thead><tbody>
+<section class="panel table-scroll"><table><thead><tr><th>Order</th><th>Placed</th><th>What to pack</th><th>Deliver to</th><th>Status</th><th>Courier</th><th></th></tr></thead><tbody>
 {% for r in rows %}<tr><td><strong>{{ r.o.code }}</strong></td><td>{{ r.o.placed_on|date:"j M Y" }}</td><td>{% for i in r.items %}<div>{{ i.name }}<small class="muted"> {{ i.detail }}</small></div>{% endfor %}</td>
+<td><strong>{{ r.o.customer_name }}</strong><br><a href="tel:{{ r.o.customer_phone }}">{{ r.o.customer_phone }}</a>{% if r.o.alt_phone %}<small class="muted"> · {{ r.o.alt_phone }}</small>{% endif %}<br><small>{{ r.o.address }}{% if r.o.city %}, {{ r.o.city }}{% endif %}{% if r.o.postal_code %} {{ r.o.postal_code }}{% endif %}</small></td>
 <td><span class="badge ok">{{ r.status }}</span> <span class="badge">{{ r.fulfilment }}</span></td><td>{% if r.o.courier %}{{ r.o.courier }}<small class="muted"> {{ r.o.tracking }}</small>{% else %}—{% endif %}</td>
 <td>{% if not r.acked and r.o.status == 'New' %}<form method="post">{% csrf_token %}<input type="hidden" name="order" value="{{ r.o.pk }}"><button type="submit">Seen</button></form>{% endif %}</td></tr>
-{% empty %}<tr><td colspan="6" class="empty-state">No online orders are waiting in this shop.</td></tr>{% endfor %}</tbody></table></section>
+{% empty %}<tr><td colspan="7" class="empty-state">No online orders are waiting in this shop.</td></tr>{% endfor %}</tbody></table></section>
 {% endblock %}

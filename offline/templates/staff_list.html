@@ -5,15 +5,21 @@
 <div class="field"><label for="name">Name</label><input id="name" name="name" maxlength="180" required></div>
 <div class="field"><label for="branch">Shop</label><select id="branch" name="branch">{% for b in shops %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}</select></div>
 <div class="field"><label for="designation">Role (optional)</label><input id="designation" name="designation" maxlength="100" placeholder="Salesman, counter…"></div>
-<div class="field"><label for="commission">Commission (% of net sales)</label><input id="commission" name="commission" type="number" min="0" max="100" step="0.01" inputmode="decimal" value="0"></div></div>
-<button class="primary" type="submit">Add</button></form></section>
-<section class="panel table-scroll"><h2 style="margin-top:0">Staff</h2><table><thead><tr><th>Name</th><th>Shop</th><th>Role</th><th class="num">Commission %</th><th class="num">Sales (net)</th><th>Active</th><th></th></tr></thead><tbody>
-{% for r in people %}<tr><form method="post" id="f{{ r.p.pk }}">{% csrf_token %}<input type="hidden" name="action" value="update"><input type="hidden" name="staff" value="{{ r.p.pk }}"></form>
-<td><a href="{% url 'staff_detail' r.p.pk %}"><strong>{{ r.p.name }}</strong></a></td><td>{{ r.p.branch.name }}</td>
+<div class="field"><label for="commission">Commission (% of net sales)</label><input id="commission" name="commission" type="number" min="0" max="100" step="0.01" inputmode="decimal" required placeholder="e.g. 1.5, or 0 for none"></div></div>
+<div class="form-actions"><button class="primary" type="submit">Add</button></div></form></section>
+<section class="panel table-scroll"><h2 style="margin-top:0">Staff</h2>
+<p class="sh-hint" style="margin-top:0">Changing a commission applies from today. Sales made earlier keep the rate they were made under. Moving someone to another shop does not change their past sales.</p>
+<table class="staff-table"><thead><tr><th>Name</th><th>Shop</th><th>Role</th><th class="num">Commission %</th><th class="num">Sales (net)</th><th>Active</th><th></th></tr></thead><tbody>
+{% for r in people %}<tr>
+<td><a href="{% url 'staff_detail' r.p.pk %}"><strong>{{ r.p.name }}</strong></a></td>
+<td><select form="f{{ r.p.pk }}" name="branch" aria-label="Shop">{% for b in transfer_shops %}<option value="{{ b.pk }}"{% if b.pk == r.p.branch_id %} selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></td>
 <td><input form="f{{ r.p.pk }}" name="designation" value="{{ r.p.designation }}" maxlength="100" aria-label="Role"></td>
-<td class="num"><input form="f{{ r.p.pk }}" name="commission" type="number" min="0" max="100" step="0.01" value="{{ r.p.commission_rate }}" style="width:90px" aria-label="Commission"></td>
+<td class="num"><input form="f{{ r.p.pk }}" name="commission" type="number" min="0" max="100" step="0.01" value="{{ r.p.commission_rate }}" required style="width:90px" aria-label="Commission"></td>
 <td class="num">{{ r.sales|floatformat:"0g" }}<small class="muted"> {{ r.count }} sales</small></td>
 <td><input form="f{{ r.p.pk }}" type="checkbox" name="enabled" {% if r.p.enabled %}checked{% endif %} aria-label="Active"></td>
 <td><button form="f{{ r.p.pk }}" type="submit">Save</button></td></tr>
-{% empty %}<tr><td colspan="7" class="empty-state">No staff yet. Add the first person above.</td></tr>{% endfor %}</tbody></table></section>
+{% empty %}<tr><td colspan="7" class="empty-state">No staff yet. Add the first person above.</td></tr>{% endfor %}</tbody></table>
+{# The forms live outside the table: a form directly inside a table row is moved out by the browser, which left the Save button without its security token. #}
+{% for r in people %}<form method="post" id="f{{ r.p.pk }}" hidden>{% csrf_token %}<input type="hidden" name="action" value="update"><input type="hidden" name="staff" value="{{ r.p.pk }}"></form>{% endfor %}
+</section>
 {% endblock %}

@@ -21,12 +21,13 @@
 </section>
 
 <section class="panel"><h2 style="margin-top:0">Payment accounts</h2>
+{% if not owner %}<div class="notice info">Only the owner can add, hide or remove payment accounts. You can see what customers are shown below.</div>{% endif %}
 <p class="sh-hint">Customers who choose Bank Transfer, Easypaisa, JazzCash or Card see these account details at checkout. Until you add any, those methods stay available without details. Once you add one, only methods with a shown account are offered.</p>
 {% if accounts %}<div class="table-scroll"><table><thead><tr><th>Method</th><th>Account</th><th>Number / IBAN</th><th>On the website</th><th></th></tr></thead><tbody>
 {% for a in accounts %}<tr><td>{{ a.method }}</td><td>{{ a.title }}{% if a.bank_name %}<small class="muted"> {{ a.bank_name }}</small>{% endif %}</td><td>{{ a.account_number }}{% if a.iban %}<small class="muted"> {{ a.iban }}</small>{% endif %}</td><td>{% if a.enabled %}<span class="badge ok">Shown</span>{% else %}<span class="badge">Hidden</span>{% endif %}</td>
-<td><form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="account_toggle"><input type="hidden" name="account" value="{{ a.pk }}"><button type="submit">{% if a.enabled %}Hide{% else %}Show{% endif %}</button></form>
-<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="account_delete"><input type="hidden" name="account" value="{{ a.pk }}"><button type="submit" data-confirm="Remove this account?">Remove</button></form></td></tr>{% endfor %}</tbody></table></div>{% endif %}
-<h3>Add an account</h3>
+<td>{% if owner %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="account_toggle"><input type="hidden" name="account" value="{{ a.pk }}"><button type="submit">{% if a.enabled %}Hide{% else %}Show{% endif %}</button></form>
+<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="action" value="account_delete"><input type="hidden" name="account" value="{{ a.pk }}"><button type="submit" data-confirm="Remove this account?">Remove</button></form>{% else %}<span class="muted">Owner only</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if owner %}<h3>Add an account</h3>
 <form method="post" class="form-block">{% csrf_token %}<input type="hidden" name="action" value="account_add"><div class="form-grid">
 <div class="field"><label for="method">Method</label><select id="method" name="method">{% for m in methods %}<option value="{{ m }}">{{ m }}</option>{% endfor %}</select></div>
 <div class="field"><label for="title">Account title</label><input id="title" name="title" maxlength="120" required placeholder="Name on the account"></div>
@@ -34,6 +35,6 @@
 <div class="field"><label for="account_number">Account or wallet number</label><input id="account_number" name="account_number" maxlength="60" inputmode="numeric" placeholder="e.g. 0300 1234567"></div>
 <div class="field"><label for="iban">IBAN (optional)</label><input id="iban" name="iban" maxlength="40"></div>
 <div class="field"><label for="instructions">Instructions (optional)</label><input id="instructions" name="instructions" maxlength="300" placeholder="e.g. Send a screenshot on WhatsApp"></div></div>
-<button class="primary" type="submit">Add account</button></form>
+<div class="form-actions"><button class="primary" type="submit">Add account</button></div></form>{% endif %}
 </section>
 {% endblock %}

@@ -195,7 +195,7 @@ def release(order):
 
 
 # ------------------------------------------------------------------ creating an order
-KNOWN_TOP={'external_ref','customer','payment_method','payment_status','payment_reference','delivery_fee','notes','items','expected_total','discount','shipping','shipping_method'}
+KNOWN_TOP={'external_ref','customer','payment_method','payment_status','payment_reference','delivery_fee','notes','items','expected_total','discount','shipping','shipping_method','client_ip'}
 KNOWN_CUSTOMER={'name','phone','email','address','city','alt_phone','phone2','postal_code','zip','province'}
 MAX_EXTRA=20000
 
@@ -224,6 +224,36 @@ def _extra(data,cust):
     except (TypeError,ValueError):raise ValidationError('The extra order details could not be read.')
     if len(text)>MAX_EXTRA:raise ValidationError('The extra order details are too large.')
     return json.loads(text)
+
+
+# ------------------------------------------------------------------ order spam
+# The website's own limiter counts in each server's memory, and a serverless site runs many copies of itself, so a spammer is only slowed down.
+# These limits count orders in this database, which every copy of the website shares. What spam does here is hold real phones in reserve, so
+# the limits are on orders that are still waiting for the confirmation call, and on how fast one phone number or one address can order.
+MAX_WAITING_PER_PHONE=3          # orders from one phone number that nobody has called yet
+MAX_PER_PHONE_PER_HOUR=6
+MAX_PER_ADDRESS_PER_HOUR=12      # orders from one internet address (a shared office or mobile network can place several honest ones)
+
+
+class TooManyOrders(ValidationError):
+    """The same visitor is placing orders faster than a person would. Answered with 429 by the order API."""
+
+
+def _client_ip(value):
+    text=_text(value,'the client address').strip()[:45]
+    return text if text and all(ch.isalnum() or ch in '.:-' for ch in text) else ''
+
+
+def _throttle(phone,ip):
+    tail=''.join(ch for ch in phone if ch.isdigit())[-10:]
+    mine=OnlineOrder.objects.filter(source='Website',customer_phone__endswith=tail)
+    if mine.filter(status=OnlineOrder.NEW,confirmed_at__isnull=True).count()>=MAX_WAITING_PER_PHONE:
+        raise TooManyOrders(f'You already have {MAX_WAITING_PER_PHONE} orders waiting for our confirmation call. We will call you shortly; please wait for that call before ordering more.')
+    since=timezone.now()-timezone.timedelta(hours=1)
+    if mine.filter(created__gte=since).count()>=MAX_PER_PHONE_PER_HOUR:
+        raise TooManyOrders('Too many orders from this phone number in the last hour. Please try again later.')
+    if ip and OnlineOrder.objects.filter(source='Website',created__gte=since,extra__client_ip=ip).count()>=MAX_PER_ADDRESS_PER_HOUR:
+        raise TooManyOrders('Too many orders from this connection in the last hour. Please try again later.')
 
 
 def _clean_phone(value):
@@ -285,6 +315,8 @@ def create(data,user=None,source='Website',credit=None,strict=False):
     try:fee=_amount(data.get('delivery_fee') or 0)
     except ValidationError:raise ValidationError('Delivery fee is not a valid amount.')
     if fee<0 or fee>100000:raise ValidationError('Delivery fee is outside the allowed range.')
+    client_ip=_client_ip(data.get('client_ip'))
+    if strict:_throttle(phone,client_ip)
     if strict and method not in [o['method'] for o in payment_options()]:raise ValidationError(f'{method} is not available right now. Choose another payment method.')
     lines=[];seen=set()
     for item in items:
@@ -325,7 +357,7 @@ def create(data,user=None,source='Website',credit=None,strict=False):
         city=text['city'][:100],payment_method=method,payment_status='Paid' if (data.get('payment_status')=='Paid' and method!='Cash on Delivery') else 'Unpaid',payment_reference=pay_ref[:180],
         delivery_fee=fee,subtotal=subtotal,total=total,notes=notes[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit,
         alt_phone=(text['alt_phone'] or text['phone2'])[:40],postal_code=(text['postal_code'] or text['zip'])[:20],
-        shipping_method=_text(data['shipping'].get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method'),'the shipping method')[:100],discount_amount=discount,discount_code=code,extra=_extra(data,cust))
+        shipping_method=_text(data['shipping'].get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method'),'the shipping method')[:100],discount_amount=discount,discount_code=code,extra=dict(_extra(data,cust),**({'client_ip':client_ip} if client_ip else {})))
     if getattr(user,'is_authenticated',False):order.seen_at=order.confirmed_at=timezone.now();order.confirmed_by=user;order.save(update_fields=['seen_at','confirmed_at','confirmed_by'])      # an order the team typed in after a call is already confirmed
     for l in lines:l['line']=OnlineOrderLine.objects.create(order=order,product=l['product'],condition=l['condition'],pta_status=l['pta_status'],device_type=l['device_type'],quantity=l['quantity'],unit_price=l['unit_price'])
     _reserve(order,plan(lines))
@@ -386,6 +418,8 @@ def confirm(order, user, note=''):
         raise ValidationError('Only a new order can be confirmed.')
     if order.confirmed_at is not None:
         return order
+    if order.payment_method != 'Cash on Delivery' and order.payment_status != 'Paid':
+        raise ValidationError(f'Confirm that the {order.payment_method} payment has arrived first. A prepaid order is confirmed only once its money is received.')
     order.confirmed_at = timezone.now()
     order.confirmed_by = user if getattr(user, 'is_authenticated', False) else None
     order.seen_at = order.seen_at or order.confirmed_at

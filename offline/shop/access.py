@@ -130,7 +130,9 @@ def menu_for(user,visible,path=''):
 def navigation(request):
     """Template context for every page: the menu plus the live order badges."""
     context=_navigation(request)
-    if context and request.user.is_authenticated:context.update(_badges(request.user))
+    if context and request.user.is_authenticated:
+        context.update(_badges(request.user))
+        context['online_only']=online_access.is_online(request.user) or request.path.startswith('/online/')      # no New Sale / New Purchase shortcuts on the online store's screens
     return context
 
 

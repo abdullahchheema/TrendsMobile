@@ -108,9 +108,10 @@ class OnlineBooks(OrderBase):
         oo.deliver(o,self.user,'Cash');self.assertEqual(self.money(online,'Cash'),Decimal('100500'));self.assertEqual(self.money(self.other,'Cash'),0)
         rows,own=online_accounts.owed_to_shops();self.assertEqual(({r['shop'].pk:r['owed'] for r in rows},own),({self.other.pk:Decimal('80000')},Decimal('80000')))
     def test_prepaid_orders_need_the_payment_confirmed_and_land_in_the_online_store_bank(self):
-        self.phone(self.branch);o=self.order([self.item()],payment_method='Bank Transfer')
-        with self.assertRaisesMessage(ValidationError,'payment arrived'):oo.dispatch(o,self.user)
-        oo.mark_paid(o,self.user,'TRX-77');inv=oo.dispatch(o,self.user)[0];self.assertEqual(inv.outstanding,Decimal('0.00'));self.assertEqual(self.money(oo.online_branch(),'Bank Transfer'),Decimal('100000'))
+        self.phone(self.branch);o=self.order([self.item()],payment_method='Bank Transfer',confirm=False)
+        with self.assertRaisesMessage(ValidationError,'payment has arrived first'):oo.confirm(o,self.user)           # a prepaid order is confirmed only once its money is received
+        with self.assertRaisesMessage(ValidationError,'Call the customer'):oo.dispatch(o,self.user)
+        oo.mark_paid(o,self.user,'TRX-77');oo.confirm(o,self.user);o.refresh_from_db();inv=oo.dispatch(o,self.user)[0];self.assertEqual(inv.outstanding,Decimal('0.00'));self.assertEqual(self.money(oo.online_branch(),'Bank Transfer'),Decimal('100000'))
     def test_a_split_order_is_one_invoice_and_each_shop_is_owed_its_own_cost(self):
         self.phone(self.branch,cost='80000');self.phone(self.other,cost='70000');o=self.order([self.item(qty=2)],delivery_fee='400')
         made=oo.dispatch(o,self.user);self.assertEqual(len(made),1);self.assertEqual(made[0].total,Decimal('200400'))

@@ -456,6 +456,18 @@ class Loan(Record):
     def outstanding(self):return self.principal-self.principal_paid
 
 
+class StaffRate(models.Model):
+    """A commission rate and the day it starts. A sale earns the rate that was in force on its date, so raising someone's commission never changes what they
+    earned before. Staff.commission_rate always mirrors the newest row."""
+    id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    staff=models.ForeignKey(Staff,on_delete=models.CASCADE,related_name='rates')
+    rate=models.DecimalField(max_digits=5,decimal_places=2)
+    effective_from=models.DateField()
+    class Meta:
+        ordering=['effective_from']
+        constraints=[models.UniqueConstraint(fields=['staff','effective_from'],name='staffrate_staff_day'),models.CheckConstraint(condition=Q(rate__gte=0,rate__lte=100),name='staffrate_range')]
+
+
 class OnlineStaff(models.Model):
     """A login that runs the online store only: orders, online stock, products and photos, online refunds. It never sees shop money screens."""
     user=models.OneToOneField(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name='online_staff')

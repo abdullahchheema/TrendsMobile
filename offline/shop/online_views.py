@@ -233,6 +233,7 @@ def api_order(request):
     if b'\\u0000' in request.body or b'\x00' in request.body:return JsonResponse({'error':'The order contains a character that cannot be stored (NUL). Remove it and try again.'},status=400)
     try:
         with transaction.atomic():order,created=oo.create(data,None,'Website',strict=True)
+    except oo.TooManyOrders as error:return JsonResponse({'error':_err(error)},status=429)
     except (ValidationError,IntegrityError,DataError,ValueError,TypeError,AttributeError,OverflowError) as error:      # whatever shape the body has, the answer is a 4xx and nothing is reserved
         text=_err(error);conflict=any(w in text for w in ('no longer','total is now','Only ','does not exist any more','not for sale online','changed to PKR','delivery charge is now','is not available right now'))
         return JsonResponse({'error':text},status=409 if conflict else 400)
@@ -344,6 +345,7 @@ def settings_page(request):
                 elif action=='rule_delete':
                     get_object_or_404(OnlineDeliveryRule,pk=request.POST.get('rule')).delete();messages.success(request,'Removed.')
                 elif action=='account_add':
+                    if not request.user.is_superuser:raise ValidationError('Only the owner can add payment accounts.')
                     method=request.POST.get('method','')
                     if method not in OnlinePaymentAccount.METHODS:raise ValidationError('Choose a payment method.')
                     title=' '.join(request.POST.get('title','').split())[:120]
@@ -353,6 +355,7 @@ def settings_page(request):
                     OnlinePaymentAccount.objects.create(method=method,title=title,bank_name=request.POST.get('bank_name','').strip()[:120],account_number=number,iban=request.POST.get('iban','').replace(' ','')[:40],instructions=request.POST.get('instructions','').strip()[:300])
                     messages.success(request,'Payment account added.')
                 elif action in ('account_toggle','account_delete'):
+                    if not request.user.is_superuser:raise ValidationError('Only the owner can change payment accounts.')
                     account=get_object_or_404(OnlinePaymentAccount,pk=request.POST.get('account'))
                     if action=='account_delete':account.delete();messages.success(request,'Account removed.')
                     else:account.enabled=not account.enabled;account.save(update_fields=['enabled']);messages.success(request,'Account '+('shown' if account.enabled else 'hidden')+' on the website.')
@@ -362,4 +365,4 @@ def settings_page(request):
         return redirect('online_settings')
     return render(request,'online_settings.html',dict(title='Delivery & Payment Settings',cfg=cfg,rules=list(OnlineDeliveryRule.objects.all()),accounts=list(OnlinePaymentAccount.objects.all()),
         provinces=['Punjab','Sindh','Khyber Pakhtunkhwa','Balochistan','Islamabad Capital Territory','Gilgit-Baltistan','Azad Kashmir'],methods=OnlinePaymentAccount.METHODS,
-        preview=[dict(label=lab,amount=amt,fee=oo.delivery_fee_for(amt)) for lab,amt in (('A small order',Decimal('5000')),('An order of 20,000',Decimal('20000')),('A large order',Decimal('60000')))]))
+        owner=request.user.is_superuser,preview=[dict(label=lab,amount=amt,fee=oo.delivery_fee_for(amt)) for lab,amt in (('A small order',Decimal('5000')),('An order of 20,000',Decimal('20000')),('A large order',Decimal('60000')))]))

@@ -396,3 +396,220 @@ class OnlineReturnsAndExchanges(ShopStockBase):
         online=oo.online_branch();refund=s.new_doc('Payment Entry',online,customer=inv.customer,handler=shopdefaults.shop_person(online),reference=credit,channel='Online',online_order=order,data=dict(amount=str(-credit.outstanding),direction='Pay',mode='Cash'))
         s.submit(refund,self.user);credit.refresh_from_db();self.assertEqual(credit.outstanding,0);self.assertEqual(all_problems(),[])
         order.refresh_from_db();self.assertEqual(oo.display_stage(order),'Returned')
+
+
+class OrderSpamLimits(ApiBase):
+    """The limits live in the database, so every copy of the website shares them. What they protect is the stock: spam orders hold real phones."""
+    def place(self,n,phone='+923211234567',ip=None,**extra):
+        b=self.body(external_ref=f'TM-SPAM{n:04d}-ABCDEF',customer=dict(name='Spammer',phone=phone,city='Karachi',province='Sindh'),**extra)
+        if ip:b['client_ip']=ip
+        return self.send(b)
+    def stock(self,count):
+        for _ in range(count):self.phone(self.branch)
+    def test_a_fourth_order_waiting_for_the_call_is_refused_until_one_is_confirmed(self):
+        self.stock(6)
+        for n in range(3):self.assertEqual(self.place(n).status_code,201)
+        refused=self.place(3);self.assertEqual(refused.status_code,429);self.assertIn('confirmation call',refused.json()['error'])
+        self.assertEqual((OnlineOrder.objects.count(),Device.objects.filter(status='Reserved').count()),(3,3))               # the refused order reserved nothing
+        oo.confirm(OnlineOrder.objects.order_by('created').first(),self.user);self.assertEqual(self.place(4).status_code,201)
+    def test_the_same_number_written_two_ways_is_counted_together(self):
+        self.stock(6)
+        for n,phone in enumerate(('+923211234567','0321 1234567','923211234567')):self.assertEqual(self.place(n,phone).status_code,201)
+        self.assertEqual(self.place(3,'03211234567').status_code,429)
+        self.assertEqual(self.place(4,'+923009876543').status_code,201)                                                      # another person is not affected
+    def test_a_retry_of_an_order_that_already_exists_is_never_refused(self):
+        self.stock(4)
+        for n in range(3):self.assertEqual(self.place(n).status_code,201)
+        again=self.place(1);self.assertEqual((again.status_code,again.json()['created']),(200,False))
+    def test_one_number_cannot_order_faster_than_the_hourly_limit_even_if_every_order_is_confirmed(self):
+        from unittest.mock import patch
+        self.stock(5)
+        with patch.object(oo,'MAX_PER_PHONE_PER_HOUR',3):
+            for n in range(3):
+                self.assertEqual(self.place(n).status_code,201);oo.confirm(OnlineOrder.objects.get(external_ref=f'TM-SPAM{n:04d}-ABCDEF'),self.user)
+            self.assertEqual(self.place(3).status_code,429)
+            OnlineOrder.objects.update(created=s.timezone.now()-s.timezone.timedelta(hours=2))                                  # an hour later the limit is clear
+            self.assertEqual(self.place(4).status_code,201)
+    def test_one_internet_address_is_limited_across_different_numbers(self):
+        from unittest.mock import patch
+        self.stock(5)
+        with patch.object(oo,'MAX_PER_ADDRESS_PER_HOUR',2):
+            self.assertEqual(self.place(0,'+923001111111','203.0.113.5').status_code,201);self.assertEqual(self.place(1,'+923002222222','203.0.113.5').status_code,201)
+            self.assertEqual(self.place(2,'+923003333333','203.0.113.5').status_code,429)
+            self.assertEqual(self.place(3,'+923003333333','203.0.113.6').status_code,201)                                       # a different address
+            self.assertEqual(self.place(4,'+923004444444').status_code,201)                                                     # no address sent: only the other limits apply
+    def test_the_address_is_kept_with_the_order_and_junk_is_dropped(self):
+        self.stock(2)
+        self.place(0,ip='203.0.113.5');self.assertEqual(OnlineOrder.objects.get().extra['client_ip'],'203.0.113.5')
+        OnlineOrder.objects.all().delete()
+        self.place(1,ip='<script>alert(1)</script>');self.assertNotIn('client_ip',OnlineOrder.objects.get().extra)
+    def test_orders_typed_in_by_the_team_are_not_limited(self):
+        self.stock(6)
+        for n in range(5):
+            data=dict(external_ref=f'MANUAL-{n}',customer=dict(name='Ali Khan',phone='0300 1234567'),payment_method='Cash on Delivery',items=[self.item()])
+            self.assertTrue(oo.create(data,None,'Manual')[1])
+
+
+# ---------------------------------------------------------------------------------------------------------------- accounting probes
+from datetime import date,timedelta
+from django.db.models import Sum
+from django.test import TestCase
+from . import advanced,yearend,coa,tests_advanced as adv
+D=Decimal
+
+
+class AssetsLoansDeferrals(adv.Base):
+    """Fixed assets, prepaid expenses, accruals and loans through their whole life, with every consistency check run at the end."""
+    def clean(self):self.assertEqual(money_problems(),[])
+    def test_an_asset_sold_in_the_month_it_was_bought_can_be_disposed_of(self):
+        a=self.asset(cost=120000,on=date(2025,1,10))
+        advanced.dispose_asset(self.user,a,date(2025,1,25),D('100000'),'Cash');a.refresh_from_db()
+        self.assertEqual(a.status,'Disposed');self.assertEqual(self.bal('6900'),D('20000.00'));self.assertEqual(self.bal('1510'),0);self.assertEqual(self.bal('1590'),0);self.clean()
+    def test_straight_line_depreciation_uses_up_exactly_cost_less_scrap_with_no_cents_left(self):
+        a=self.asset(cost='100000.01',salvage='1.01',life=7,on=date(2025,1,10))
+        for end in (date(2025,2,28),date(2025,4,30),date(2025,5,31),date(2025,9,30),date(2025,12,31)):advanced.depreciate(self.user,a,end)       # in irregular steps
+        a.refresh_from_db();self.assertEqual(a.accumulated,D('99999.00'));self.assertEqual(a.book_value,D('1.01'));self.clean()      # exactly cost less scrap, not a paisa over
+    def test_reducing_balance_stops_at_the_scrap_value_and_never_goes_below(self):
+        a=self.asset(cost=10000,salvage=4000,life=60,on=date(2024,1,5),method='Reducing balance',rate=40)
+        advanced.depreciate(self.user,a,date(2025,12,31));a.refresh_from_db();self.assertGreater(a.book_value,D('4000.00'))              # 24 months at 40% a year: not there yet
+        advanced.depreciate(self.user,a,date(2026,10,31));a.refresh_from_db();self.assertEqual(a.book_value,D('4000.00'))                # 34 months: stopped exactly at the scrap value
+        self.assertEqual(advanced.depreciate(self.user,a,date(2026,10,31)),None);self.clean()
+    def test_depreciating_twice_for_the_same_month_posts_once(self):
+        a=self.asset(cost=120000,on=date(2025,1,10));first=advanced.depreciate(self.user,a,date(2025,3,31));a.refresh_from_db()
+        self.assertEqual(a.accumulated,D('30000.00'));self.assertIsNone(advanced.depreciate(self.user,a,date(2025,3,31)));a.refresh_from_db();self.assertEqual(a.accumulated,D('30000.00'))
+        advanced.depreciate(self.user,a,date(2025,4,30));a.refresh_from_db();self.assertEqual(a.accumulated,D('40000.00'));self.clean()
+    def test_a_prepaid_bill_that_does_not_divide_evenly_is_released_to_the_last_paisa(self):
+        data=dict(kind='Prepaid',amount=D('1000.00'),months=3,start_date=date(2025,1,1),expense_account=str(self.acc('6800').pk),balance_account=str(self.acc('1320').pk),description='Insurance',mode='Cash')
+        advanced.add_deferral(self.user,self.branch,data);item=Deferral.objects.latest('created')
+        advanced.release(self.user,item,date(2025,3,31));item.refresh_from_db();self.assertEqual((item.released,item.status),(D('1000.00'),'Complete'));self.assertEqual(self.bal('1320'),0);self.clean()
+    def test_loan_repayment_rules(self):
+        loan_account=Account.objects.filter(root_type='Liability',is_group=False,enabled=True).exclude(account_type__in=('Payable','Receivable')).order_by('code').first()
+        data=dict(lender='Bank A',principal=D('50000'),annual_rate=D('12'),start_date=date(2025,1,1),term_months=12,liability_account=str(loan_account.pk),interest_account=str(self.acc('6900').pk) if False else str(Account.objects.get(code='COA-6950').pk),mode='Cash')
+        advanced.add_loan(self.user,self.branch,data);loan=Loan.objects.latest('created')
+        with self.assertRaises(ValidationError):advanced.repay_loan(self.user,loan,date(2025,2,1),D('50000.01'),0,'Cash')
+        with self.assertRaises(ValidationError):advanced.repay_loan(self.user,loan,date(2024,12,31),D('1'),0,'Cash')
+        with self.assertRaises(ValidationError):advanced.repay_loan(self.user,loan,date(2025,2,1),0,0,'Cash')
+        advanced.repay_loan(self.user,loan,date(2025,2,1),0,D('500'),'Cash');loan.refresh_from_db();self.assertEqual((loan.outstanding,loan.interest_paid),(D('50000.00'),D('500.00')))
+        advanced.repay_loan(self.user,loan,date(2025,3,1),D('50000'),D('500'),'Cash');loan.refresh_from_db();self.assertEqual(loan.outstanding,0)
+        with self.assertRaises(ValidationError):advanced.repay_loan(self.user,loan,date(2025,4,1),D('1'),0,'Cash')
+        self.clean()
+
+
+class YearEnd(adv.Base):
+    def test_closing_a_year_moves_profit_to_retained_earnings_and_locks_it(self):
+        from . import vouchers
+        vouchers.post(dict(branch=self.branch,type='income',posting_date=date(2025,3,3),amount=D('5000'),account=str(self.acc('4900').pk),mode='Cash',description='Misc income'),self.user)
+        vouchers.post(dict(branch=self.branch,type='expense',posting_date=date(2025,4,4),amount=D('1200'),account=str(self.acc('6950').pk),mode='Cash',description='Misc cost'),self.user)
+        retained=self.acc('3900');doc,profit=yearend.close_year(self.user,self.branch,date(2025,1,1),date(2025,12,31),retained);self.assertEqual(profit,D('3800.00'))
+        self.assertEqual(self.bal('3900'),D('-3800.00'));self.assertEqual((self.bal('4900'),self.bal('6950')),(0,0));self.assertEqual(money_problems(),[])
+        from . import dashboard_metrics as dm,report_extra
+        shown=dm.overview([self.branch],date(2025,1,1),date(2025,12,31));self.assertEqual((shown['income'],shown['net']),(D('5000.00'),D('3800.00')))        # the closed year still shows what happened in it
+        december=report_extra.span_totals([self.branch],[(date(2025,12,1),date(2025,12,31)),(date(2025,3,1),date(2025,3,31))])
+        self.assertEqual((december[0]['sales'],december[0]['profit'],december[1]['sales'],december[1]['profit']),(0,0,D('5000.00'),D('5000.00')))
+        self.assertEqual([r['Amount'] for r in report_extra.expense_report([self.branch],date(2025,1,1),date(2025,12,31))],[D('1200.00')])
+        with self.assertRaises(ValidationError):yearend.close_year(self.user,self.branch,date(2025,1,1),date(2025,12,31),retained)             # already closed
+        with self.assertRaises(ValidationError):yearend.close_year(self.user,self.branch,date(2025,1,1),date(2025,6,30),retained)              # inside a closed year
+        with self.assertRaises(ValidationError):vouchers.post(dict(branch=self.branch,type='expense',posting_date=date(2025,6,1),amount=D('10'),account=str(self.acc('6950').pk),mode='Cash',description='Late'),self.user)
+        with self.assertRaises(ValidationError):yearend.close_year(self.user,self.branch,date(2026,1,1),date(2099,1,1),retained)             # not before it is over
+    def test_a_year_with_nothing_in_it_cannot_be_closed(self):
+        with self.assertRaises(ValidationError):yearend.close_year(self.user,self.branch,date(2020,1,1),date(2020,12,31),self.acc('3900'))
+
+
+class TaxedSalesReturnsAndCommission(TestCase):
+    """A discounted, taxed sale of awkward prices, returned a unit at a time: income, tax and stock all come back to exactly zero, and
+    a salesperson's commission is on what the shop earned (net of tax and discount), not on the tax it collects for the government."""
+    def setUp(self):
+        from .tests import fixtures
+        from . import pricing as p
+        self.__dict__.update(fixtures());self.p=p
+        self.item=Product.objects.create(code='CASE',name='Case',selling_price=100)
+        receipt=s.new_doc('Purchase Receipt',self.branch,status='Submitted')
+        StockMovement.objects.create(document=receipt,posting_date=s.timezone.localdate(),product=self.item,warehouse=self.warehouse,quantity=100,value=1000)
+        self.tax=Account.objects.create(code='OUTPUT',name='Output tax',account_type='Tax')
+        self.rule=SalesTaxRule.objects.create(code='VAT17',branch=self.branch,name='Sales tax',rate=Decimal('17'),account=self.tax,reference='Test rate')
+        self.client.force_login(self.user)
+    def sale(self,qty,rate,percent):
+        doc=s.new_doc('Sales Invoice',self.branch,customer=self.customer,seller=self.seller,warehouse=self.warehouse)
+        Line.objects.create(document=doc,product=self.item,warehouse=self.warehouse,quantity=qty,rate=Decimal(rate));self.p.inputs(doc,'percent',percent,self.rule.pk,capture=True);doc.save();return s.submit(doc,self.user)
+    def give_back(self,sale,qty):
+        line=sale.lines.get();return s.submit(s.return_sale(sale,self.user,[],'Good','Returned',{str(line.pk):str(qty)},self.warehouse),self.user)
+    def bal(self,account):
+        e=LedgerEntry.objects.filter(account=account).aggregate(d=Sum('debit'),c=Sum('credit'));return (e['d'] or 0)-(e['c'] or 0)
+    def test_returning_every_unit_one_at_a_time_leaves_no_income_tax_or_stock_value(self):
+        sale=self.sale(7,'33.33','12.5');self.assertGreater(sale.total,0)
+        for _ in range(7):self.give_back(sale,1)
+        sale.refresh_from_db()
+        sales=Account.objects.get(pk=ShopSettings.objects.get(branch=self.branch).accounts['sales']);inventory=Account.objects.get(pk=ShopSettings.objects.get(branch=self.branch).accounts['inventory'])
+        self.assertEqual((self.bal(sales),self.bal(self.tax)),(0,0))
+        returns=Document.objects.filter(reference=sale,is_return=True,status='Submitted');self.assertEqual(sum((r.total for r in returns),Decimal(0)),-sale.total)
+        self.assertEqual(s.on_hand(self.item,self.warehouse),(100,Decimal('1000.00')));self.assertEqual(money_problems(),[])
+    def test_commission_is_on_net_sales_not_on_the_tax_collected(self):
+        Staff.objects.filter(pk=self.seller.pk).update(crew=True,commission_rate=Decimal('10'))
+        sale=self.sale(10,'100','10')                                          # 1,000 less 10% = 900 net, plus 17% tax = 1,053 total
+        self.assertEqual((sale.total,sale.data['pricing']['net_total']),(Decimal('1053.00'),'900.00'))
+        page=self.client.get(reverse('staff_detail',args=[self.seller.pk]));self.assertEqual((page.context['net'],page.context['commission']),(Decimal('900.00'),Decimal('90.00')))
+        self.give_back(sale,5);page=self.client.get(reverse('staff_detail',args=[self.seller.pk]))
+        self.assertEqual((page.context['net'],page.context['commission']),(Decimal('450.00'),Decimal('45.00')))      # half came back: half the commission
+
+
+class StaffScreens(OrderBase):
+    """Staff: the edit form posts (its security token reaches it), commission is required, a raise applies only from today, and staff can move shops."""
+    def setUp(self):
+        super().setUp();self.client.force_login(self.user)
+        self.client.post(reverse('staff_list'),dict(action='add',name='Bilal',branch=str(self.branch.pk),commission='1.5'));self.person=Staff.objects.get(name='Bilal')
+    def update(self,**extra):
+        data=dict(action='update',staff=str(self.person.pk),designation='Salesman',commission='1.5',branch=str(self.person.branch_id),enabled='on');data.update(extra);return self.client.post(reverse('staff_list'),data,follow=True)
+    def test_every_row_form_sits_outside_the_table_and_carries_its_token(self):
+        html=self.client.get(reverse('staff_list')).content.decode();mark='id="f%s"'%self.person.pk
+        self.assertIn('csrfmiddlewaretoken',html[html.index(mark):html.index(mark)+600]);self.assertNotIn('<tr><form',html);self.assertGreater(html.index(mark),html.index('</table>'))
+    def test_commission_is_required_when_adding_and_saving(self):
+        self.assertContains(self.client.post(reverse('staff_list'),dict(action='add',name='NoRate',branch=str(self.branch.pk),commission=''),follow=True),'Enter the commission percentage')
+        self.assertFalse(Staff.objects.filter(name='NoRate').exists());self.assertContains(self.update(commission=''),'Enter the commission percentage')
+        self.assertContains(self.update(commission='101'),'between 0 and 100');self.assertContains(self.update(commission='0'),'Saved')
+    def test_a_raise_applies_from_today_and_earlier_sales_keep_their_rate(self):
+        from . import staff_views as sv
+        from datetime import timedelta
+        today=s.timezone.localdate();self.assertEqual(sv.rate_on(sv.rate_table(self.person),today),Decimal('1.50'))
+        self.update(commission='3');self.person.refresh_from_db();table=sv.rate_table(self.person)
+        self.assertEqual((sv.rate_on(table,today-timedelta(days=1)),sv.rate_on(table,today)),(Decimal('1.50'),Decimal('3.00')));self.assertEqual(self.person.commission_rate,Decimal('3.00'))
+        self.update(commission='3');self.assertEqual(self.person.rates.count(),2)
+        self.update(commission='4');self.assertEqual(self.person.rates.count(),2);self.assertEqual(sv.rate_on(sv.rate_table(self.person),today),Decimal('4.00'))
+    def test_the_detail_page_prices_each_sale_at_the_rate_of_its_day(self):
+        from datetime import timedelta
+        today=s.timezone.localdate();Party.objects.filter(pk=self.customer.pk).update(branch=self.branch)
+        self.phone(self.branch);self.phone(self.branch)
+        def sale(day):
+            d=Device.objects.filter(status='Available',branch=self.branch).first();doc=s.new_doc('Sales Invoice',self.branch,customer=self.customer,seller=self.person,warehouse=self.warehouse,posting_date=day)
+            Line.objects.create(document=doc,product=d.product,device=d,warehouse=d.warehouse,quantity=1,rate=Decimal('100000'));return s.submit(doc,self.user)
+        old=sale(today-timedelta(days=3));self.update(commission='3');new=sale(today)
+        page=self.client.get(reverse('staff_detail',args=[self.person.pk])+f'?from={today-timedelta(days=10)}&to={today}')
+        rows={r['d'].pk:r for r in page.context['sales']}
+        self.assertEqual((rows[old.pk]['rate'],rows[old.pk]['earned']),(Decimal('1.50'),Decimal('1500.00')));self.assertEqual((rows[new.pk]['rate'],rows[new.pk]['earned']),(Decimal('3.00'),Decimal('3000.00')))
+        self.assertEqual(page.context['commission'],Decimal('4500.00'))
+    def test_staff_can_move_to_another_shop(self):
+        self.assertContains(self.update(branch=str(self.other.pk)),'is now in %s'%self.other.name);self.person.refresh_from_db();self.assertEqual(self.person.branch_id,self.other.pk)
+        online=oo.online_branch();bad=self.client.post(reverse('staff_list'),dict(action='update',staff=str(self.person.pk),designation='',commission='1',branch=str(online.pk),enabled='on'));self.assertEqual(bad.status_code,404)
+        self.person.refresh_from_db();self.assertEqual(self.person.branch_id,self.other.pk)
+
+
+class OnlineOwnerRules(OrderBase):
+    """Payment accounts are the owner's to change; the online manager can see them. Prepaid orders need their payment before confirmation."""
+    def setUp(self):
+        super().setUp();from . import shop_accounts;self.web=shop_accounts.create_online_login('Web Team','web-team2','Strong-pass-for-WT-77!')
+    def add(self):return dict(action='account_add',method='JazzCash',title='Abdullah',account_number='0300 1111111')
+    def test_only_the_owner_changes_payment_accounts(self):
+        self.client.force_login(self.web);self.assertContains(self.client.post(reverse('online_settings'),self.add(),follow=True),'Only the owner');self.assertEqual(OnlinePaymentAccount.objects.count(),0)
+        self.client.force_login(self.user);self.client.post(reverse('online_settings'),self.add());account=OnlinePaymentAccount.objects.get()
+        self.client.force_login(self.web)
+        for action in ('account_toggle','account_delete'):self.assertContains(self.client.post(reverse('online_settings'),dict(action=action,account=str(account.pk)),follow=True),'Only the owner')
+        account.refresh_from_db();self.assertTrue(account.enabled);page=self.client.get(reverse('online_settings'));self.assertContains(page,'Owner only');self.assertNotContains(page,'Add an account')
+        self.client.post(reverse('online_settings'),dict(action='delivery',delivery_fee='400',free_from='',cod='on'));self.assertEqual(OnlineSettings.get().delivery_fee,Decimal('400'))
+    def test_the_order_screen_asks_for_the_payment_before_the_confirmation_call(self):
+        self.phone(self.branch);o=self.order([self.item()],payment_method='JazzCash',confirm=False);self.client.force_login(self.web)
+        page=self.client.get(reverse('online_order',args=[o.pk]));self.assertContains(page,'Payment received');self.assertNotContains(page,'Customer confirmed the order')
+        self.assertContains(self.client.post(reverse('online_order',args=[o.pk]),dict(action='confirm'),follow=True),'payment has arrived first')
+        self.client.post(reverse('online_order',args=[o.pk]),dict(action='paid',reference='TX1'));page=self.client.get(reverse('online_order',args=[o.pk]));self.assertContains(page,'Customer confirmed the order')
+        self.client.post(reverse('online_order',args=[o.pk]),dict(action='confirm'));o.refresh_from_db();self.assertEqual((oo.order_status(o),o.payment_status),('Confirmed','Paid'))
+    def test_online_screens_have_no_new_sale_or_new_purchase_buttons(self):
+        self.client.force_login(self.web);self.assertNotContains(self.client.get(reverse('online_dashboard')),'New Purchase')
+        self.client.force_login(self.user);self.assertNotContains(self.client.get(reverse('online_orders')),'New Purchase')

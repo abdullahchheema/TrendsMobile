@@ -271,3 +271,23 @@ label.button.small{display:inline-block;padding:3px 10px;font-size:12px;cursor:p
   .sh-table td[data-label]::before{content:attr(data-label);display:block;margin-bottom:3px;font-size:12px;color:var(--ink-3)}
   .sh-table .sh-num,.sh-table .sh-num.sm{width:100%}
 }
+
+/* ---- spacing: forms, panels, notices and lists breathe the same way on every screen ---- */
+.panel .form-block{display:grid;gap:var(--s4);margin:0}
+.panel .form-block>label{display:grid;gap:6px;font-weight:600}
+.panel .form-block>label>input,.panel .form-block>label>select{font-weight:400}
+.panel .form-block .form-actions{margin-top:0}
+.panel .form-block + .form-block,.panel .form-block + .table-scroll,.panel .form-block + .sh-hint{margin-top:var(--s4)}
+.panel h2{margin:0 0 var(--s4)}
+.panel h3{margin:var(--s6) 0 var(--s3);font-size:16px}
+.panel .check{margin:0}
+.panel > .sh-hint,.panel .sh-hint{margin:var(--s3) 0 var(--s4);line-height:1.5}
+.panel .notice{display:block;line-height:1.5;margin:0 0 var(--s4)}
+.panel .notice strong{overflow-wrap:anywhere}
+.panel hr{margin:var(--s5) 0}
+.panel ul.plain{list-style:none;margin:0;padding:0;display:grid;gap:var(--s4)}
+.panel ul.plain li{padding-left:var(--s4);border-left:2px solid var(--line);line-height:1.5}
+.staff-table select,.staff-table input:not([type=checkbox]){min-width:0;max-width:100%}
+.staff-table td{vertical-align:middle}
+.panel .form-block>label.check{display:flex;align-items:center;gap:var(--s2);font-weight:600}
+.staff-table input[name=designation]{width:150px}.staff-table select{width:auto;min-width:120px}.staff-table td,.staff-table th{padding-right:var(--s3)}

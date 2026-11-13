@@ -192,7 +192,7 @@ def reports_vs_ledger():
     per={}
     for b in Branch.objects.all():
         inc=exp=ZERO
-        for r in LedgerEntry.objects.filter(branch=b,posting_date__range=[start,end]).values('account_id').annotate(d=Sum('debit'),c=Sum('credit')):
+        for r in financial_reports.pre_closing(LedgerEntry.objects.filter(branch=b,posting_date__range=[start,end])).values('account_id').annotate(d=Sum('debit'),c=Sum('credit')):      # year-end closing entries move profit into equity; the statements are about the period's activity
             account,root=classes[r['account_id']];net=(r['d'] or ZERO)-(r['c'] or ZERO)
             if root=='Income':inc-=net
             elif root=='Expense':exp+=net

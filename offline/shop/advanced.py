@@ -128,7 +128,7 @@ def dispose_asset(user,asset,on,proceeds,mode,reference=''):
     proceeds=cents(proceeds or 0)
     if proceeds<0:raise ValidationError('Proceeds cannot be negative.')
     if on>timezone.localdate() or on<asset.purchase_date:raise ValidationError('Choose a disposal date between the purchase date and today.')
-    if asset.depreciated_through is None or asset.depreciated_through<last_full_month_end(on):
+    if depreciation_due(asset,on)[0]>0:        # nothing may be waiting to be depreciated, or the book value (and the gain or loss) would be wrong; an asset sold in the month it was bought has nothing due
         raise ValidationError('Post depreciation up to the disposal date first, so the book value is right.')
     book=asset.cost-asset.accumulated;loss=book-proceeds
     if proceeds>0:
