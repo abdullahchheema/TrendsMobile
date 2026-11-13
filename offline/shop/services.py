@@ -677,6 +677,9 @@ def submit(doc,user):
     # into demo mode. Only an explicit transaction/shop mode does that.
     doc.demo_batch=doc.demo_batch or doc.branch.demo_batch
     balanced(doc);doc.status='Submitted';doc.save();audit(user,'Submit',doc)
+    if doc.kind in SELL and doc.is_return and doc.online_order_id:
+        from .online_orders import after_return
+        after_return(doc)      # an online order whose every unit came back becomes Returned
     return doc
 
 @transaction.atomic

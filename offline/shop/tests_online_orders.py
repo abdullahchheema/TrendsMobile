@@ -125,8 +125,8 @@ class OnlineBooks(OrderBase):
     def test_the_online_store_cannot_pay_money_it_does_not_hold_and_only_the_owner_can_settle(self):
         self.phone(self.other);o=self.order([self.item()]);oo.dispatch(o,self.user)
         with self.assertRaisesMessage(ValidationError,'holds only'):online_accounts.pay_shop(self.user,self.other,'10000','Cash','Cash')
-        web=shop_accounts.create_online_login('Web','web-x','Strong-pass-for-WX-77!')
-        with self.assertRaisesMessage(ValidationError,'Only the owner'):online_accounts.pay_shop(web,self.other,'1','Cash','Cash')
+        shop_login=shop_accounts.create_login(self.branch,'shop-x','Strong-pass-for-SX-77!')
+        with self.assertRaisesMessage(ValidationError,'Only the owner and the online store login'):online_accounts.pay_shop(shop_login,self.other,'1','Cash','Cash')
     def test_a_returned_online_phone_can_go_back_into_a_different_shop_and_both_sides_still_agree(self):
         from . import returns
         d=self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0];oo.deliver(o,self.user)
@@ -177,7 +177,8 @@ class Access(OrderBase):
     def test_the_online_login_lands_on_the_online_dashboard_and_nowhere_else(self):
         self.client.force_login(self.web)
         self.assertRedirects(self.client.get(reverse('dashboard')),reverse('online_dashboard'),fetch_redirect_response=False)
-        for name in ('online_dashboard','online_orders','online_stock','online_store','online_order_new','online_accounts'):self.assertEqual(self.client.get(reverse(name)).status_code,200,name)
+        for name in ('online_dashboard','online_orders','online_stock','online_store','online_order_new'):self.assertEqual(self.client.get(reverse(name)).status_code,200,name)
+        self.assertRedirects(self.client.get(reverse('online_accounts')),reverse('online_dashboard'),fetch_redirect_response=False)      # the old Online Accounts page is part of the dashboard now
         for name in ('pos','money_in','cash_and_bank','customer_dues','stock_transfer','users','returns','accessories'):self.assertEqual(self.client.get(reverse(name)).status_code,403,name)
         self.assertEqual(self.client.get(reverse('collection',args=['Customer'])).status_code,403)
     def test_the_online_login_sees_the_online_menu_only(self):
@@ -196,12 +197,14 @@ class Access(OrderBase):
         r=self.client.post(reverse('online_order',args=[o.pk]),dict(action='dispatch',courier='TCS',tracking='T1'),follow=True);self.assertContains(r,'Dispatched')
         r=self.client.post(reverse('online_order',args=[o.pk]),dict(action='deliver',method='Cash'),follow=True);self.assertContains(r,'Delivered')
         inv=Document.objects.get(online_order=o,kind='Sales Invoice');self.assertEqual((inv.outstanding,inv.posted_by_id),(Decimal('0.00'),self.web.pk))
-    def test_the_online_login_can_record_online_expenses_but_not_pay_a_shop(self):
+    def test_the_online_login_can_record_online_expenses_and_pay_a_shop_only_from_money_the_store_holds(self):
         self.phone(self.other);o=self.order([self.item()]);oo.dispatch(o,self.user);oo.deliver(o,self.user)
         self.client.force_login(self.web);cat=money_views._accounts('Expense',('COA-6950','COA-5200')).order_by('code').first()      # a category the screen really offers (an unordered pick failed at random)
         self.client.post(reverse('online_accounts'),dict(action='expense',category=str(cat.pk),amount='1200',method='Cash',description='Facebook ads'),follow=True)
         self.assertEqual(online_accounts.summary()['expenses'],Decimal('1200'))
-        r=self.client.post(reverse('online_accounts'),dict(action='pay_shop',shop=str(self.other.pk),amount='1000',method='Cash',shop_method='Cash'),follow=True);self.assertContains(r,'Only the owner')
+        r=self.client.post(reverse('online_accounts'),dict(action='pay_shop',shop=str(self.other.pk),amount='1000',method='Cash',shop_method='Cash'),follow=True);self.assertContains(r,'Payment to')      # the online login runs the store's money and settles with the shop (the store holds the delivered order's cash)
+        owed=[x['owed'] for x in online_accounts.owed_to_shops()[0] if x['shop'].pk==self.other.pk][0];self.assertEqual(owed,Decimal('79000'))      # 80,000 cost less the 1,000 just paid
+        r=self.client.post(reverse('online_dashboard'),dict(action='pay_shop',shop=str(self.other.pk),amount='500000',method='Cash',shop_method='Cash'),follow=True);self.assertContains(r,'owes')      # never more than is owed
     def test_shops_know_nothing_about_online_sales_while_the_owner_sees_everything(self):
         self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user)[0]
         self.client.force_login(self.shop)

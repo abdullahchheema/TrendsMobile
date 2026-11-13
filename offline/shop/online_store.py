@@ -291,7 +291,10 @@ def image_file(request,path):
 @login_required
 def dashboard(request):
     """What the website is selling right now and what needs attention: live stock and value, per shop, margin, slow stock, and fix-it lists."""
-    _owner(request);sync_all()
+    _owner(request)
+    from . import online_views
+    if request.method=='POST':return online_views.accounts_post(request)
+    sync_all()
     from datetime import date
     today=date.today();shops=oo.shops()
     live=list(Product.objects.filter(online_visible=True,enabled=True).select_related('model'));live_ids={p.pk for p in live}
@@ -324,10 +327,9 @@ def dashboard(request):
     candidates=Device.objects.filter(status='Available',branch__in=shops).exclude(product_id__in=live_ids).values('product_id','product__name').annotate(n=Count('id'),lo=Min('asking_price')).order_by('-n')[:15]
     for r in candidates:hidden.append(dict(pk=r['product_id'],name=r['product__name'],units=r['n'],price=r['lo'],photos=0))
     hidden_total=Device.objects.filter(status='Available',branch__in=shops).exclude(product_id__in=live_ids).count()
-    from . import online_accounts
-    month=today.replace(day=1);acct=online_accounts.summary(month,today)
     see_cost=request.user.is_superuser
     if not see_cost:totals=dict(totals,cost=None,margin=None);below_cost=[]
-    return render(request,'online_dashboard.html',dict(title='Online Dashboard',acct=acct,see_cost=see_cost,live=len(live),totals=totals,shops=sorted(per_shop.values(),key=lambda s:-s['units']),
+    money=online_views.accounts_context(request)
+    return render(request,'online_dashboard.html',dict(title='Online Dashboard',see_cost=see_cost,**money,live=len(live),totals=totals,shops=sorted(per_shop.values(),key=lambda s:-s['units']),
         top=sorted(products,key=lambda r:-r['value'])[:10],out_of_stock=out_of_stock,low_stock=low_stock,gaps=gaps,slow=sorted(slow,key=lambda r:-r['days'])[:10],below_cost=below_cost,
         hidden=hidden,hidden_total=hidden_total,no_photo=len(hidden)))

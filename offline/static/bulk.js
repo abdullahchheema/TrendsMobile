@@ -24,10 +24,9 @@
       field('Model','<input data-f="model" list="models-'+i+'" value="'+esc(r.model)+'" placeholder="e.g. Galaxy S21" autocomplete="off"><datalist id="models-'+i+'">'+cat.models(r.brand).map(function(m){return '<option value="'+esc(m)+'">'}).join('')+'</datalist>')+
       field('Storage','<select data-f="storage"><option value="">Choose</option>'+opts(cat.storage,r.storage)+'</select>')+
       field('Colour','<input data-f="colour" list="phone-colours" value="'+esc(r.colour)+'" placeholder="e.g. Black" autocomplete="off">')+
-      field('PTA status','<select data-f="pta_status"><option'+(r.pta_status==='PTA'?' selected':'')+'>PTA</option><option'+(r.pta_status==='Non-PTA'?' selected':'')+'>Non-PTA</option></select>')+
+      field('PTA status','<select data-f="pta_status"><option'+(r.pta_status==='PTA'?' selected':'')+'>PTA</option><option'+(r.pta_status==='Non-PTA'?' selected':'')+'>Non-PTA</option><option'+(r.pta_status==='JV'?' selected':'')+'>JV</option></select>')+
       field('Condition','<select data-f="condition">'+opts(conditions,r.condition)+'</select>')+
       field('Type','<select data-f="device_type">'+opts(types,r.device_type)+'</select>')+
-      field('Grade (1-10, optional)','<input data-f="grade" type="number" inputmode="numeric" min="1" max="10" value="'+esc(r.grade)+'">')+
       field('Selling price (PKR)','<input data-f="asking_price" type="number" inputmode="decimal" min="0" step="0.01" data-words value="'+esc(r.asking_price)+'" placeholder="Price you will sell it at">','bf-price')+
       field('IMEI 1 &mdash; scan here','<input data-f="imei1" inputmode="numeric" autocomplete="off" maxlength="17" value="'+esc(r.imei1)+'" placeholder="15 digits">','bf-imei')+
       field('IMEI 2 (dual SIM, optional)','<input data-f="imei2" inputmode="numeric" autocomplete="off" maxlength="17" value="'+esc(r.imei2)+'" placeholder="15 digits">','bf-imei')+

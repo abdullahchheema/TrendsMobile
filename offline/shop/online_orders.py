@@ -380,7 +380,7 @@ FAILED = 'Delivery Failed'
 def is_fulfilled(order):
     """Fulfilled = the payment has been received AND the item has been handed to the courier with a tracking number.
     Cash on delivery therefore stays unfulfilled after dispatch (tracking added, money not yet collected) until the cash is received."""
-    return order.status in (OnlineOrder.DISPATCHED, OnlineOrder.DELIVERED) and bool(order.tracking) and order.payment_status == 'Paid'
+    return order.status in (OnlineOrder.DISPATCHED, OnlineOrder.DELIVERED) and bool(order.tracking) and order.payment_status == 'Paid' and not order.returned_on
 
 
 def order_status(order):
@@ -388,7 +388,7 @@ def order_status(order):
     (a failed delivery that came back)."""
     if order.status == OnlineOrder.CANCELLED:
         return 'Cancelled'
-    if order.status == OnlineOrder.RETURNED:
+    if order.status == OnlineOrder.RETURNED or order.returned_on:      # a failed delivery that came back, or everything the customer bought sent back
         return 'Returned'
     if order.status == OnlineOrder.NEW and order.confirmed_at is None:
         return 'Unconfirmed'
@@ -675,6 +675,105 @@ def cancel_uncollected_charges(invoice, order, user):
     s.balanced(doc)
     s.audit(user, 'Online delivery charge cancelled', doc, order=order.code, amount=str(amount))
     event(order, user, 'Delivery charge cancelled', note=f'PKR {amount:,.2f} that was never collected')
+    return doc
+
+
+def after_return(doc):
+    """A sales return was posted for an online order. When every unit of every invoice of the order has now come back, the order itself becomes
+    Returned (it stops counting as Fulfilled), shows up under Returned in the lists and in the customer's tracking, and keeps its history.
+    A part return leaves the order as it is. A failed delivery is closed by receive_returned instead."""
+    from . import returns
+    order = OnlineOrder.objects.select_for_update().get(pk=doc.online_order_id)
+    if order.returned_on or order.stage == FAILED or order.status not in (OnlineOrder.DISPATCHED, OnlineOrder.DELIVERED):
+        return
+    for invoice in Document.objects.filter(online_order=order, kind__in=list(s.SELL), is_return=False, status='Submitted'):
+        try:
+            lines = returns.sale_lines(invoice)
+            used = returns.used_quantities(invoice, lines)
+        except ValidationError:
+            return
+        if any(used[str(line.pk)] < line.quantity for line in lines):
+            return
+    old = display_stage(order)
+    order.returned_on = timezone.localdate()
+    order.stage = 'Returned'
+    order.save(update_fields=['returned_on', 'stage', 'modified'])
+    event(order, doc.posted_by, 'Returned by the customer', old, 'Returned', f'Return {doc.code}')
+
+
+def returned_devices(order):
+    """Phones of this order that came back and are waiting in Holding for someone to check them."""
+    ids = Line.objects.filter(document__online_order=order, document__is_return=True, document__status='Submitted', device__isnull=False).values_list('device_id', flat=True)
+    return list(Device.objects.filter(pk__in=list(ids), status='Holding').select_related('product', 'branch'))
+
+
+@transaction.atomic
+def accept_returned(order, user, note=''):
+    """The returned phone was checked: it goes back on sale in the shop that holds it (and on the website). The same inspection step as accepting
+    any returned phone into stock, done from the order."""
+    order = _lock(order)
+    wanted = [d.pk for d in returned_devices(order)]
+    devices = list(Device.objects.select_for_update(of=('self',)).filter(pk__in=wanted, status='Holding'))
+    if not devices:
+        raise ValidationError('No returned phone of this order is waiting to go back on sale.')
+    for d in devices:
+        d.status = 'Available'
+        d.inspection_status = 'Passed'
+        d.inspection_date = timezone.localdate()
+        d.save()
+        s.audit(user, 'Returned phone accepted into stock', None, order=order.code, device=d.code, shop=d.branch.name)
+    event(order, user, 'Returned phone back on sale', note=', '.join(f'{d.code} in {d.branch.name}' for d in devices) + (f' · {note}' if note else ''))
+    return devices
+
+
+def delivery_charge_of(invoice):
+    """(net, tax) of the delivery charge on an online invoice: the lines that are not stock."""
+    rows = [line.snapshot.get('pricing') or {} for line in invoice.lines.select_related('product') if not line.product.stock_item]
+    return sum((s.money(r.get('net')) for r in rows), ZERO), sum((s.money(r.get('tax')) for r in rows), ZERO)
+
+
+def delivery_refundable(order):
+    """The delivery charge the customer paid on an order that came back whole after delivery, if it has not been given back yet. None otherwise."""
+    if not order.returned_on or order.status == OnlineOrder.RETURNED:
+        return None
+    invoice = Document.objects.filter(online_order=order, kind__in=list(s.SELL), is_return=False, status='Submitted').first()
+    if invoice is None or invoice.data.get('charges_cancelled') or invoice.data.get('charges_refunded'):
+        return None
+    net, tax = delivery_charge_of(invoice)
+    return net + tax if net + tax > 0 else None
+
+
+@transaction.atomic
+def refund_delivery_charge(order, user, note=''):
+    """Give the delivery charge back after the whole order was returned (the customer returned a faulty phone, or you decided to). The charge comes out of the
+    Online Store's income (and output tax) and becomes more credit owed to the customer on the return, to be refunded with the rest."""
+    order = _lock(order)
+    amount = delivery_refundable(order)
+    if amount is None:
+        raise ValidationError('There is no delivery charge to refund on this order (it is not fully returned, or it was already refunded).')
+    invoice = Document.objects.select_for_update().filter(online_order=order, kind__in=list(s.SELL), is_return=False, status='Submitted').first()
+    credit = Document.objects.select_for_update().filter(online_order=order, kind__in=list(s.SELL), is_return=True, status='Submitted').order_by('-created').first()
+    if credit is None:
+        raise ValidationError('This order has no return to attach the refund to.')
+    net, tax = delivery_charge_of(invoice)
+    doc = s.new_doc('Journal Entry', invoice.branch, customer=invoice.customer, reference=credit, posted_by=user, channel='Online', online_order=order,
+                    notes=f'Delivery charge of online order {order.code} refunded after the order was returned' + (f' · {note}' if note else ''),
+                    data=dict(charge_cancelled=str(invoice.pk), amount=str(amount), refunded_after_return=True))
+    s.open_date(doc)
+    s.entry(doc, 'sales', debit=net)
+    if tax:
+        s.entry(doc, pricing.tax_account(invoice), debit=tax)
+    s.entry(doc, 'receivable', credit=amount, party=invoice.customer, reference=credit)
+    credit.outstanding -= amount
+    credit.save(update_fields=['outstanding', 'modified'])
+    invoice.data['charges_refunded'] = dict(amount=str(amount), journal=str(doc.pk), date=str(doc.posting_date))
+    invoice.save(update_fields=['data', 'modified'])
+    doc.total = amount
+    doc.status = 'Submitted'
+    doc.save()
+    s.balanced(doc)
+    s.audit(user, 'Online delivery charge refunded', doc, order=order.code, amount=str(amount))
+    event(order, user, 'Delivery charge refunded', note=f'PKR {amount:,.2f} added to what is owed back to the customer')
     return doc
 
 

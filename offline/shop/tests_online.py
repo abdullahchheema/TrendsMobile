@@ -143,7 +143,8 @@ class OnePagePerModel(OnlineBase):
     def test_online_stock_shows_each_model_once_with_totals_per_shop(self):
         page=self.client.get(reverse('online_stock'));html=page.content.decode()
         self.assertEqual(html.count('iPhone 13</strong>'),1)                    # two colours, three phones each: still one line
-        rows=[r for r in page.context['rows'] if r['title']=='Apple iPhone 13'];self.assertEqual(len(rows),1);self.assertEqual((rows[0]['stock'],rows[0]['cells']),(6,[6]))
+        rows=[m for b in page.context['brands'] for m in b['models'] if m['title']=='Apple iPhone 13'];self.assertEqual(len(rows),1);self.assertEqual((rows[0]['stock'],rows[0]['per_shop']),(6,[('Test Shop',6)]))
+        self.assertContains(page,'Variants and stock by shop')                    # the same layout as Products & Photos: the model, its variants and where each one is
     def test_the_model_page_lists_variants_and_where_the_stock_is(self):
         page=self.client.get(reverse('online_edit',args=[self.product.pk]));self.assertContains(page,'Where the stock is')
         m=page.context['matrix'];self.assertEqual(sorted((x['label'],x['total']) for x in m),[('128GB Blue',3),('128GB Red',3)]);self.assertEqual(page.context['shop_totals'],[6])

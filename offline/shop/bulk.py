@@ -64,7 +64,7 @@ def parse_rows(raw,require_imei=True,bulk_total=None):
         try:grade=int(grade) if grade not in (None,'') else None
         except (TypeError,ValueError):raise ValidationError(f'Line {position}: the grade must be a whole number from 1 to 10.')
         if grade is not None and not 1<=grade<=10:raise ValidationError(f'Line {position}: the grade must be from 1 to 10.')
-        if row.get('pta_status') not in ('PTA','Non-PTA'):raise ValidationError(f'Line {position}: choose PTA or Non-PTA.')
+        if row.get('pta_status') not in ('PTA','Non-PTA','JV'):raise ValidationError(f'Line {position}: choose PTA, Non-PTA or JV.')
         try:asking=s.payment_money(row.get('asking_price') or 0)       # the price the phone is listed at; the cashier can still change it at the sale
         except ValidationError:raise ValidationError(f'Line {position}: enter the selling price as an amount.')
         if asking<=0:raise ValidationError(f'Line {position}: enter the selling price (more than zero).')

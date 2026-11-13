@@ -10,6 +10,7 @@ from django.db import DataError,IntegrityError,transaction
 from django.db.models import Q
 from django.http import Http404,JsonResponse
 from django.shortcuts import get_object_or_404,redirect,render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -33,9 +34,10 @@ def orders(request):
     q=request.GET.get('q','').strip();status=request.GET.get('status','')
     rows=OnlineOrder.objects.all().prefetch_related('lines__product','lines__allocations__branch')
     NEW,DISP,DELIV=OnlineOrder.NEW,OnlineOrder.DISPATCHED,OnlineOrder.DELIVERED
-    fulfilled=Q(status__in=(DISP,DELIV),payment_status='Paid')&~Q(tracking='')
-    kinds={'Unconfirmed':Q(status=NEW,confirmed_at__isnull=True),'Confirmed':(Q(status=NEW,confirmed_at__isnull=False)|Q(status__in=(DISP,DELIV)))&~fulfilled,'Fulfilled':fulfilled,
-           'Cancelled':Q(status=OnlineOrder.CANCELLED),'Returned':Q(status=OnlineOrder.RETURNED)}
+    back=Q(returned_on__isnull=False)      # everything came back: a failed delivery, or the customer returned the whole order
+    fulfilled=Q(status__in=(DISP,DELIV),payment_status='Paid')&~Q(tracking='')&~back
+    kinds={'Unconfirmed':Q(status=NEW,confirmed_at__isnull=True),'Confirmed':(Q(status=NEW,confirmed_at__isnull=False)|Q(status__in=(DISP,DELIV)))&~fulfilled&~back,'Fulfilled':fulfilled,
+           'Cancelled':Q(status=OnlineOrder.CANCELLED),'Returned':Q(status=OnlineOrder.RETURNED)|back}
     counts={name:OnlineOrder.objects.filter(cond).count() for name,cond in kinds.items()}
     if status in kinds:rows=rows.filter(kinds[status])
     elif status=='history':rows=rows.filter(kinds['Fulfilled']|kinds['Cancelled']|kinds['Returned'])
@@ -99,6 +101,8 @@ def order(request,pk):
                 if charge:category=get_object_or_404(Account,pk=request.POST.get('category'))
                 oo.receive_returned(o,request.user,warehouse,request.POST.get('condition',''),request.POST.get('resale','hold'),request.POST.get('note',''),charge or None,category,request.POST.get('method'),_date.today())
                 messages.success(request,'Returned phone received. The sale is reversed and the phone is back in that shop at its original cost.')
+            elif action=='accept_returned':oo.accept_returned(o,request.user,request.POST.get('note',''));messages.success(request,'The returned phone is back on sale in its shop and on the website.')
+            elif action=='refund_delivery':oo.refund_delivery_charge(o,request.user,request.POST.get('note',''));messages.success(request,'The delivery charge was added to what is owed back to the customer. Refund it from the return.')
             elif action=='deliver':oo.deliver(o,request.user,request.POST.get('method','Cash'));messages.success(request,'Marked delivered; any cash on delivery is now recorded as received.')
             else:raise ValidationError('Unknown action.')
         except (ValidationError,IntegrityError,ValueError) as error:messages.error(request,_err(error))
@@ -112,7 +116,7 @@ def order(request,pk):
         if isinstance(v,list):return ', '.join(flat(x) for x in v)
         return str(v)
     extra_rows=[(str(k).replace('_',' ').capitalize(),flat(v)) for k,v in (o.extra or {}).items() if v not in ('',None,[],{})]
-    return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),primary=oo.order_status(o),events=list(o.events.select_related('user')),shipped_stages=oo.SHIPPED_STAGES,failed=oo.FAILED,receiving=_receiving(o),cancel_reasons=oo.CANCEL_REASONS,unconfirmed=o.status==OnlineOrder.NEW and o.confirmed_at is None,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
+    return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),primary=oo.order_status(o),events=list(o.events.select_related('user')),shipped_stages=oo.SHIPPED_STAGES,failed=oo.FAILED,receiving=_receiving(o),holding=oo.returned_devices(o),delivery_refundable=oo.delivery_refundable(o),cancel_reasons=oo.CANCEL_REASONS,unconfirmed=o.status==OnlineOrder.NEW and o.confirmed_at is None,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
         candidates=list(_candidates(o)) if o.status==OnlineOrder.NEW and not o.exchange_credit_id else [],prepaid=o.payment_method!='Cash on Delivery',
         outstanding=sum((i.outstanding for i in invoices if i.outstanding>0),Decimal(0))))
 
@@ -166,53 +170,69 @@ def order_new(request):
 # ------------------------------------------------------------------ online stock
 @login_required
 def stock(request):
-    """Everything the website can sell, one line per phone model (never one per variant), with the quantity in each shop. Open a model for its variants."""
+    """Everything the website can sell in stock now, one line per phone model with its photo, the variants and how many each shop holds. Same layout as Products & Photos."""
     _guard(request)
     from . import online_store
-    shops=oo.shops();q=request.GET.get('q','').strip()
-    rows=[]
-    for fam in online_store.catalog(q):
-        per=dict(fam['per_shop'])
-        rows.append(dict(fam,cells=[per.get(b.name,0) for b in shops],variant_count=len({(r['product'].pk) for r in fam['rows']})))
-    from .views import paginate
-    page,pager=paginate(request,rows,60)
-    return render(request,'online_stock.html',dict(title='Online Stock',rows=page.object_list,page_obj=page,pager_query=pager,shops=shops,q=q,total=sum(r['stock'] for r in rows)))
+    q=request.GET.get('q','').strip()
+    models=[fam for fam in online_store.catalog(q) if fam['stock']>0]
+    brands=[]
+    for fam in models:
+        if not brands or brands[-1]['brand']!=fam['brand']:brands.append(dict(brand=fam['brand'],models=[]))
+        fam=dict(fam,rows=[r for r in fam['rows'] if r['quantity']>0]);brands[-1]['models'].append(fam)
+    return render(request,'online_stock.html',dict(title='Online Stock',brands=brands,q=q,total=sum(m['stock'] for m in models),model_count=len(models)))
+
+
+def accounts_post(request):
+    """Record an online expense, money put into the Online Store, or a payment to a shop. Posted from the Online Dashboard."""
+    _guard(request)
+    from datetime import date
+    from . import money,money_views
+    action=request.POST.get('action')
+    try:
+        when=date.fromisoformat(request.POST.get('date') or str(timezone.localdate()))
+        money_views._ensure_chart(request.user)
+        with transaction.atomic():
+            if action=='expense':
+                category=get_object_or_404(money_views._accounts('Expense',('COA-6950','COA-5200')),pk=request.POST.get('category'))
+                money.record_voucher(request.user,oo.online_branch(),'expense',category,request.POST.get('amount'),request.POST.get('method'),when,request.POST.get('description') or category.name)
+                messages.success(request,'Online expense recorded.')
+            elif action=='capital':
+                money.record_voucher(request.user,oo.online_branch(),'capital',money_views._by_code('COA-3100'),request.POST.get('amount'),request.POST.get('method'),when,request.POST.get('description') or 'Money put into the Online Store')
+                messages.success(request,'Money put into the Online Store recorded.')
+            elif action=='pay_shop':
+                shop=get_object_or_404(Branch,pk=request.POST.get('shop'),is_online=False)
+                online_accounts.pay_shop(request.user,shop,request.POST.get('amount'),request.POST.get('method'),request.POST.get('shop_method'),when,request.POST.get('description',''))
+                messages.success(request,f'Payment to {shop.name} recorded in both sets of books.')
+            else:raise ValidationError('Unknown action.')
+    except (ValidationError,ValueError,IntegrityError) as error:messages.error(request,_err(error))
+    return redirect('online_dashboard')
+
+
+def accounts_context(request):
+    """Everything the money part of the Online Dashboard shows: sales, profit, what is owed to each shop, payments made, balances, forms."""
+    from datetime import date
+    from . import money_views
+    online=oo.online_branch();methods=list(ShopSettings.objects.get(branch=online).payment_methods)
+    g=request.GET;today=timezone.localdate()
+    try:start=date.fromisoformat(g['from']) if g.get('from') else today.replace(day=1);end=date.fromisoformat(g['to']) if g.get('to') else today
+    except ValueError:start,end=today.replace(day=1),today
+    data=online_accounts.summary(start,end)
+    shop_methods={b.pk:list(ShopSettings.objects.filter(branch=b).values_list('payment_methods',flat=True).first() or []) for b in Branch.objects.filter(enabled=True,is_online=False)}
+    for row in data['owed']:row['shop_methods']=shop_methods.get(row['shop'].pk,[])
+    payments=list(Document.objects.filter(branch=online,status='Submitted',data__has_key='online_settlement').order_by('-posting_date','-created')[:15])
+    names={str(b.pk):b.name for b in Branch.objects.filter(is_online=False)}
+    for p in payments:p.shop_name=names.get(p.data.get('online_settlement'),'—')
+    return dict(data=data,start=str(start),end=str(end),methods=methods,payments=payments,today=today,
+        categories=list(money_views._accounts('Expense',('COA-6950','COA-5200')).values_list('pk','name')) if Account.objects.filter(code='COA-6750').exists() else [])
 
 
 @login_required
 def accounts(request):
-    """The Online Store's books: sales, money, what it owes the shops, and the forms to record online expenses, owner money and payments to shops."""
+    """The old Online Accounts page: it is now part of the Online Dashboard."""
     _guard(request)
-    from datetime import date
-    from . import money,money_views
-    online=oo.online_branch();methods=list(ShopSettings.objects.get(branch=online).payment_methods)
-    if request.method=='POST':
-        action=request.POST.get('action')
-        try:
-            when=date.fromisoformat(request.POST.get('date') or str(timezone.localdate()))
-            money_views._ensure_chart(request.user)
-            with transaction.atomic():
-                if action=='expense':
-                    category=get_object_or_404(money_views._accounts('Expense',('COA-6950','COA-5200')),pk=request.POST.get('category'))
-                    money.record_voucher(request.user,online,'expense',category,request.POST.get('amount'),request.POST.get('method'),when,request.POST.get('description') or category.name)
-                    messages.success(request,'Online expense recorded.')
-                elif action=='capital':
-                    money.record_voucher(request.user,online,'capital',money_views._by_code('COA-3100'),request.POST.get('amount'),request.POST.get('method'),when,request.POST.get('description') or 'Money put into the Online Store')
-                    messages.success(request,'Money put into the Online Store recorded.')
-                elif action=='pay_shop':
-                    online_accounts.pay_shop(request.user,get_object_or_404(Branch,pk=request.POST.get('shop'),is_online=False),request.POST.get('amount'),request.POST.get('method'),request.POST.get('shop_method'),when,request.POST.get('description',''))
-                    messages.success(request,'Payment to the shop recorded in both sets of books.')
-                else:raise ValidationError('Unknown action.')
-        except (ValidationError,ValueError,IntegrityError) as error:messages.error(request,_err(error))
-        return redirect('online_accounts')
-    g=request.GET
-    try:start=date.fromisoformat(g['from']) if g.get('from') else None;end=date.fromisoformat(g['to']) if g.get('to') else None
-    except ValueError:start=end=None
-    shop_methods={b.pk:list(ShopSettings.objects.filter(branch=b).values_list('payment_methods',flat=True).first() or []) for b in Branch.objects.filter(enabled=True,is_online=False)}
-    owner=request.user.is_superuser
-    return render(request,'online_accounts.html',dict(title='Online Accounts',data=online_accounts.summary(start,end),start=g.get('from',''),end=g.get('to',''),profit=owner,owner=owner,methods=methods,
-        categories=list(money_views._accounts('Expense',('COA-6950','COA-5200')).values_list('pk','name')) if Account.objects.filter(code='COA-6750').exists() else [],
-        shops=list(Branch.objects.filter(enabled=True,is_online=False).order_by('name')),all_shop_methods=sorted({m for ms in shop_methods.values() for m in ms}),today=timezone.localdate()))
+    if request.method=='POST':return accounts_post(request)
+    query=request.META.get('QUERY_STRING','')
+    return redirect(reverse('online_dashboard')+('?'+query if query else ''))
 
 
 # ------------------------------------------------------------------ the website's API

@@ -40,7 +40,7 @@ class EasyEntryForm(forms.Form):
             self.fields['quantity']=forms.IntegerField(label='How many phones?',min_value=1,max_value=20,initial=1)
             self.fields['imeis']=forms.CharField(label='IMEI numbers (recommended)',required=False,widget=forms.Textarea(attrs={'rows':3,'placeholder':'One phone per line. Dual-SIM: put both IMEIs on the line, separated by a space.','autocomplete':'off'}),
                 help_text='Entering IMEIs lets you find each phone later and stops the same phone being bought twice. Leave blank only if you will add them later.')
-        self.fields['pta_status']=forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA approved'),('Non-PTA','Non-PTA')],initial=phone.pta_status if phone and phone.pta_status in ('PTA','Non-PTA') else '')
+        self.fields['pta_status']=forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA approved'),('Non-PTA','Non-PTA'),('JV','JV')],initial=phone.pta_status if phone and phone.pta_status in ('PTA','Non-PTA','JV') else '')
         self.fields['price']=forms.DecimalField(label='Selling price (PKR)' if kind=='sale' else 'Buying price per phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2,initial=(phone.asking_price or None) if phone else None)
         if kind=='purchase':
             self.fields['asking_price']=forms.DecimalField(label='Selling price per phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2,help_text='The price this phone is listed at. The cashier can still change it at the sale.')

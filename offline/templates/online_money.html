@@ -1,0 +1,58 @@
+<section class="panel"><h2>Money and profit</h2>
+<form method="get" class="search-bar"><label>From<input type="date" name="from" value="{{ start }}"></label><label>To<input type="date" name="to" value="{{ end }}"></label><button>Show</button><a class="muted" href="?from=2000-01-01&amp;to={{ today|date:'Y-m-d' }}">All time</a></form>
+<p class="sh-hint">The Online Store keeps its own books. It holds no stock: when it sells a phone from a shop, the shop gives up the stock at cost and the Online Store owes the shop that cost until it pays.</p>
+
+<div class="profit-strip" role="group" aria-label="How the online profit is made">
+  <div><small>Sold online</small><strong>PKR {{ data.revenue|floatformat:"0g" }}</strong><span>after returns, without tax</span></div>
+  <b aria-hidden="true">−</b>
+  <div><small>Bought from the shops</small><strong>PKR {{ data.cogs|floatformat:"0g" }}</strong><span>the shops' cost of what sold</span></div>
+  <b aria-hidden="true">=</b>
+  <div class="strong"><small>Online profit</small><strong>PKR {{ data.gross_profit|floatformat:"0g" }}</strong><span>before online expenses</span></div>
+  <b aria-hidden="true">−</b>
+  <div><small>Online expenses</small><strong>PKR {{ data.expenses|floatformat:"0g" }}</strong><span>ads, courier, packaging</span></div>
+  <b aria-hidden="true">=</b>
+  <div class="strong"><small>Net online profit</small><strong>PKR {{ data.net_profit|floatformat:"0g" }}</strong><span>what the Online Store earned</span></div>
+</div>
+</section>
+
+<div class="statement-cards">
+  <a class="panel" href="{% url 'online_orders' %}?status=Unconfirmed"><h2>To call</h2><strong>{{ data.orders.New|default:0 }}</strong><small>New orders, not yet shipped</small></a>
+  <a class="panel" href="{% url 'online_orders' %}?status=Confirmed"><h2>On the way</h2><strong>{{ data.orders.Dispatched|default:0 }}</strong><small>Dispatched, not delivered</small></a>
+  <div class="panel"><h2>Net online sales</h2><strong>PKR {{ data.net_sales|floatformat:"0g" }}</strong><small>{{ data.invoices }} invoice{{ data.invoices|pluralize }}, {{ data.returned|floatformat:"0g" }} returned</small></div>
+  <div class="panel"><h2>Money received</h2><strong>PKR {{ data.net_received|floatformat:"0g" }}</strong><small>{{ data.received|floatformat:"0g" }} in, {{ data.refunded|floatformat:"0g" }} refunded</small></div>
+  <div class="panel"><h2>Cash on delivery to collect</h2><strong>PKR {{ data.pending|floatformat:"0g" }}</strong><small>Dispatched, not yet paid</small></div>
+  <div class="panel"><h2>Owed to customers</h2><strong>PKR {{ data.credit_owed|floatformat:"0g" }}</strong><small>Return credit not yet refunded or used</small></div>
+  <div class="panel"><h2>Owed to the shops</h2><strong>PKR {{ data.owed_total|floatformat:"0g" }}</strong><small>Cost of stock supplied, not yet paid</small></div>
+</div>
+
+<section class="panel table-scroll"><h2>Owed to the shops</h2>
+<p class="sh-hint">What the Online Store still owes each shop for the stock it sold. Pay the whole amount or only part of it: change the amount, choose where the money comes from and where it goes, then press Pay. Both sets of books are updated.</p>
+<table class="staff-table"><thead><tr><th>Shop</th><th class="num">Owed</th><th class="num">Amount to pay</th><th>Paid from (Online Store)</th><th>Received in (shop)</th><th></th></tr></thead><tbody>
+{% for r in data.owed %}<tr><td><strong>{{ r.shop.name }}</strong></td><td class="num">{{ r.owed|floatformat:"2g" }}</td>
+{% if r.owed > 0 %}<td class="num"><input form="pay{{ r.shop.pk }}" name="amount" type="number" min="0.01" max="{{ r.owed|stringformat:'.2f' }}" step="0.01" value="{{ r.owed|stringformat:'.2f' }}" required style="width:130px" aria-label="Amount to pay {{ r.shop.name }}"></td>
+<td><select form="pay{{ r.shop.pk }}" name="method" aria-label="Paid from">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></td>
+<td><select form="pay{{ r.shop.pk }}" name="shop_method" aria-label="Received in">{% for m in r.shop_methods %}<option>{{ m }}</option>{% endfor %}</select></td>
+<td><button form="pay{{ r.shop.pk }}" class="primary" type="submit" data-confirm="Record this payment to {{ r.shop.name }}?">Pay</button></td>
+{% else %}<td colspan="4"><span class="badge ok">Settled</span></td>{% endif %}</tr>
+{% empty %}<tr><td colspan="6" class="empty-state">No stock has been supplied by a shop yet.</td></tr>{% endfor %}</tbody>
+{% if data.owed %}<tfoot><tr><th>Total</th><th class="num">{{ data.owed_total|floatformat:"2g" }}</th><th colspan="4"></th></tr></tfoot>{% endif %}</table>
+{% for r in data.owed %}{% if r.owed > 0 %}<form method="post" id="pay{{ r.shop.pk }}" hidden>{% csrf_token %}<input type="hidden" name="action" value="pay_shop"><input type="hidden" name="shop" value="{{ r.shop.pk }}"></form>{% endif %}{% endfor %}
+<p class="muted">{% if data.books_agree %}The Online Store's books and the shops' books agree.{% else %}<strong>The two sides do not agree. Contact support.</strong>{% endif %}</p>
+</section>
+
+<section class="panel table-scroll"><h2>Payments made to the shops</h2>
+<table><thead><tr><th>Date</th><th>Shop</th><th>Paid from</th><th>Received in</th><th class="num">Amount</th></tr></thead><tbody>
+{% for p in payments %}<tr><td>{{ p.posting_date|date:"j M Y" }}</td><td>{{ p.shop_name }}</td><td>{{ p.data.mode }}</td><td>{{ p.data.shop_mode }}</td><td class="num">{{ p.total|floatformat:"2g" }}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty-state">No payments to the shops have been recorded yet.</td></tr>{% endfor %}</tbody></table></section>
+
+<div class="online-dash-grid">
+<section class="panel table-scroll"><h2>Online Store money</h2><table><thead><tr><th>Account</th><th class="num">Balance</th></tr></thead><tbody>{% for b in data.balances %}<tr><td>{{ b.method }}</td><td class="num">{{ b.amount|floatformat:"2g" }}</td></tr>{% empty %}<tr><td colspan="2" class="empty-state">No accounts yet.</td></tr>{% endfor %}</tbody></table><p class="muted">Money received online lands here, not in a shop.</p></section>
+<section class="panel table-scroll"><h2>Money by payment method</h2><table><thead><tr><th>Method</th><th class="num">Received</th><th class="num">Refunded</th></tr></thead><tbody>{% for m in data.methods %}<tr><td>{{ m.method }}</td><td class="num">{{ m.received|floatformat:"2g" }}</td><td class="num">{{ m.refunded|floatformat:"2g" }}</td></tr>{% empty %}<tr><td colspan="3" class="empty-state">No online payments yet.</td></tr>{% endfor %}</tbody></table></section>
+</div>
+
+<div class="online-dash-grid">
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="action" value="expense"><h2>Record an online expense</h2>
+<div class="form-grid"><label>Category<select name="category" required>{% for pk,name in categories %}<option value="{{ pk }}">{{ name }}</option>{% empty %}<option value="">Open Accounts &amp; Finance once to install the categories</option>{% endfor %}</select></label><label>Amount (PKR)<input name="amount" type="number" min="0.01" step="0.01" required></label><label>Paid from<select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></label><label>Date<input type="date" name="date" value="{{ today|date:'Y-m-d' }}"></label><label>Description<input name="description" maxlength="240" placeholder="Facebook ads, courier charges…"></label></div><div class="form-actions"><button class="primary" type="submit">Save expense</button></div></form>
+<form method="post" class="panel">{% csrf_token %}<input type="hidden" name="action" value="capital"><h2>Money put into the Online Store</h2><p class="muted">Owner money that starts or tops up the Online Store's account (for refunds, expenses and paying the shops).</p>
+<div class="form-grid"><label>Amount (PKR)<input name="amount" type="number" min="0.01" step="0.01" required></label><label>Received in<select name="method">{% for m in methods %}<option>{{ m }}</option>{% endfor %}</select></label><label>Date<input type="date" name="date" value="{{ today|date:'Y-m-d' }}"></label><label>Description<input name="description" maxlength="240"></label></div><div class="form-actions"><button class="primary" type="submit">Save</button></div></form>
+</div>

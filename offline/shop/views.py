@@ -682,7 +682,7 @@ def pos_checkout(request):
                     device=Device.objects.select_for_update().get(pk=device.pk);device.warranty_days=days;device.save(update_fields=['warranty_days','modified'])
                     doc.data.setdefault('warranty',[]).append(dict(phone=product.name,device=device.code,days=days))
                 if device and 'pta_status' in row:
-                    if row['pta_status'] not in ('PTA','Non-PTA'):raise ValidationError('Choose PTA or Non-PTA for each phone.')
+                    if row['pta_status'] not in ('PTA','Non-PTA','JV'):raise ValidationError('Choose PTA, Non-PTA or JV for each phone.')
                     device=Device.objects.select_for_update().get(pk=device.pk);device.pta_status=row['pta_status'];device.save(update_fields=['pta_status','modified'])
                 Line.objects.create(document=doc,product=product,device=device,warehouse=place,
                     quantity=services.quantity(row['quantity']),rate=services.money(row['rate']))

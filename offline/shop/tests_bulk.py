@@ -71,7 +71,7 @@ class Validation(BulkBase):
     def test_row_fields_are_validated(self):
         self.check([],'at least one phone');self.check([self.row(self.product,0,1,[])],'between 1 and 100',require_imei=False)
         self.check([self.row(self.product,1,0,[imei(361)])],'more than zero');self.check([dict(self.row(self.product,1,1,[imei(362)]),grade='11')],'1 to 10')
-        self.check([dict(self.row(self.product,1,1,[imei(363)]),condition='Mint')],'valid condition');self.check([dict(self.row(self.product,1,1,[imei(364)]),pta_status='')],'PTA or Non-PTA')
+        self.check([dict(self.row(self.product,1,1,[imei(363)]),condition='Mint')],'valid condition');self.check([dict(self.row(self.product,1,1,[imei(364)]),pta_status='')],'PTA, Non-PTA or JV')
 
 
 class Screen(BulkBase):

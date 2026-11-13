@@ -62,9 +62,9 @@ def menu(path=''):
     rows=[dict(title='Online Dashboard',icon='home',url=r('online_dashboard'),items=[],open=False),
             dict(title='Orders',icon='buy',url=r('online_orders'),items=[dict(label='All Orders',url=r('online_orders'),current=False),dict(label='To Call (Unconfirmed)',url=r('online_orders')+'?status=Unconfirmed',current=False),dict(label='Confirmed',url=r('online_orders')+'?status=Confirmed',current=False),dict(label='History',url=r('online_orders')+'?status=history',current=False),dict(label='New Order (phone / WhatsApp)',url=r('online_order_new'),current=False)],open=False),
             dict(title='Online Stock',icon='stock',url=r('online_stock'),items=[],open=False),
-            dict(title='Delivery & Payments',icon='settings',url=r('online_settings'),items=[],open=False),
-            dict(title='Online Finance',icon='payments-expenses',url=r('online_money_in'),items=[dict(label='Money In',url=r('online_money_in'),current=False),dict(label='Money Out',url=r('online_money_out'),current=False),dict(label='Online Expenses',url=r('online_expenses'),current=False),dict(label='Customer Dues (COD)',url=r('online_customer_dues'),current=False),dict(label='Cash and Bank',url=r('online_cash_and_bank'),current=False),dict(label='Transaction History',url=r('online_history'),current=False),dict(label='Online Accounts & Profit',url=r('online_accounts'),current=False)],open=False),
             dict(title='Products & Photos',icon='phones',url=r('online_store'),items=[],open=False),
+            dict(title='Delivery & Payments',icon='settings',url=r('online_settings'),items=[],open=False),
+            dict(title='Online Finance',icon='payments-expenses',url=r('online_money_in'),items=[dict(label='Money In',url=r('online_money_in'),current=False),dict(label='Money Out',url=r('online_money_out'),current=False),dict(label='Online Expenses',url=r('online_expenses'),current=False),dict(label='Customer Dues (COD)',url=r('online_customer_dues'),current=False),dict(label='Cash and Bank',url=r('online_cash_and_bank'),current=False),dict(label='Transaction History',url=r('online_history'),current=False)],open=False),
             dict(title='My Account',icon='settings',url=r('password'),items=[dict(label='Name and password',url=r('password'),current=False)],open=False)]
     here=path.split('?')[0]
     for s in rows:

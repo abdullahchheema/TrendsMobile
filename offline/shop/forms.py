@@ -31,7 +31,7 @@ def sections(form):
         ('Cash count and settlement',['opening_float','counted_cash','difference_notes','mode','transaction_reference','direction','amount','sales_invoice','purchase_invoice','target_warehouse']),
         ('Invoice discount and sales tax',['invoice_discount_type','invoice_discount_value','sales_tax_rule']),
         ('Phone details',['device_type','pta_status','manufacturer_serial','regional_version','market_description','imei_1','pta_status_1','verified_on_1','evidence_1','imei_2','pta_status_2','verified_on_2','evidence_2','pta_notes']),
-        ('Condition and inspection',['condition','grade','inspection_status','inspection_date','battery_checked','battery',*DETAIL_CHOICES,'repair_history','included_accessories','inspection_notes','faults']),
+        ('Condition and inspection',['condition','inspection_status','inspection_date','battery_checked','battery',*DETAIL_CHOICES,'repair_history','included_accessories','inspection_notes','faults']),
         ('Prices and checking warranty',['asking_price','online_price','minimum_price','wholesale_price','warranty_days','warranty_terms']),
         ('Claim and notes',['device','claim_status','resolution','notes'])]
     if getattr(form,'kind',None)=='Stock Entry':groups=[('Source, destination and date',['branch','posting_date','warehouse','target_warehouse']),('Transfer reason',['notes'])]
@@ -46,7 +46,7 @@ def sections(form):
 class DeviceForm(forms.ModelForm):
     class Meta:
         model=Device
-        fields=['device_type','pta_status','condition','grade','inspection_status','inspection_date','battery_checked','battery','asking_price','online_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
+        fields=['device_type','pta_status','condition','inspection_status','inspection_date','battery_checked','battery','asking_price','online_price','minimum_price','wholesale_price','warranty_days','warranty_terms','faults']
         widgets={'inspection_date':DATE}
         labels={'asking_price':'Shop price (PKR)','online_price':'Online price (PKR, optional)'}
     def __init__(self,*args,user,**kwargs):
@@ -54,7 +54,7 @@ class DeviceForm(forms.ModelForm):
         if not costs(user):
             for key in ('minimum_price','wholesale_price'):self.fields.pop(key)
         for key in DETAIL_FIELDS:self.fields[key]=detail_field(key,self.instance.details.get(key,''))
-        self.fields['pta_status'].choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA')]
+        self.fields['pta_status'].choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA'),('JV','JV')]
         self.fields['online_price'].help_text='Leave empty to use the product online price, then the shop price.'
         self.sections=sections(self)
     def clean_asking_price(self):
@@ -141,7 +141,7 @@ class DocumentForm(forms.ModelForm):
             add('warranty_days',forms.IntegerField(min_value=0,required=False))
             for name in ('warranty_terms','faults'):add(name,forms.CharField(required=False,widget=forms.Textarea(attrs={'rows':2})))
             for name in DETAIL_FIELDS:add(name,detail_field(name))
-            add('pta_status',forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA')]))
+            add('pta_status',forms.ChoiceField(label='PTA status',choices=[('','Choose PTA status'),('PTA','PTA'),('Non-PTA','Non-PTA'),('JV','JV')]))
         if kind in ('Payment Entry','Mobile Exchange'):
             methods=ShopSettings.objects.filter(branch=branch).first() if branch else None
             add('mode',forms.ChoiceField(choices=[(x,x) for x in (methods.payment_methods if methods else ['Cash'])]))

@@ -84,7 +84,8 @@ def summary(start=None,end=None):
 def pay_shop(user,shop,amount,online_method,shop_method,when=None,note=''):
     """The Online Store pays a shop what it owes for stock supplied (at cost). Real money moves from an Online Store account to a shop account;
     both sets of books record it and the inter-shop clearing falls on both sides."""
-    if not user.is_superuser:raise ValidationError('Only the owner settles accounts between the Online Store and a shop.')
+    from . import online_access
+    if not (user.is_superuser or online_access.is_online(user)):raise ValidationError('Only the owner and the online store login settle accounts between the Online Store and a shop.')
     online=_online()
     if not online:raise ValidationError('The Online Store has no books yet.')
     if shop.is_online or not shop.enabled:raise ValidationError('Choose a shop.')

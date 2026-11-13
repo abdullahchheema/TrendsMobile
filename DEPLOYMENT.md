@@ -29,7 +29,7 @@ exposed, rotate it in the dashboard.
    `sb_publishable_…`/`sb_secret_…` keys, try them only after the legacy keys work.)
 5. **Project Settings → Database → Connection string**: choose **Transaction pooler** and note the host, which looks like
    `aws-0-<region>.pooler.supabase.com`, and the project reference (the letters in your project URL).
-6. Optional hardening: **Project Settings → Data API** → turn the Data API off. The app talks to the database directly and does not use it.
+6. **Project Settings → Data API**: keep it **on** and add `api` to **Exposed schemas**. The website reads its catalogue through it. After Part 2, run `supabase/hosted/web-views.sql` once in the SQL Editor to create the four read-only website views. Without these two steps the website says "Our catalogue is temporarily unavailable". (The ERP itself talks to the database directly; only the website needs the Data API.)
 
 Build the two connection strings (replace the UPPERCASE parts; the user is `covison_app.` followed by the project reference):
 

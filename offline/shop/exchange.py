@@ -43,7 +43,7 @@ def parse_incoming(post):
         except ValueError:raise ValidationError(f'Old phone {i}: the grade must be a number from 1 to 10.')
         if grade is not None and not 1<=grade<=10:raise ValidationError(f'Old phone {i}: the grade must be from 1 to 10.')
         pta=post.get(f'in_pta_{i}','PTA')
-        if pta not in ('PTA','Non-PTA'):raise ValidationError(f'Old phone {i}: choose PTA or Non-PTA.')
+        if pta not in ('PTA','Non-PTA','JV'):raise ValidationError(f'Old phone {i}: choose PTA, Non-PTA or JV.')
         rows.append(dict(product=variant,value=valuation,imeis=imeis[0],condition=condition,grade=grade,pta=pta,notes=post.get(f'in_notes_{i}','')[:240]))
     if not rows:raise ValidationError('Enter at least one old phone being traded in.')
     return rows
@@ -61,7 +61,7 @@ def post(data,incoming,user):
     trade_value=sum((r['value'] for r in incoming),Decimal('0.00'))
     customer=customer_names.resolve(data['party_name'],user,demo_batch=branch.demo_batch,branch=branch)
     trader=customer_names.resolve(data['party_name'],user,kind='Supplier',demo_batch=branch.demo_batch,branch=branch)
-    if data.get('pta_status') in ('PTA','Non-PTA'):phone.pta_status=data['pta_status'];phone.save(update_fields=['pta_status','modified'])
+    if data.get('pta_status') in ('PTA','Non-PTA','JV'):phone.pta_status=data['pta_status'];phone.save(update_fields=['pta_status','modified'])
     # 1. the sale, left open so the settlement can offset the trade-in value against it
     sale=s.new_doc('Sales Invoice',branch,customer=customer,seller=data['staff'],warehouse=phone.warehouse,posting_date=data['posting_date'],demo_batch=branch.demo_batch,notes=data.get('notes',''),data={'exchange':True})
     Line.objects.create(document=sale,product=phone.product,device=phone,warehouse=phone.warehouse,quantity=1,rate=price)
@@ -94,7 +94,7 @@ class ExchangeForm(forms.Form):
         phones=Device.objects.filter(branch=branch,status='Available',warehouse__isnull=False,warehouse__enabled=True,product__enabled=True).select_related('product').prefetch_related('imeis')
         self.fields['phone']=forms.ModelChoiceField(label='New phone the customer is buying',queryset=phones,empty_label='Choose a phone from stock')
         self.fields['phone'].label_from_instance=lambda d:f'{d.product.name} · '+(('IMEI '+' / '.join(i.number for i in d.imeis.all())) if d.imeis.all() else d.code)+f' · asking PKR {d.asking_price:,.0f}'
-        self.fields['pta_status']=forms.ChoiceField(label='PTA status of the new phone',choices=[('PTA','PTA'),('Non-PTA','Non-PTA')])
+        self.fields['pta_status']=forms.ChoiceField(label='PTA status of the new phone',choices=[('PTA','PTA'),('Non-PTA','Non-PTA'),('JV','JV')])
         self.fields['price']=forms.DecimalField(label='Selling price of the new phone (PKR)',min_value=Decimal('0.01'),max_digits=15,decimal_places=2)
         self.fields['posting_date']=forms.DateField(label='Date',initial=timezone.localdate,widget=forms.DateInput(format='%Y-%m-%d',attrs={'type':'date'}))
         sellers=people.filter(can_sell=True);buyers=people.filter(can_buy=True);handlers=people.filter(can_handle_payments=True)

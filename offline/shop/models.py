@@ -179,7 +179,7 @@ class Device(Record):
     warehouse=models.ForeignKey(Warehouse,on_delete=models.PROTECT,null=True,blank=True)
     status=models.CharField(max_length=30,default='Available')
     device_type=models.CharField(max_length=30,default='Used')
-    pta_status=models.CharField(max_length=20,default='Not recorded',db_default='Not recorded',choices=[('PTA','PTA'),('Non-PTA','Non-PTA'),('Not recorded','Not recorded')])
+    pta_status=models.CharField(max_length=20,default='Not recorded',db_default='Not recorded',choices=[('PTA','PTA'),('Non-PTA','Non-PTA'),('JV','JV'),('Not recorded','Not recorded')])
     condition=models.CharField(max_length=40,default='Not Inspected')
     grade=models.PositiveSmallIntegerField(null=True,blank=True,help_text='Condition grade out of 10 (10 = like new).')
     inspection_status=models.CharField(max_length=30,default='Pending')

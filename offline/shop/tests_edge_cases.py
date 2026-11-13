@@ -613,3 +613,50 @@ class OnlineOwnerRules(OrderBase):
     def test_online_screens_have_no_new_sale_or_new_purchase_buttons(self):
         self.client.force_login(self.web);self.assertNotContains(self.client.get(reverse('online_dashboard')),'New Purchase')
         self.client.force_login(self.user);self.assertNotContains(self.client.get(reverse('online_orders')),'New Purchase')
+
+
+class CustomerReturnsTheWholeOrder(OrderBase):
+    """A delivered online order comes back in full: the order becomes Returned, the phone goes back on sale after its check, and the delivery charge can be refunded."""
+    bought=real_stock.Money.bought;sell=real_stock.Money.sell
+    def setUp(self):
+        super().setUp();from . import shop_accounts;self.web=shop_accounts.create_online_login('Web Team','web-team3','Strong-pass-for-WT-77!')
+    def returned_order(self):
+        from . import returns
+        d,_=self.bought();o=self.sell(delivery_fee='500');inv=oo.dispatch(o,self.user,'TCS','TRK-1')[0];oo.deliver(o,self.user);o.refresh_from_db()
+        self.assertEqual(oo.order_status(o),'Fulfilled')
+        credit=s.submit(returns.create(inv,self.user,[str(d.pk)],'Opened box','Changed mind',warehouse=shopdefaults.warehouse(self.branch)),self.user);o.refresh_from_db();d.refresh_from_db()
+        return d,o,inv,credit
+    def test_the_order_becomes_returned_and_leaves_the_fulfilled_list(self):
+        d,o,inv,credit=self.returned_order()
+        self.assertEqual((oo.order_status(o),o.stage,o.returned_on is not None),('Returned','Returned',True));self.assertEqual(o.status,'Delivered')
+        self.client.force_login(self.web)
+        counts=self.client.get(reverse('online_orders')).context['counts'];self.assertEqual((counts['Returned'],counts['Fulfilled'],counts['Confirmed']),(1,0,0))
+        self.assertContains(self.client.get(reverse('online_orders')+'?status=Returned'),o.code);self.assertNotContains(self.client.get(reverse('online_orders')+'?status=Fulfilled'),o.code)
+        from django.test import Client
+        with self.settings(ONLINE_API_KEY='k'):
+            body=Client().get(reverse('api_online_order_status',args=[o.code]),HTTP_X_API_KEY='k').json();self.assertEqual(body['order_status'],'Returned')
+        self.assertIn('Returned by the customer',[e.kind for e in o.events.all()]);self.assertEqual(all_problems(),[])
+    def test_the_returned_phone_waits_for_its_check_then_goes_back_on_sale_everywhere(self):
+        d,o,inv,credit=self.returned_order();self.assertEqual(d.status,'Holding');self.assertEqual(real_stock.Money.web_qty(self),0)
+        self.client.force_login(self.web);page=self.client.get(reverse('online_order',args=[o.pk]));self.assertContains(page,'Checked: put back on sale')
+        self.assertContains(self.client.post(reverse('online_order',args=[o.pk]),dict(action='accept_returned',note='Works'),follow=True),'back on sale')
+        d.refresh_from_db();self.assertEqual(d.status,'Available');self.assertEqual(real_stock.Money.web_qty(self),1)                 # on the website again
+        self.assertEqual([r for r in oo.variants() if r['product']==self.product][0]['quantity'],1);self.assertNotContains(self.client.get(reverse('online_order',args=[o.pk])),'Checked: put back on sale')
+        with self.assertRaises(ValidationError):oo.accept_returned(o,self.user)                                                         # nothing is waiting any more
+        self.assertEqual(all_problems(),[])
+    def test_the_delivery_charge_stays_unless_it_is_refunded_and_then_net_sales_are_zero(self):
+        d,o,inv,credit=self.returned_order();a=online_accounts.summary()
+        self.assertEqual((a['net_sales'],a['revenue']),(Decimal('500.00'),Decimal('500.00')))                                          # the charge for a delivery that really happened
+        self.assertEqual(oo.delivery_refundable(o),Decimal('500.00'))
+        oo.refund_delivery_charge(o,self.user,'Phone was faulty');credit.refresh_from_db();a=online_accounts.summary()
+        self.assertEqual((a['net_sales'],a['revenue'],a['gross_profit'],a['credit_owed']),(0,0,0,Decimal('135500.00')));self.assertEqual(credit.outstanding,Decimal('-135500.00'))
+        self.assertIsNone(oo.delivery_refundable(o))
+        with self.assertRaises(ValidationError):oo.refund_delivery_charge(o,self.user)                                                  # only once
+        self.assertEqual(all_problems(),[])
+        online=oo.online_branch();refund=s.new_doc('Payment Entry',online,customer=inv.customer,handler=shopdefaults.shop_person(online),reference=credit,channel='Online',online_order=o,data=dict(amount='135500.00',direction='Pay',mode='Cash'))
+        from . import money,money_views;money_views._ensure_chart(self.user);money.record_voucher(self.user,online,'capital',money_views._by_code('COA-3100'),'200000','Cash',s.timezone.localdate(),'Owner money')
+        s.submit(refund,self.user);credit.refresh_from_db();self.assertEqual(credit.outstanding,0);self.assertEqual(online_accounts.summary()['credit_owed'],0);self.assertEqual(all_problems(),[])
+    def test_the_delivery_charge_cannot_be_refunded_on_an_order_that_is_not_fully_returned(self):
+        d,_=self.bought();o=self.sell(delivery_fee='500');oo.dispatch(o,self.user,'TCS','T');oo.deliver(o,self.user);o.refresh_from_db()
+        self.assertIsNone(oo.delivery_refundable(o))
+        with self.assertRaises(ValidationError):oo.refund_delivery_charge(o,self.user)
