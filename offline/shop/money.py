@@ -47,6 +47,7 @@ def classify(doc):
             return 'Customer refund'
         if doc.supplier_id:return 'Supplier payment' if direction=='Pay' else 'Supplier refund'
         return 'Other'
+    if kind=='Journal Entry' and d.get('online_settlement'):return 'Online Store settlement'
     if kind=='Voucher':
         return {'expense':'Expense','capital':'Owner funds','drawings':'Owner drawings','income':'Other income','loan_in':'Loan','loan_out':'Loan'}.get(d.get('type'),'Other')
     if kind=='Mobile Daily Closing':return 'Cash difference'
@@ -83,7 +84,7 @@ def history(branches,start=None,end=None,kind='',method='',search=''):
             row_method=f"{doc.data.get('source_method','')} → {doc.data.get('target_method',name)}";received=paid=ZERO
         else:row_method=name;received=e.debit;paid=e.credit
         rows.append(dict(date=e.posting_date,code=doc.code,doc=doc,type=label,description=describe(doc),party=party.name if party else '',received=received,paid=paid,moved=e.debit if label=='Transfer' else ZERO,
-                         method=row_method,status='Cancelled' if doc.status=='Cancelled' else 'Posted',shop=e.branch.name))
+                         method=row_method,status='Cancelled' if doc.status=='Cancelled' else 'Posted',shop=e.branch.name,linkable=doc.branch_id==e.branch_id))      # a payment the Online Store made to this shop is a record in the Online Store's books: shown here, but the shop cannot open it
     if kind:rows=[r for r in rows if r['type']==kind]
     if method:rows=[r for r in rows if method in r['method'].split(' → ')]
     if search:

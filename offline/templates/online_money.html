@@ -3,11 +3,13 @@
 <p class="sh-hint">The Online Store keeps its own books. It holds no stock: when it sells a phone from a shop, the shop gives up the stock at cost and the Online Store owes the shop that cost until it pays.</p>
 
 <div class="profit-strip" role="group" aria-label="How the online profit is made">
-  <div><small>Sold online</small><strong>PKR {{ data.revenue|floatformat:"0g" }}</strong><span>after returns, without tax</span></div>
+  <div><small>Phones sold online</small><strong>PKR {{ data.goods_revenue|floatformat:"0g" }}</strong><span>after returns, without delivery or tax</span></div>
   <b aria-hidden="true">−</b>
   <div><small>Bought from the shops</small><strong>PKR {{ data.cogs|floatformat:"0g" }}</strong><span>the shops' cost of what sold</span></div>
   <b aria-hidden="true">=</b>
-  <div class="strong"><small>Online profit</small><strong>PKR {{ data.gross_profit|floatformat:"0g" }}</strong><span>before online expenses</span></div>
+  <div class="strong"><small>Profit on the phones</small><strong>PKR {{ data.product_profit|floatformat:"0g" }}</strong><span>sold − bought from the shops</span></div>
+  <b aria-hidden="true">+</b>
+  <div><small>Delivery charges kept</small><strong>PKR {{ data.delivery_kept|floatformat:"0g" }}</strong><span>not a sale: what customers paid for delivery</span></div>
   <b aria-hidden="true">−</b>
   <div><small>Online expenses</small><strong>PKR {{ data.expenses|floatformat:"0g" }}</strong><span>ads, courier, packaging</span></div>
   <b aria-hidden="true">=</b>
@@ -18,7 +20,8 @@
 <div class="statement-cards">
   <a class="panel" href="{% url 'online_orders' %}?status=Unconfirmed"><h2>To call</h2><strong>{{ data.orders.New|default:0 }}</strong><small>New orders, not yet shipped</small></a>
   <a class="panel" href="{% url 'online_orders' %}?status=Confirmed"><h2>On the way</h2><strong>{{ data.orders.Dispatched|default:0 }}</strong><small>Dispatched, not delivered</small></a>
-  <div class="panel"><h2>Net online sales</h2><strong>PKR {{ data.net_sales|floatformat:"0g" }}</strong><small>{{ data.invoices }} invoice{{ data.invoices|pluralize }}, {{ data.returned|floatformat:"0g" }} returned</small></div>
+  <div class="panel"><h2>Net online sales</h2><strong>PKR {{ data.goods_sales|floatformat:"0g" }}</strong><small>Phones only, after returns. {{ data.invoices }} order{{ data.invoices|pluralize }}.</small></div>
+  <div class="panel"><h2>Delivery charges kept</h2><strong>PKR {{ data.delivery_kept|floatformat:"0g" }}</strong><small>Paid for delivery, not given back. Not a sale.</small></div>
   <div class="panel"><h2>Money received</h2><strong>PKR {{ data.net_received|floatformat:"0g" }}</strong><small>{{ data.received|floatformat:"0g" }} in, {{ data.refunded|floatformat:"0g" }} refunded</small></div>
   <div class="panel"><h2>Cash on delivery to collect</h2><strong>PKR {{ data.pending|floatformat:"0g" }}</strong><small>Dispatched, not yet paid</small></div>
   <div class="panel"><h2>Owed to customers</h2><strong>PKR {{ data.credit_owed|floatformat:"0g" }}</strong><small>Return credit not yet refunded or used</small></div>

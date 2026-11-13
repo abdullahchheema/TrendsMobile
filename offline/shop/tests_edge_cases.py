@@ -647,9 +647,11 @@ class CustomerReturnsTheWholeOrder(OrderBase):
     def test_the_delivery_charge_stays_unless_it_is_refunded_and_then_net_sales_are_zero(self):
         d,o,inv,credit=self.returned_order();a=online_accounts.summary()
         self.assertEqual((a['net_sales'],a['revenue']),(Decimal('500.00'),Decimal('500.00')))                                          # the charge for a delivery that really happened
+        self.assertEqual((a['goods_sales'],a['goods_revenue'],a['product_profit'],a['delivery_kept']),(0,0,0,Decimal('500.00')))      # the 500 is delivery, never a sale of phones: sales and profit on the phones are zero
         self.assertEqual(oo.delivery_refundable(o),Decimal('500.00'))
         oo.refund_delivery_charge(o,self.user,'Phone was faulty');credit.refresh_from_db();a=online_accounts.summary()
         self.assertEqual((a['net_sales'],a['revenue'],a['gross_profit'],a['credit_owed']),(0,0,0,Decimal('135500.00')));self.assertEqual(credit.outstanding,Decimal('-135500.00'))
+        self.assertEqual((a['goods_sales'],a['delivery_kept']),(0,0))
         self.assertIsNone(oo.delivery_refundable(o))
         with self.assertRaises(ValidationError):oo.refund_delivery_charge(o,self.user)                                                  # only once
         self.assertEqual(all_problems(),[])
@@ -660,3 +662,17 @@ class CustomerReturnsTheWholeOrder(OrderBase):
         d,_=self.bought();o=self.sell(delivery_fee='500');oo.dispatch(o,self.user,'TCS','T');oo.deliver(o,self.user);o.refresh_from_db()
         self.assertIsNone(oo.delivery_refundable(o))
         with self.assertRaises(ValidationError):oo.refund_delivery_charge(o,self.user)
+
+
+class ShopSeesTheOnlineStorePayment(OrderBase):
+    """When the Online Store pays a shop, the payment shows in the shop's cash list, but it is a record in the Online Store's books: no link that ends in Not Found."""
+    def test_the_payment_is_listed_without_a_link_the_shop_cannot_open(self):
+        from . import shop_accounts
+        self.phone(self.other);o=self.order([self.item()]);oo.dispatch(o,self.user,'TCS','T-9');oo.deliver(o,self.user)
+        paid=online_accounts.pay_shop(self.user,self.other,'1000','Cash','Cash')
+        shop=shop_accounts.create_login(self.other,'other-shop','Strong-pass-for-OS-77!');self.client.force_login(shop)
+        page=self.client.get(reverse('money_history'));html=page.content.decode()
+        self.assertContains(page,paid.code);self.assertContains(page,'Online Store settlement')
+        self.assertNotIn('/document/%s/'%paid.pk,html);self.assertEqual(self.client.get(reverse('detail',args=[paid.pk])).status_code,404)      # as before: the shop cannot open the Online Store's record
+        mine=[r for r in page.context['rows'] if r['code']==paid.code];self.assertEqual([r['linkable'] for r in mine],[False])
+        self.client.force_login(self.user);self.assertContains(self.client.get(reverse('money_history')+'?all=1'),paid.code)

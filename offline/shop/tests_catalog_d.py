@@ -16,11 +16,11 @@ class Catalog(TestCase):
     def test_any_brand_can_still_be_typed_manually(self):
         self.client.post(reverse('master_new',args=['Mobile Model']),dict(name='Spark 20',brand='Brand New Maker',description=''))
         self.assertEqual(PhoneModel.objects.get(name='Spark 20').brand,'Brand New Maker');self.assertTrue(Brand.objects.filter(name='Brand New Maker').exists())
-    def test_device_form_has_grade_and_repaired_type(self):
+    def test_device_form_has_no_grade_and_accepts_the_jv_pta_status(self):
         device=Device.objects.create(code='GRD',branch=self.branch,product=self.product,warehouse=self.warehouse)
-        page=self.client.get(reverse('device',args=[device.pk]));self.assertContains(page,'name="grade"')
-        self.client.post(reverse('device',args=[device.pk]),dict(device_type='Used',pta_status='PTA',condition='Good',grade='9',inspection_status='Pending',battery='0',asking_price='1000',minimum_price='0',wholesale_price='0',warranty_days='0'))
-        device.refresh_from_db();self.assertEqual(device.grade,9)
+        page=self.client.get(reverse('device',args=[device.pk]));self.assertNotContains(page,'name="grade"')      # the grade is no longer asked for
+        self.client.post(reverse('device',args=[device.pk]),dict(device_type='Used',pta_status='JV',condition='Good',inspection_status='Pending',battery='0',asking_price='1000',minimum_price='0',wholesale_price='0',warranty_days='0'))
+        device.refresh_from_db();self.assertEqual(device.pta_status,'JV')
 
 
 class LowStock(TestCase):
