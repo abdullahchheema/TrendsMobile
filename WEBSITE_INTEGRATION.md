@@ -16,8 +16,8 @@ Browser ──► Next.js (Vercel)
 
 | Variable (website Vercel project) | Value | Public? |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://xsxskhcqejutouhlallh.supabase.co` | yes |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable key (`sb_publishable_ySNqZW4cffaEDAn10RdkPg_CP5BIZ51`): **`____________`** | yes |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://YOUR-PROJECT-REF.supabase.co` | yes |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable key (`sb_publishable_YOUR_KEY`): **`____________`** | yes |
 | `ERP_API_URL` | the ERP's address, e.g. `https://trends-mobile.vercel.app` (no trailing slash) | no |
 | `ERP_API_KEY` | secret shared with the ERP (`ONLINE_API_KEY` there): **`____________`** | **NO** — server only, never `NEXT_PUBLIC_`, never in browser code or git |
 
