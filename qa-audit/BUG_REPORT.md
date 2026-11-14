@@ -17,6 +17,7 @@ Every defect the audit confirmed, in order of severity. A defect is listed as FI
 | B10 | Medium | Performance | Device Profit report: one database question per sold phone | FIXED |
 | B6 | Low | All pages | A NUL character in a search or a form caused a server error | FIXED |
 | B11 | Low | Books check | `verify_books` reported a correct supplier credit as an error | FIXED |
+| B12 | Low | Screens (found 14 Nov while testing D2) | The "busy spinner / block double click" script failed on every form with a field named `method` (Money Out, Expenses, online order, online settings, purchase return, staff commission) | FIXED |
 | P1 | Medium | Performance (live ERP) | Static files are served by the Python function with a one-minute cache | OPEN |
 | P3 | Medium | Performance | General Ledger, Stock Ledger and Sales Register render a whole period as one page | OPEN |
 | P5 | Low | Performance | Online Dashboard and Products & Photos re-check every product page on each view | OPEN |
@@ -122,6 +123,14 @@ Items that are not defects but need a decision are in `BUSINESS_RULE_REGISTER.md
 * **Actual:** "BILL-...: outstanding -166500.00 outside 0..953500.00" (found on the staging dataset the application's own generator produced).
 * **Fix:** for a supplier bill the allowed range is from minus its total to its total. A sale is still never below zero.
 * **Regression test:** `tests_audit_shop.ReturnsAndExchanges.test_stock_goes_back_to_the_supplier_against_its_own_bill` (books check clean while the bill is in credit).
+
+## B12 · The double-click guard did not run on forms with a "method" field · Low
+
+* **Module:** `offline/static/ui.js` (and the same pattern in `static/scan.js`).
+* **Reproduce:** open Money Out, press a Record button; the browser console shows `f.method.toLowerCase is not a function`.
+* **Cause:** the script read `form.method`; on a form that has a field named `method` the browser returns that field, not the form's method.
+* **Effect:** no spinner and no protection against a fast second click on those forms. The server-side request keys still stopped any duplicate posting, so nothing was ever recorded twice.
+* **Fix:** read the form's `method` attribute instead. Checked in the browser on Money Out: no error, the guard runs.
 
 ---
 

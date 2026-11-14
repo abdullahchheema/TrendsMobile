@@ -2,7 +2,8 @@
 
 * The owner adds a person to a shop. Every sale and purchase in that shop records who made it (POS, easy entry, bulk and accessory purchases).
 * Once a sale or purchase is posted, only the owner can change who it is credited to.
-* The owner sees each person's full record (every sale and purchase, with links) and the commission on their net sales."""
+* The owner sees each person's full record (every sale and purchase, with links), the commission they earned, what has been paid to them and
+  what is still to pay, and pays it straight after a sale or once a month (see commission.py)."""
 from datetime import date
 from decimal import Decimal,InvalidOperation
 from django.contrib import messages
@@ -14,7 +15,8 @@ from django.shortcuts import get_object_or_404,redirect,render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .models import Branch,Document,Staff,StaffRate
-from . import pricing,services as s
+from . import commission as cm,pricing,services as s
+from .commission import BEGINNING,rate_table,rate_on       # kept importable from here
 
 ZERO=Decimal('0.00')
 
@@ -28,20 +30,6 @@ def set_rate(person,rate,today=None):
     person.commission_rate=rate;return True
 
 
-def rate_table(person):
-    """[(day, rate)] oldest first, for finding the rate in force on any date."""
-    rows=list(person.rates.order_by('effective_from').values_list('effective_from','rate'))
-    return rows or [(BEGINNING,person.commission_rate)]
-
-
-def rate_on(table,day):
-    found=table[0][1]
-    for start,rate in table:
-        if start<=day:found=rate
-        else:break
-    return found
-
-
 def _owner(request):
     if not request.user.is_superuser:raise PermissionDenied('Only the owner manages staff and commission.')
 
@@ -49,9 +37,6 @@ def _owner(request):
 def crew(branch):
     """The people without a login who make sales and purchases in this shop."""
     return Staff.objects.filter(branch=branch,enabled=True,crew=True)
-
-
-BEGINNING=date(2000,1,1)
 
 
 def _rate(text):
@@ -100,7 +85,8 @@ def staff_list(request):
     people=[]
     for person in Staff.objects.filter(crew=True).select_related('branch').order_by('branch__name','name'):
         mine=Document.objects.filter(seller=person,kind__in=list(s.SELL),status='Submitted')
-        people.append(dict(p=person,sales=sum((pricing.net_amount(d) for d in mine.only('total','data')),ZERO),count=mine.filter(is_return=False).count()))
+        position=cm.account(person)
+        people.append(dict(p=person,sales=sum((pricing.net_amount(d) for d in mine.only('total','data')),ZERO),count=mine.filter(is_return=False).count(),pending=position['pending'],paid=position['paid']))
     return render(request,'staff_list.html',dict(title='Staff & Commission',people=people,shops=shops,transfer_shops=shops))
 
 
@@ -115,18 +101,50 @@ def _range(request):
 
 @login_required
 def staff_detail(request,pk):
-    """One person's full record: every sale and purchase they made, what was sold net of returns, and the commission it earns."""
-    _owner(request);person=get_object_or_404(Staff,pk=pk);start,end=_range(request)
-    sales=list(Document.objects.filter(seller=person,kind__in=list(s.SELL),status='Submitted',posting_date__range=[start,end]).select_related('customer','branch','reference').order_by('-posting_date','-created'))
+    """One person's full record: every sale and purchase they made, what was sold net of returns, the commission it earns, what has been paid and
+    what is still to pay. The owner pays from here: one sale's commission straight away, or everything pending at the end of a month."""
+    _owner(request);person=get_object_or_404(Staff.objects.select_related('branch'),pk=pk);start,end=_range(request)
+    if request.method=='POST':return _pay(request,person)
+    sale_rows=cm.earned_rows(person,start,end)             # net of discount and tax (the tax belongs to the government), at the rate in force on the day of the sale
+    position=cm.account(person)
+    for r in sale_rows:
+        item=position['sales'].get(r['sale_id'],{})
+        r['paid']=item.get('paid',ZERO) if not r['d'].is_return else None;r['pending']=item.get('pending',ZERO) if not r['d'].is_return else None
+        r['returned']=not r['d'].is_return and item.get('earned',ZERO)<=0 and r['earned']>0          # the sale came back: it earns nothing now
     buys=list(Document.objects.filter(buyer=person,kind='Purchase Receipt',status='Submitted',posting_date__range=[start,end]).select_related('supplier','branch').order_by('-posting_date','-created'))
-    table=rate_table(person);sale_rows=[];net=ZERO;commission=ZERO
-    for d in sales:            # net of discount and tax (the tax belongs to the government), at the rate that was in force on the day of the sale
-        earned_on=d.reference.posting_date if d.is_return and d.reference_id else d.posting_date      # a return gives back exactly what its sale earned, so it uses the rate of the day of that sale
-        amount=pricing.net_amount(d);rate=rate_on(table,earned_on);earned=(amount*rate/Decimal(100)).quantize(Decimal('0.01'))
-        sale_rows.append(dict(d=d,net=amount,rate=rate,earned=earned));net+=amount;commission+=earned
-    bought=sum((d.total for d in buys),ZERO)
-    return render(request,'staff_detail.html',dict(title=person.name,person=person,sales=sale_rows,buys=buys,net=net,bought=bought,commission=commission,start=start,end=end,
-        sale_count=sum(1 for d in sales if not d.is_return),return_count=sum(1 for d in sales if d.is_return),rates=[dict(day=a,rate=b) for a,b in reversed(table)]))
+    net=sum((r['net'] for r in sale_rows),ZERO);commission=sum((r['earned'] for r in sale_rows),ZERO)
+    period_ids={r['sale_id'] for r in sale_rows}
+    period_pending=sum((max(position['sales'][i]['pending'],ZERO) for i in period_ids if i in position['sales']),ZERO)
+    paid_in_period=cm.payments(person,start,end)
+    from django.urls import reverse
+    from .models import ShopSettings
+    methods=list((ShopSettings.objects.filter(branch=person.branch).values_list('payment_methods',flat=True).first() or {}).keys())
+    suggested=request.GET.get('pay') or (str(max(position['pending'],ZERO)) if position['pending']>0 else '')
+    return render(request,'staff_detail.html',dict(title=person.name,person=person,sales=sale_rows,buys=buys,net=net,bought=sum((d.total for d in buys),ZERO),commission=commission,start=start,end=end,
+        sale_count=sum(1 for r in sale_rows if not r['d'].is_return),return_count=sum(1 for r in sale_rows if r['d'].is_return),rates=[dict(day=a,rate=b) for a,b in reversed(rate_table(person))],
+        position=position,paid_in_period=paid_in_period,paid_period_total=sum((p.total for p in paid_in_period),ZERO),period_pending=period_pending,methods=methods,
+        suggested=suggested,pay_sale=request.GET.get('sale',''),today=timezone.localdate(),request_key=__import__('uuid').uuid4(),here=reverse('staff_detail',args=[person.pk])))
+
+
+def _pay(request,person):
+    """Record a commission payment (once per form, even if the button is pressed twice)."""
+    import uuid
+    from django.urls import reverse
+    from .views import error_text
+    from urllib.parse import urlencode
+    back=reverse('staff_detail',args=[person.pk])+'?'+urlencode({k:v for k,v in request.GET.items() if k in ('from','to')})      # back to the plain form: the sale just paid is not offered again
+    try:
+        when=date.fromisoformat(request.POST.get('date') or str(timezone.localdate()))
+        sale=None
+        if request.POST.get('sale'):sale=get_object_or_404(Document,pk=request.POST['sale'],seller=person)
+        key=uuid.UUID(request.POST.get('request_key',''))
+        payload={k:request.POST.getlist(k) for k in request.POST if k not in ('csrfmiddlewaretoken','request_key')}
+        with transaction.atomic():
+            doc=s.once(key,request.user,{'commission':str(person.pk),**payload},lambda:cm.pay(request.user,person,request.POST.get('amount'),request.POST.get('method'),when,request.POST.get('note',''),sale,request.POST.get('reference','')))
+        messages.success(request,f'Commission of PKR {doc.total:,.2f} paid to {person.name} ({doc.code}). It is recorded as an expense of {person.branch.name}.')
+    except ValueError:messages.error(request,'Enter a valid date.')
+    except (ValidationError,IntegrityError) as error:messages.error(request,error_text(error))
+    return redirect(back)
 
 
 @login_required

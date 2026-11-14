@@ -13,7 +13,7 @@ ERP repository at `63b99a4` plus the changes listed in section 6 (uncommitted). 
 | Defects found and fixed | 11: 1 high, 7 medium, 3 low (section 6) |
 | Defects open | 6 performance and hardening items, none affecting money or data (section 7) |
 | Critical defects | 0 found, 0 open |
-| Automated tests | 890 existing + **105 new** = **995**, all passing on the final clean run after the owner's decisions (section 4) |
+| Automated tests | 890 existing + **117 new** = **1,007**, all passing on the final clean run after the owner's decisions (section 4) |
 | Calculations verified against an independent oracle | 162 of 162, difference 0.00 |
 | Invariants | 21 new + 18 existing books checks + online check: clean after every scenario, after load, and on staging |
 | Concurrency | up to 32 simultaneous requests: 0 server errors, 0 double sales, 0 double reservations, books clean (measured before D4/D5/D8; the race tests were re-run after them) |
@@ -23,10 +23,13 @@ Before go-live: deploy the fixes and the three decisions below (or at least set 
 
 ### Owner's decisions of 14 Nov 2026, implemented after the audit
 
+All other open decisions (D1, D3, D6, D7, D9, D10, D11, and moves between a shop's own accounts) were decided the same day: **keep as today**. Nothing changes for them.
+
 | # | Decision | What changed |
 |---|----------|--------------|
 | D4 | Online revenue is recorded **at delivery** | Dispatch posts nothing: the phones stay in their shop's stock, Reserved, and the accessories stay held (also on the website). Delivery posts the whole sale: revenue, cost of goods, the stock leaving the shop, the debt to the shop, and the cash (COD) or the advance (prepaid). A failed delivery reverses nothing because nothing was sold: the parcel goes back on the shelf of the shop that sent it. A prepaid order that comes back keeps the delivery charge it paid for (D6, unchanged) and owes the customer the rest |
 | D5 | Prepaid money is booked **as an advance** | "Confirm payment received" books Dr the Online Store's account / Cr the customer at once; delivery applies it; a cancelled paid order keeps it as money owed back (the order history says so). A "Paid" flag sent by the website is now ignored: only the online team confirms payments |
+| D2 | Commission is earned on the sale date (as before) and **paid when the owner chooses** | Staff & Commission: each person shows earned, paid (all time and in the chosen period) and still to pay, per sale too. "Pay now" pays one sale; "Pay commission" pays everything pending (the monthly payment). A payment is an expense of the shop (Commissions and incentives) from its cash or bank, refused from an empty account; a payment for one sale settles that sale, any other the oldest sales first. A return or cancellation takes the commission back; if that sale was already paid, the person is "paid ahead" until later sales cover it. Owner only; pressing Pay twice pays once |
 | D8 | A payment from an account that does not hold the money is **refused** | One check inside every payment out (purchases at the Buy screens, bulk and accessory purchases, supplier bills, exchange differences, refunds), refused whole, under the same shop lock that serialises postings |
 
 Orders already dispatched before deployment (they were invoiced at dispatch) keep the old path for delivery and failed delivery; orders already marked paid before deployment have no advance and are received at delivery as before. Both are detected automatically.
@@ -77,7 +80,8 @@ Structural risks (not defects): the shop row lock serialises each shop's posting
 | Audit: query counts | 2 | PASS |
 | New deployment-setting test | 1 | PASS |
 | Final clean run before the owner's decisions (14 Nov) | 993 | 993 PASS |
-| **Final clean run after D4, D5, D8** (new empty database, 14 Nov) | **995** | **995 PASS** |
+| Final clean run after D4, D5, D8 (14 Nov) | 995 | 995 PASS |
+| **Final clean run after D2 commission payments** (new empty database, 14 Nov) | **1,007** | **1,007 PASS** |
 | Website: vitest / eslint / tsc | 95 / - / - | PASS / clean / clean |
 | Website: local end-to-end checks | 90 | 89 PASS, 1 noted (W1) |
 | Invariants command on the staging database | 40 checks | 40 PASS |
@@ -110,6 +114,7 @@ None critical. One high: **B4**, an overlapping year-end close moved the same pr
 | B10 | Medium | Device Profit: one query for the shops | `reports.py` |
 | B6 | Low | Requests carrying a NUL answered 400 | `requestctx.py` |
 | B11 | Low | Books check accepts a supplier bill in credit | `books_check.py` |
+| B12 | Low | Double-click guard works on forms with a "method" field | `static/ui.js`, `static/scan.js` |
 | N1 | Note | Two code comments corrected to match the pack list | `online_orders.py`, `online_views.py` |
 
 Each has a regression test that failed before the fix (`BUG_REPORT.md`). Total production-code change: 13 files, 67 lines added and 16 removed (plus two existing test files: `tests_pos.py` as explained in section 4, and one new test in `tests_deploy_settings.py`). Added: the 10 `tests_audit_*.py` modules, `manage.py audit_invariants`, and this folder.
@@ -174,17 +179,17 @@ From `BUSINESS_RULE_REGISTER.md`, with the options for each:
 
 | # | Decision |
 |---|----------|
-| D1 | One rounding rule for half a paisa (half-even on invoices, half-up elsewhere) |
-| D2 | Commission earned on sale or on payment; posted as a liability or report only |
-| D3 | Auto-release of unconfirmed online orders after a time |
+| D1 | ~~One rounding rule for half a paisa (half-even on invoices, half-up elsewhere)~~ **Decided: keep as today** |
+| D2 | ~~Commission earned on sale or on payment~~ **Decided: earned on the sale date, paid when the owner chooses** (implemented) |
+| D3 | ~~Auto-release of unconfirmed online orders after a time~~ **Decided: keep as today** |
 | D4 | ~~Online revenue at dispatch or at delivery~~ **Decided: at delivery** (implemented) |
 | D5 | ~~Book prepaid money as a customer advance~~ **Decided: yes** (implemented) |
-| D6 | Refund the delivery charge when a prepaid delivery fails |
-| D7 | Online return received by a shop other than the supplier |
-| D8 | ~~Refuse purchases paid from an account with no money~~ **Decided: refuse** (implemented). Open: the same for moves between own accounts |
-| D9 | Depreciation in the month of purchase |
-| D10 | Per-login discount and refund limits |
-| D11 | Sales tax rules (for the tax adviser) |
+| D6 | ~~Refund the delivery charge when a prepaid delivery fails~~ **Decided: keep as today** |
+| D7 | ~~Online return received by a shop other than the supplier~~ **Decided: keep as today** |
+| D8 | ~~Refuse purchases paid from an account with no money~~ **Decided: refuse** (implemented). Moves between own accounts: **keep as today** |
+| D9 | ~~Depreciation in the month of purchase~~ **Decided: keep as today** |
+| D10 | ~~Per-login discount and refund limits~~ **Decided: keep as today** |
+| D11 | ~~Sales tax rules (for the tax adviser)~~ **Decided: keep as today** |
 
 ## 14. Database migrations required
 

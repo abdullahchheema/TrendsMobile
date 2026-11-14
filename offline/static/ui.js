@@ -37,7 +37,7 @@
 
   /* ---- submit feedback: spinner on the pressed button, block double submits ---- */
   document.addEventListener('submit',function(e){
-    var f=e.target;if(e.defaultPrevented||f.dataset.noLoading!==undefined||f.method.toLowerCase()!=='post'||!f.checkValidity())return;
+    var f=e.target;if(e.defaultPrevented||f.dataset.noLoading!==undefined||(f.getAttribute('method')||'get').toLowerCase()!=='post'||!f.checkValidity())return;
     var b=e.submitter||f.querySelector('button[type=submit],button:not([type])');if(!b||b.classList.contains('is-loading'))return;
     setTimeout(function(){b.classList.add('is-loading');b.setAttribute('aria-busy','true')},0);
     setTimeout(function(){b.classList.remove('is-loading');b.removeAttribute('aria-busy')},15000);

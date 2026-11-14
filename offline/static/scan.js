@@ -73,7 +73,7 @@
     if (field.tagName === 'INPUT') {
       field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));   // the POS and purchase screens move on after a scan
       var form = field.form;
-      if (form && form.method.toLowerCase() === 'get' && field.type === 'search' && form.requestSubmit) form.requestSubmit();
+      if (form && (form.getAttribute('method') || 'get').toLowerCase() === 'get' && field.type === 'search' && form.requestSubmit) form.requestSubmit();
     }
     field.focus();
   }
