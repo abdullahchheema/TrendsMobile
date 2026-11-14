@@ -1,0 +1,455 @@
+{
+ "site": "http://localhost:3111",
+ "results": [
+  {
+   "check": "page / opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page / carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /ur opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /ur carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /p/iphone-11 opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /p/iphone-11 carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /ur/p/iphone-11 opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /ur/p/iphone-11 carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /cart opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /cart carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /checkout opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /checkout carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /orders opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /orders carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /help opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /help carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /search?q=iphone opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /search?q=iphone carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /deals opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /deals carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /about opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /about carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /promise opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /promise carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /trade-in opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /trade-in carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /journal opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /journal carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /legal/privacy opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /legal/privacy carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /legal/terms opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /legal/terms carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /robots.txt opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /robots.txt carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "page /sitemap.xml opens",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "page /sitemap.xml carries no server secret",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "Urdu page is right-to-left",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "unknown product is kept out of search engines (404, or 200 marked noindex)",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "unknown product answers with HTTP 404",
+   "status": "NOTE",
+   "detail": "answered 200: the page is streamed, so \"not found\" arrives after the 200 was sent; Next marks it noindex"
+  },
+  {
+   "check": "/en redirects to the default address",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "cart: 2 x 4500 + 250 delivery = 9250",
+   "status": "PASS",
+   "detail": "{'subtotal': 9000, 'shipping': 250, 'total': 9250}"
+  },
+  {
+   "check": "cart: delivery is free from 30,000",
+   "status": "PASS",
+   "detail": "{'subtotal': 39500, 'shipping': 0, 'total': 39500}"
+  },
+  {
+   "check": "cart: a variant key with a made-up price is not sold",
+   "status": "PASS",
+   "detail": "{'subtotal': 0, 'shipping': 0, 'total': 0}"
+  },
+  {
+   "check": "cart: the same variant twice becomes one line of two",
+   "status": "PASS",
+   "detail": "{'subtotal': 9000, 'shipping': 250, 'total': 9250}"
+  },
+  {
+   "check": "cart: invalid body refused {\"items\": [{\"key\": \"401||||4500.00\", \"qt",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "cart: invalid body refused {\"items\": [{\"key\": \"401||||4500.00\", \"qt",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "cart: invalid body refused {\"items\": [{\"key\": \"401||||4500.00\", \"qt",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "cart: invalid body refused {\"items\": [{\"key\": \"401||||4500.00\", \"qt",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "cart: invalid body refused {\"items\": \"x\"}",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "cart: invalid body refused []",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "checkout: a valid cash-on-delivery order is accepted",
+   "status": "PASS",
+   "detail": "{'order': {'ref': 'TM-4B1E006425924CEE-5KVQIY', 'total': 4750, 'status': 'New'}}"
+  },
+  {
+   "check": "checkout: the ERP reserved exactly one unit",
+   "status": "PASS",
+   "detail": "(60, 59)"
+  },
+  {
+   "check": "checkout: the same order sent again is the same order, not a second one",
+   "status": "PASS",
+   "detail": "{'order': {'ref': 'TM-4B1E006425924CEE-5KVQIY', 'total': 4750, 'status': 'New'}}"
+  },
+  {
+   "check": "checkout: a total the server does not agree with is refused",
+   "status": "PASS",
+   "detail": "{'error': {'code': 'PRICE_CHANGED', 'message': 'The price changed. Please review your cart and confirm again.'}}"
+  },
+  {
+   "check": "checkout: a made-up price is refused",
+   "status": "PASS",
+   "detail": "{'error': {'code': 'OUT_OF_STOCK', 'message': 'Some items are no longer available. Please review your cart.'}}"
+  },
+  {
+   "check": "checkout: more than is in stock is refused",
+   "status": "PASS",
+   "detail": "{'error': {'code': 'PRICE_CHANGED', 'message': 'The price changed. Please review your cart and confirm again.'}}"
+  },
+  {
+   "check": "checkout: extra fields (fee 0, discount, \"Paid\") are ignored; the customer still owes 4750",
+   "status": "PASS",
+   "detail": "{'order': {'ref': 'TM-1BFF7F16CF574B9E-FSIPKI', 'total': 4750, 'status': 'New'}}"
+  },
+  {
+   "check": "checkout: the order the ERP holds is unpaid and for the full amount",
+   "status": "PASS",
+   "detail": "{'order': 'ON-00014', 'external_ref': 'TM-1BFF7F16CF574B9E-FSIPKI', 'status': 'New', 'payment_status': 'Unpaid', 'courier': None, 'tracking': None, 'total': 4750, 'placed_on': '2026-11-13T23:19:24.801Z', 'dispatched_on': None, 'delivered_on': None}"
+  },
+  {
+   "check": "checkout: the province fee applies (Sindh 400)",
+   "status": "PASS",
+   "detail": "{'order': {'ref': 'TM-7151A6BE72A64D37-VY7WDR', 'total': 4900, 'status': 'New'}}"
+  },
+  {
+   "check": "checkout: the default fee for a province with its own fee is refused",
+   "status": "PASS",
+   "detail": "{'error': {'code': 'PRICE_CHANGED', 'message': 'The price changed. Please review your cart and confirm again.'}}"
+  },
+  {
+   "check": "checkout: free delivery at 39,500",
+   "status": "PASS",
+   "detail": "{'order': {'ref': 'TM-28577DB05283403F-KQ2QPA', 'total': 39500, 'status': 'New'}}"
+  },
+  {
+   "check": "checkout: invalid phone is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Enter a valid Pakistani mobile number'}})"
+  },
+  {
+   "check": "checkout: landline is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Enter a valid Pakistani mobile number'}})"
+  },
+  {
+   "check": "checkout: missing address is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Enter house number, street and area'}})"
+  },
+  {
+   "check": "checkout: missing province is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Choose a province'}})"
+  },
+  {
+   "check": "checkout: unknown province is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Choose a province'}})"
+  },
+  {
+   "check": "checkout: unknown payment method is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Choose a payment method'}})"
+  },
+  {
+   "check": "checkout: short name is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Enter your full name'}})"
+  },
+  {
+   "check": "checkout: honeypot filled is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Please check your details and try again.'}})"
+  },
+  {
+   "check": "checkout: no items is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Your cart is empty.'}})"
+  },
+  {
+   "check": "checkout: fractional quantity is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Invalid input: expected int, received number'}})"
+  },
+  {
+   "check": "checkout: negative quantity is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Too small: expected number to be >=1'}})"
+  },
+  {
+   "check": "checkout: negative total is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Too small: expected number to be >=0'}})"
+  },
+  {
+   "check": "checkout: bad order id is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Invalid order id'}})"
+  },
+  {
+   "check": "checkout: 41 lines is refused before the ERP is asked",
+   "status": "PASS",
+   "detail": "(400, {'error': {'code': 'INVALID', 'message': 'Too big: expected array to have <=40 items'}})"
+  },
+  {
+   "check": "checkout: an empty body is refused",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "checkout: a payment method the shop does not offer today is refused",
+   "status": "PASS",
+   "detail": "{'error': {'code': 'CONFLICT', 'message': 'That payment method is not available right now. Please choose another.'}}"
+  },
+  {
+   "check": "checkout: the ninth order in ten minutes from one address is slowed down",
+   "status": "PASS",
+   "detail": "[201, 201, 201, 201, 201, 201, 201, 201, 429, 429]"
+  },
+  {
+   "check": "tracking: the right number and phone show the order",
+   "status": "PASS",
+   "detail": "{'order': {'ref': 'TM-4B1E006425924CEE-5KVQIY', 'status': 'New', 'orderStatus': None, 'stage': None, 'paymentStatus': 'Unpaid', 'courier': None, 'tracking': None, 'total': 4750, 'placedOn': '2026-11-13T23:19:24.379Z', 'dispatchedOn': None, 'deliveredOn': None}}"
+  },
+  {
+   "check": "tracking: only status fields are shown (no name, address or phone)",
+   "status": "PASS",
+   "detail": "['courier', 'deliveredOn', 'dispatchedOn', 'orderStatus', 'paymentStatus', 'placedOn', 'ref', 'stage', 'status', 'total', 'tracking']"
+  },
+  {
+   "check": "tracking: the phone may be written either way",
+   "status": "PASS",
+   "detail": ""
+  },
+  {
+   "check": "tracking: a wrong phone and an unknown order give the same answer",
+   "status": "PASS",
+   "detail": "((404, {'error': {'code': 'NOT_FOUND', 'message': \"We couldn't find an order with that number and mobile number.\"}}), (404, {'error': {'code': 'NOT_FOUND', 'message': \"We couldn't find an order with that number and mobile number.\"}}))"
+  },
+  {
+   "check": "tracking: a changed check code is refused",
+   "status": "PASS",
+   "detail": "404"
+  },
+  {
+   "check": "tracking: the phone is required",
+   "status": "PASS",
+   "detail": "400"
+  },
+  {
+   "check": "tracking: guessing is cut off after 20 tries from one address",
+   "status": "PASS",
+   "detail": "[404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 404, 429, 429, 429]"
+  },
+  {
+   "check": "revalidate: refused without the key",
+   "status": "PASS",
+   "detail": "401"
+  },
+  {
+   "check": "revalidate: refused with a wrong key",
+   "status": "PASS",
+   "detail": "401"
+  },
+  {
+   "check": "revalidate: accepted with the key",
+   "status": "PASS",
+   "detail": "200"
+  },
+  {
+   "check": "store settings: delivery pricing and payment accounts, nothing secret",
+   "status": "PASS",
+   "detail": "['delivery', 'paymentMethods']"
+  },
+  {
+   "check": "cart: asking for more than the stock left is flagged",
+   "status": "PASS",
+   "detail": "{'subtotal': 225000, 'shipping': 0, 'total': 225000}"
+  }
+ ]
+}

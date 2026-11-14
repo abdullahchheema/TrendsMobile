@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fixtures,fund,imei
 from . import credit,easy_retail,services as s
 
 
@@ -20,6 +20,7 @@ class CreditBase(TestCase):
         self.n+=1
         data=dict(branch=self.branch,party_name='Credit Supplier',product=self.product,quantity=1,price=cost,asking_price=90000,pta_status='PTA',device_type='Used',condition='Good',warehouse=self.warehouse,staff=self.buyer,handler=self.handler,
                   posting_date=self.today,payment_status='full',method='Cash',imeis=[[imei(500+self.n)]])
+        fund(self.branch,self.user,cost)      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         return easy_retail.purchase(data,self.user).reference.lines.get().device
     def sale(self,price=60000,paid='unpaid',amount=None,name='Credit Customer',on=None,**extra):
         data=dict(branch=self.branch,party_name=name,phone=self.phone(),price=price,pta_status='PTA',staff=self.seller,handler=self.handler,posting_date=on or self.today,payment_status=paid,method='Cash');data.update(extra)

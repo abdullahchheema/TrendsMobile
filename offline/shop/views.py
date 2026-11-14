@@ -124,6 +124,7 @@ def collection(request,kind):
         if kind in ('Customer','Supplier'):objects=access.scoped_parties(request.user).filter(kind=kind)
         if kind in ('Mobile Staff','Warehouse','Till'):objects=objects.filter(branch__in=access.branches(request.user))
         if kind=='Shop':objects=Branch.objects.filter(is_online=False) if request.user.is_superuser else access.branches(request.user)
+        if any(f.name=='branch' for f in objects.model._meta.fields):objects=objects.select_related('branch')       # the shop's name is shown on every row: fetch it with the rows, not once per row
         rows=[dict(id=o.pk,code=o.code,name=o.name,state=getattr(o,'designation','') or ('Active' if getattr(o,'enabled',True) else 'Inactive'),party=str(getattr(o,'branch','')),amount=None) for o in objects.order_by('code')]
     elif kind in KINDS:
         objects=scoped(request.user).filter(kind__in=services.SELL if kind=='Sales Invoice' else [kind]).select_related('customer','supplier').order_by('-posting_date','-created')
@@ -698,10 +699,19 @@ def pos_checkout(request):
                 from datetime import date as _date
                 credit.plan(sale,request.user,terms.get('instalments') or 0,_date.fromisoformat(terms['due_date']))
             return sale
-        result=services.once(uuid.UUID(data['request_key']),request.user,data,perform)
+        try:result=services.once(uuid.UUID(data['request_key']),request.user,data,perform)
+        except PermissionDenied as error:
+            # A sale that needs an approval (over the customer's credit limit, below a phone's minimum price) is refused with the reason. The screen
+            # only shows a reason that arrives as JSON with status 400; an HTML 403 page made it say the result was uncertain and ask for a retry for ever.
+            # Who may use this shop at all is still decided above and still answers 403.
+            return JsonResponse({'error':str(error) or 'This sale needs a manager to approve it.'},status=400)
         return JsonResponse(dict(id=str(result.pk),code=result.code,total=str(result.total),outstanding=str(result.outstanding),shop=result.branch.name,url=reverse('detail',args=[result.pk]),receipt=reverse('receipt',args=[result.pk])))
     except (ValidationError,IntegrityError,ValueError,KeyError,TypeError,AttributeError,ObjectDoesNotExist) as error:  # ValueError covers malformed JSON
         return JsonResponse({'error':'Invalid checkout request.' if isinstance(error,(TypeError,AttributeError)) else error_text(error)},status=400)
+    except Http404:
+        # The phone was moved to another shop, or the shop is not this login's, after the page was opened. Nothing was sold. The screen needs a reason
+        # it can show (JSON, status 400); an HTML 'not found' page made it report an uncertain result and ask the cashier to retry the same sale.
+        return JsonResponse({'error':'An item in this sale is no longer in this shop (it may have been transferred or sold). Reload the page and try again.'},status=400)
 
 @login_required
 def evidence(request,pk):

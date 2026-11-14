@@ -133,7 +133,10 @@ def dispose_asset(user,asset,on,proceeds,mode,reference=''):
     book=asset.cost-asset.accumulated;loss=book-proceeds
     if proceeds>0:
         vouchers.post(dict(branch=asset.branch,type='asset_sale',posting_date=on,amount=proceeds,account=str(asset.asset_account.pk),mode=mode,reference=reference,description=f'Sale of {asset.name}'),user)
-    lines=[(asset.accumulated_account,asset.accumulated,ZERO),(asset.asset_account,ZERO,asset.cost-proceeds)]
+    # The sale voucher above already took `proceeds` out of the asset account. What is left of the cost comes out here; when the asset sold for
+    # more than it cost, the voucher took out too much and the difference goes back in (a ledger row is never negative).
+    rest=asset.cost-proceeds
+    lines=[(asset.accumulated_account,asset.accumulated,ZERO),(asset.asset_account,ZERO,rest) if rest>=0 else (asset.asset_account,-rest,ZERO)]
     if loss>0:lines.append((_default('COA-6900','loss on disposal'),loss,ZERO))
     elif loss<0:lines.append((_default('COA-4900','gain on disposal'),ZERO,-loss))
     lines=[l for l in lines if l[1] or l[2]]

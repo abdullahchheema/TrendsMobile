@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import coa,ledgers,vouchers,easy_retail,services as s
 
 
@@ -20,6 +20,7 @@ class LedgerBase(TestCase):
         data=dict(branch=self.branch,party_name='Ledger Supplier',product=self.product,quantity=1,price=price,asking_price=80000,pta_status='PTA',device_type='Used',condition='Good',warehouse=self.warehouse,staff=self.buyer,handler=self.handler,
                   posting_date=on or self.today,payment_status=paid,method='Cash',imeis=[[imei(number)]])
         if amount:data['amount_paid']=amount
+        if paid!='unpaid':fund(self.branch,self.user,price if paid=='full' else amount)      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         return easy_retail.purchase(data,self.user)
     def sell(self,device,price=70000,paid='unpaid',amount=None,on=None):
         data=dict(branch=self.branch,party_name='Ledger Customer',phone=device,price=price,pta_status='PTA',staff=self.seller,handler=self.handler,posting_date=on or self.today,payment_status=paid,method='Cash')

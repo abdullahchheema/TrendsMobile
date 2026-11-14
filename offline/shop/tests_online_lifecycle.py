@@ -93,7 +93,7 @@ class Lifecycle(OrderBase):
         o.refresh_from_db();self.assertEqual((o.lines.get().unit_price,o.total),(Decimal('100000.00'),Decimal('100000.00')))
     def test_a_return_request_moves_no_stock_and_a_returned_phone_waits_in_holding(self):
         from . import returns
-        d=self.phone(self.branch);o=self.order([self.item()]);inv=oo.dispatch(o,self.user,'TCS','T')[0];oo.deliver(o,self.user)
+        d=self.phone(self.branch);o=self.order([self.item()]);inv=self.ship(o)
         oo.request_return(o,self.user,'Not as described');d.refresh_from_db();o.refresh_from_db();self.assertEqual((d.status,oo.display_stage(o)),('Sold','Return Requested'))
         ret=s.submit(returns.create(inv,self.user,[str(d.pk)],'Screen scratched','Not as described'),self.user);d.refresh_from_db()
         self.assertEqual(d.status,'Holding');self.assertEqual(oo.display_stage(o),'Returned')

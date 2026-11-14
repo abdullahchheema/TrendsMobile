@@ -31,6 +31,13 @@ def fixtures():
     product=Product.objects.create(code='IPHONE',name='iPhone 13 128GB',model=model,serialized=True)
     return dict(user=user,branch=branch,warehouse=warehouse,till=till,buyer=buyer,seller=seller,handler=handler,customer=customer,supplier=supplier,product=product)
 
+def fund(branch,user,amount='1000000',mode='Cash'):
+    """Owner money put into a test shop. A payment can only leave an account that holds the money (decision D8), so a test that pays a supplier
+    from a shop starts here, as a real shop starts with the owner's capital."""
+    capital,_=Account.objects.get_or_create(code='TEST-CAPITAL',defaults=dict(name='Owner capital (tests)',account_type='Equity',root_type='Equity'))
+    doc=s.new_doc('Voucher',branch,notes='Owner capital for the test',data=dict(type='capital',amount=str(amount),account=str(capital.pk),mode=mode,description='Owner capital for the test'))
+    return s.submit(doc,user)
+
 def imei(n):
     body='99000019'+f'{n:06d}'
     return next(body+str(c) for c in range(10) if s.valid_imei(body+str(c)))
@@ -57,6 +64,8 @@ class Workflows(TestCase):
         bill=s.supplier_bill(receipt,self.user);self.assertEqual(s.supplier_bill(receipt,self.user),bill)
         s.submit(bill,self.user)
         pe=s.new_doc('Payment Entry',self.branch,supplier=self.supplier,handler=self.handler,reference=bill,data=dict(amount='20000',direction='Pay',mode='Cash'))
+        with self.assertRaisesMessage(ValidationError,'has only'):s.submit(pe,self.user)          # nothing in the till yet: refused (D8)
+        fund(self.branch,self.user,'20000');pe.refresh_from_db()
         s.submit(pe,self.user);bill.refresh_from_db();self.assertEqual(bill.outstanding,30000);self.assert_balanced()
     def test_duplicate_imei_rolls_back_receiving(self):
         self.intake();before=(Device.objects.count(),Document.objects.count(),StockMovement.objects.count())

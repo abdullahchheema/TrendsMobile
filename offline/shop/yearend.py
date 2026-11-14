@@ -41,6 +41,9 @@ def close_year(user,branch,start,end,retained):
     if retained.root_type!='Equity' or retained.is_group or not retained.enabled:raise ValidationError('Choose an active equity account for retained earnings.')
     if Document.objects.filter(branch=branch,kind='Journal Entry',data__year_end_close=True,status='Submitted',data__to__gte=str(end)).exists():
         raise ValidationError('This period has already been closed.')
+    earlier=Document.objects.filter(branch=branch,kind='Journal Entry',data__year_end_close=True,status='Submitted',data__to__gte=str(start)).order_by('-data__to').first()
+    if earlier:       # the profit of those days is already in retained earnings; closing them again would move it a second time
+        raise ValidationError(f'This shop is already closed through {date.fromisoformat(earlier.data["to"]):%d %b %Y}. Start the new period on the day after that.')
     rows=_movements(branch,start,end)
     if not rows:raise ValidationError('There is no income or expense in this period to close.')
     doc=s.new_doc('Journal Entry',branch,posting_date=end,status='Submitted',posted_by=user,notes=f'Year-end closing {start:%d %b %Y} to {end:%d %b %Y}',data={'year_end_close':True,'from':str(start),'to':str(end),'retained_earnings':str(retained.pk)})

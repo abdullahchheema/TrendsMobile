@@ -57,7 +57,9 @@ class Checkout(PosBase):
         device=self.stock();self.login(self.a);self.assertEqual(self.checkout(self.payload(device)).status_code,200)
         again=self.checkout(self.payload(device));self.assertEqual(again.status_code,400)
         other=Device.objects.create(code='OTHER-ONLY',product=self.product,warehouse=Warehouse.objects.get(branch=self.other),branch=self.other,status='Available',purchase_cost=1)
-        self.assertEqual(self.checkout(self.payload(other)).status_code,404)
+        refused=self.checkout(self.payload(other))      # refused with a reason the New Sale screen can show (it was an HTML 404 page, which the screen reported as an uncertain result)
+        self.assertEqual(refused.status_code,400);self.assertIn('no longer in this shop',refused.json()['error'])
+        other.refresh_from_db();self.assertEqual((other.status,other.sale_id),('Available',None))
     def test_same_request_key_posts_once(self):
         self.fund();device=self.stock();self.login(self.a);data=self.payload(device);one=self.checkout(data);two=self.checkout(data)
         self.assertEqual(one.json()['id'],two.json()['id']);self.assertEqual(Document.objects.filter(kind='Sales Invoice',customer__name='Pos Customer').count(),1)

@@ -87,8 +87,8 @@ def order(request,pk):
             elif action=='dispatch':
                 courier=' '.join(request.POST.get('courier','').split());tracking=' '.join(request.POST.get('tracking','').split())
                 if not courier or not tracking:raise ValidationError('Enter the courier company and the tracking number (or the rider name) before dispatching.')
-                made=oo.dispatch(o,request.user,courier,tracking,request.POST.get('notes',''))
-                messages.success(request,f'Dispatched. {len(made)} invoice{"s" if len(made)!=1 else ""} posted in the supplying shop{"s" if len(made)!=1 else ""}.')
+                oo.dispatch(o,request.user,courier,tracking,request.POST.get('notes',''))
+                messages.success(request,'Dispatched. The phones stay reserved in their shop; the sale is recorded when the order is delivered.')
             elif action=='stage':oo.set_stage(o,request.user,request.POST.get('stage',''),request.POST.get('note',''));messages.success(request,'Order updated.')
             elif action=='shipment':oo.update_shipment(o,request.user,request.POST.get('courier',''),request.POST.get('tracking',''),request.POST.get('notes',''));messages.success(request,'Courier and tracking saved.')
             elif action=='return_request':oo.request_return(o,request.user,request.POST.get('note',''));messages.success(request,'Return request recorded. Nothing moves in stock until the phone is received and inspected.')
@@ -96,21 +96,21 @@ def order(request,pk):
             elif action=='receive_returned':
                 from datetime import date as _date
                 from .models import Warehouse
-                warehouse=get_object_or_404(Warehouse,pk=request.POST.get('warehouse'),enabled=True)
+                warehouse=get_object_or_404(Warehouse,pk=request.POST.get('warehouse'),enabled=True) if request.POST.get('warehouse') else None
                 charge=request.POST.get('courier_charge','').strip();category=None
                 if charge:category=get_object_or_404(Account,pk=request.POST.get('category'))
                 oo.receive_returned(o,request.user,warehouse,request.POST.get('condition',''),request.POST.get('resale','hold'),request.POST.get('note',''),charge or None,category,request.POST.get('method'),_date.today())
-                messages.success(request,'Returned phone received. The sale is reversed and the phone is back in that shop at its original cost.')
+                messages.success(request,'Returned parcel received. The phones are back in the shop that sent them, at their original cost.')
             elif action=='accept_returned':oo.accept_returned(o,request.user,request.POST.get('note',''));messages.success(request,'The returned phone is back on sale in its shop and on the website.')
             elif action=='refund_delivery':oo.refund_delivery_charge(o,request.user,request.POST.get('note',''));messages.success(request,'The delivery charge was added to what is owed back to the customer. Refund it from the return.')
-            elif action=='deliver':oo.deliver(o,request.user,request.POST.get('method','Cash'));messages.success(request,'Marked delivered; any cash on delivery is now recorded as received.')
+            elif action=='deliver':oo.deliver(o,request.user,request.POST.get('method','Cash'));messages.success(request,'Delivered. The sale is recorded now; cash on delivery is recorded as received, or the advance payment is used.')
             else:raise ValidationError('Unknown action.')
         except (ValidationError,IntegrityError,ValueError) as error:messages.error(request,_err(error))
         return redirect('online_order',pk=o.pk)
     o.refresh_from_db()
     lines=oo.order_lines(o);invoices=list(oo.invoices(o))
     returns=list(Document.objects.filter(online_order=o,is_return=True,kind__in=list(s.SELL)).exclude(status='Cancelled').select_related('branch').order_by('created'))
-    methods=sorted({m for b in {i.branch for i in invoices} for m in (ShopSettings.objects.filter(branch=b).first().payment_methods if ShopSettings.objects.filter(branch=b).exists() else {})}) or ['Cash']
+    methods=sorted((ShopSettings.objects.filter(branch=oo.online_branch()).values_list('payment_methods',flat=True).first() or {}).keys()) or ['Cash']      # the delivery money goes into the Online Store's own accounts
     def flat(v):
         if isinstance(v,dict):return ', '.join(f'{k}: {flat(x)}' for k,x in v.items())
         if isinstance(v,list):return ', '.join(flat(x) for x in v)
@@ -118,16 +118,19 @@ def order(request,pk):
     extra_rows=[(str(k).replace('_',' ').capitalize(),flat(v)) for k,v in (o.extra or {}).items() if v not in ('',None,[],{})]
     return render(request,'online_order.html',dict(title=o.code,o=o,stage=oo.display_stage(o),primary=oo.order_status(o),events=list(o.events.select_related('user')),shipped_stages=oo.SHIPPED_STAGES,failed=oo.FAILED,receiving=_receiving(o),holding=oo.returned_devices(o),delivery_refundable=oo.delivery_refundable(o),cancel_reasons=oo.CANCEL_REASONS,unconfirmed=o.status==OnlineOrder.NEW and o.confirmed_at is None,extra_rows=extra_rows,lines=lines,invoices=invoices,returns=returns,methods=methods,
         candidates=list(_candidates(o)) if o.status==OnlineOrder.NEW and not o.exchange_credit_id else [],prepaid=o.payment_method!='Cash on Delivery',
-        outstanding=sum((i.outstanding for i in invoices if i.outstanding>0),Decimal(0))))
+        outstanding=sum((i.outstanding for i in invoices if i.outstanding>0),Decimal(0)) or (o.total if o.status==OnlineOrder.DISPATCHED and not invoices and o.payment_method=='Cash on Delivery' else Decimal(0)),
+        advance=sum((s.money(d.data.get('unallocated')) for d in oo.advances(o)),Decimal(0))))
 
 
 def _receiving(o):
-    """What the 'phone came back' form needs: the shops that can receive it, the expense categories and the Online Store's payment methods."""
+    """What the 'phone came back' form needs: where the parcel goes back to, the expense categories and the Online Store's payment methods. A parcel
+    goes back to the shop that sent it; only an order invoiced at dispatch (before 14 Nov 2026) still lets you choose."""
     if o.status!=OnlineOrder.DISPATCHED or o.stage!=oo.FAILED:return None
     from . import money_views
     from .models import Warehouse
-    online=oo.online_branch()
-    return dict(warehouses=[(w.pk,w.branch.name) for w in Warehouse.objects.filter(enabled=True,branch__enabled=True,branch__is_online=False).select_related('branch').order_by('branch__name')],
+    online=oo.online_branch();legacy=oo._invoiced(o) is not None
+    senders=sorted({a.branch.name for l in o.lines.all() for a in l.allocations.select_related('branch')})
+    return dict(legacy=legacy,senders=senders,warehouses=[(w.pk,w.branch.name) for w in Warehouse.objects.filter(enabled=True,branch__enabled=True,branch__is_online=False).select_related('branch').order_by('branch__name')] if legacy else [],
                 categories=list(money_views._accounts('Expense',('COA-6950','COA-5200')).values_list('pk','name')) if Account.objects.filter(code='COA-6750').exists() else [],
                 methods=list(ShopSettings.objects.get(branch=online).payment_methods))
 
@@ -296,7 +299,7 @@ def finance_views():
 # ------------------------------------------------------------------ shops: what to pack (read only) and the live state every screen polls
 @login_required
 def shop_orders(request):
-    """A shop sees only the online orders that hold its own stock: what to pack, the phone codes and IMEIs, and the courier once dispatched. No customer, no money."""
+    """A shop sees only the online orders that hold its own stock: what to pack, the phone codes and IMEIs, who it is delivered to, and the courier once dispatched. No prices, no payments."""
     from . import access
     person=access.staff(request.user)
     if person is None:return redirect('online_orders') if online_access.can_use_online(request.user) else redirect('dashboard')

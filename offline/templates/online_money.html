@@ -23,7 +23,8 @@
   <div class="panel"><h2>Net online sales</h2><strong>PKR {{ data.goods_sales|floatformat:"0g" }}</strong><small>Phones only, after returns. {{ data.invoices }} order{{ data.invoices|pluralize }}.</small></div>
   <div class="panel"><h2>Delivery charges kept</h2><strong>PKR {{ data.delivery_kept|floatformat:"0g" }}</strong><small>Paid for delivery, not given back. Not a sale.</small></div>
   <div class="panel"><h2>Money received</h2><strong>PKR {{ data.net_received|floatformat:"0g" }}</strong><small>{{ data.received|floatformat:"0g" }} in, {{ data.refunded|floatformat:"0g" }} refunded</small></div>
-  <div class="panel"><h2>Cash on delivery to collect</h2><strong>PKR {{ data.pending|floatformat:"0g" }}</strong><small>Dispatched, not yet paid</small></div>
+  <div class="panel"><h2>Cash on delivery to collect</h2><strong>PKR {{ data.pending|floatformat:"0g" }}</strong><small>Dispatched, not yet delivered and paid</small></div>
+  <div class="panel"><h2>Paid in advance</h2><strong>PKR {{ data.advances|floatformat:"0g" }}</strong><small>Prepaid orders not delivered yet, or money to refund</small></div>
   <div class="panel"><h2>Owed to customers</h2><strong>PKR {{ data.credit_owed|floatformat:"0g" }}</strong><small>Return credit not yet refunded or used</small></div>
   <div class="panel"><h2>Owed to the shops</h2><strong>PKR {{ data.owed_total|floatformat:"0g" }}</strong><small>Cost of stock supplied, not yet paid</small></div>
 </div>

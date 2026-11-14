@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import bulk,services as s
 
 
@@ -44,7 +44,7 @@ class Posting(BulkBase):
         bill=bulk.post(self.data(),rows,self.user);self.assertEqual(bill.total,Decimal('100000.00'))
         self.assertEqual(sorted(d.purchase_cost for d in Device.objects.all()),[Decimal('33333.33'),Decimal('33333.33'),Decimal('33333.34')])
     def test_part_payment_and_supplier_balance(self):
-        rows=bulk.parse_rows(json.dumps([self.row(self.product,2,50000,[imei(321),imei(322)])]))
+        rows=bulk.parse_rows(json.dumps([self.row(self.product,2,50000,[imei(321),imei(322)])]));fund(self.branch,self.user,'30000')      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         bill=bulk.post(self.data(payment_status='part',amount_paid=Decimal('30000')),rows,self.user);self.assertEqual((bill.total,bill.outstanding),(Decimal('100000.00'),Decimal('70000.00')))
     def test_everything_rolls_back_if_one_phone_is_invalid_at_posting_time(self):
         IMEI.objects.create(number=imei(331),device=Device.objects.create(code='PRE',branch=self.branch,product=self.product,warehouse=self.warehouse),slot=1)

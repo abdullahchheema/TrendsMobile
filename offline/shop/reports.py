@@ -68,7 +68,7 @@ def run(name,user,params):
         if params.get('warehouse'):trades=trades.filter(Q(warehouse_id=params['warehouse'])|Q(warehouse__isnull=True,document__warehouse_id=params['warehouse']))
         if params.get('model'):trades=trades.filter(product__model_id=params['model'])
         if params.get('product'):trades=trades.filter(product_id=params['product'])
-        for line in trades.select_related('device','document','product'):
+        for line in trades.select_related('device','document','document__branch','product'):      # the shop is printed on every row: fetch it with the rows
             if line.document.source.get('is_consolidated'):continue
             sign=-1 if line.document.is_return else 1
             rows.append({'Date':line.document.posting_date,'Shop':f'{line.document.branch.name} ({line.document.branch.code})','Invoice':line.document.code,'Device':line.device.code,

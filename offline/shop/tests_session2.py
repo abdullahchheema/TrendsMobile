@@ -8,7 +8,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import bulk,easy_retail,returns_flow,services as s
 from .words import amount_in_words
 
@@ -37,6 +37,7 @@ class PaymentRules(TestCase):
 class Purchases(TestCase):
     def setUp(self):
         self.__dict__.update(fixtures());self.client.force_login(self.user);self.today=timezone.localdate()
+        fund(self.branch,self.user,'2000000')      # money cannot leave an empty till (D8): the owner puts in what these purchases pay
     def rows(self,n,**extra):
         return json.dumps([dict(brand='Apple',model='iPhone 17 Pro Max',storage='512GB',colour='White',quantity=1,condition='Good',device_type='Used',grade='',pta_status='PTA',cost='505400',cost_mode='each',asking_price='600000',imeis=imei(5100+i),notes='',**extra) for i in range(n)])
     def post(self,n,**form):

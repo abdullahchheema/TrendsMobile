@@ -32,6 +32,9 @@ class HostsAndModes(SimpleTestCase):
     def test_cache_and_static_modes(self):
         self.assertTrue(deploy.uses_database_cache({'DATABASE_URL':'x'}));self.assertFalse(deploy.uses_database_cache({}))
         self.assertTrue(deploy.static_from_finders({'VERCEL':'1'}));self.assertFalse(deploy.static_from_finders({}))
+    def test_cookies_are_https_only_on_vercel_even_when_the_https_switch_was_forgotten(self):
+        self.assertTrue(deploy.secure_cookies({'VERCEL':'1'}));self.assertTrue(deploy.secure_cookies({'COVISON_HTTPS':'1'}))
+        self.assertFalse(deploy.secure_cookies({}));self.assertFalse(deploy.secure_cookies({'COVISON_HTTPS':'0'}))        # the shop LAN over plain HTTP still works
 
 
 class VercelPathDecoding(SimpleTestCase):

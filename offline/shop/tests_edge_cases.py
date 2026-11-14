@@ -113,34 +113,41 @@ class MoneyAsJsonNumbers(ApiBase):
 
 
 class FailedDeliveryWithACharge(OrderBase):
-    """A refused cash-on-delivery parcel: the customer owes nothing, not even the delivery charge that was on the invoice."""
-    def run_failed(self,**extra):
-        d=self.phone(self.branch);o=self.order([self.item()],delivery_fee='500',**extra);inv=oo.dispatch(o,self.user,'TCS','TRK-1')[0]
-        oo.delivery_failed(o,self.user,'Customer refused');credit=oo.receive_returned(o,self.user,shopdefaults.warehouse(self.branch),'Sealed box','approve')
-        o.refresh_from_db();inv.refresh_from_db();credit.refresh_from_db();d.refresh_from_db();return d,o,inv,credit
+    """A refused cash-on-delivery parcel: nothing was sold (the sale is posted at delivery, D4), so the customer owes nothing, not even the delivery
+    charge. A refused prepaid parcel keeps the delivery charge that was paid for and owes the customer the rest of the advance (D5)."""
+    def run_failed(self,prepaid=False,**extra):
+        d=self.phone(self.branch)
+        if prepaid:o=self.order([self.item()],delivery_fee='500',payment_method='Bank Transfer',confirm=False,**extra);oo.mark_paid(o,self.user,'TXN-1');oo.confirm(o,self.user)
+        else:o=self.order([self.item()],delivery_fee='500',**extra)
+        oo.dispatch(o,self.user,'TCS','TRK-1');self.assertEqual(oo.invoices(o).count(),0)
+        oo.delivery_failed(o,self.user,'Customer refused');kept=oo.receive_returned(o,self.user,shopdefaults.warehouse(self.branch),'Sealed box','approve')
+        o.refresh_from_db();d.refresh_from_db();return d,o,kept
     def test_a_refused_cash_on_delivery_parcel_leaves_no_debt_and_no_profit(self):
-        d,o,inv,credit=self.run_failed()
+        d,o,kept=self.run_failed()
         self.assertEqual((o.status,d.status,d.branch_id),('Returned','Available',self.branch.pk))
-        self.assertEqual((inv.outstanding,credit.outstanding),(Decimal('0.00'),Decimal('0.00')))          # nothing is owed either way
+        self.assertEqual((kept,oo.invoices(o).count(),Document.objects.filter(online_order=o).count()),(None,0,0))      # nothing was ever posted
         a=online_accounts.summary();self.assertEqual((a['pending'],a['credit_owed'],a['revenue'],a['cogs'],a['gross_profit']),(0,0,0,0,0));self.assertTrue(a['books_agree'])
         online=oo.online_branch();receivable=Account.objects.get(pk=ShopSettings.objects.get(branch=online).accounts['receivable'])
         self.assertEqual(s.account_balance(online,receivable),Decimal('0.00'))                           # the customer's account is clear in the ledger too
         self.assertEqual(online_check.problems(),[]);self.assertEqual(money_problems(),[])
     def test_a_refused_parcel_with_a_coupon_and_an_accessory_also_clears_to_zero(self):
         self.phone(self.branch);self.accessories(self.branch,4)
-        o=self.order([self.item(),dict(product_id=str(self.cover.pk),quantity=2)],delivery_fee='350',discount=dict(amount='999',code='EID'));inv=oo.dispatch(o,self.user,'TCS','TRK-2')[0]
-        self.assertEqual(inv.total,Decimal('100000')+Decimal('1600')-Decimal('999')+Decimal('350'))
-        oo.delivery_failed(o,self.user,'Not reachable');oo.receive_returned(o,self.user,shopdefaults.warehouse(self.branch),'Sealed box','approve');inv.refresh_from_db()
-        self.assertEqual(inv.outstanding,Decimal('0.00'));a=online_accounts.summary();self.assertEqual((a['pending'],a['credit_owed'],a['revenue'],a['cogs'],a['net_sales']),(0,0,0,0,0))
-        self.assertEqual(s.on_hand(self.cover,shopdefaults.warehouse(self.branch))[0],4);self.assertEqual(online_check.problems(),[])
+        o=self.order([self.item(),dict(product_id=str(self.cover.pk),quantity=2)],delivery_fee='350',discount=dict(amount='999',code='EID'));oo.dispatch(o,self.user,'TCS','TRK-2')
+        self.assertEqual(o.total,Decimal('100000')+Decimal('1600')-Decimal('999')+Decimal('350'))
+        self.assertEqual((oo.reserved_qty(self.cover,self.branch),online_accounts.summary()['pending']),(2,o.total))          # on its way: the covers stay held, the cash is still to collect
+        oo.delivery_failed(o,self.user,'Not reachable');oo.receive_returned(o,self.user,shopdefaults.warehouse(self.branch),'Sealed box','approve')
+        self.assertEqual(oo.invoices(o).count(),0);a=online_accounts.summary();self.assertEqual((a['pending'],a['credit_owed'],a['revenue'],a['cogs'],a['net_sales']),(0,0,0,0,0))
+        self.assertEqual((s.on_hand(self.cover,shopdefaults.warehouse(self.branch))[0],oo.reserved_qty(self.cover,self.branch)),(4,0));self.assertEqual(online_check.problems(),[])
         self.assertEqual(money_problems(),[])
     def test_a_refused_prepaid_parcel_leaves_the_price_of_the_goods_as_a_credit_to_refund(self):
-        d,o,inv,credit=self.run_failed(payment_method='Bank Transfer',payment_status='Paid',payment_reference='TXN-1')
-        self.assertEqual((o.status,inv.outstanding,credit.outstanding),('Returned',Decimal('0.00'),Decimal('-100000.00')))   # the goods are owed back; the delivery that was paid for and attempted is not reversed
-        a=online_accounts.summary();self.assertEqual((a['credit_owed'],a['pending'],a['revenue']),(Decimal('100000.00'),0,Decimal('500.00')))
+        d,o,kept=self.run_failed(prepaid=True)
+        self.assertEqual((o.status,kept.total,kept.outstanding),('Returned',Decimal('500.00'),Decimal('0.00')))      # the delivery that was paid for and attempted is kept, paid from the advance
+        self.assertEqual(sum(s.money(x.data['unallocated']) for x in oo.advances(o)),Decimal('100000.00'))             # the price of the goods is owed back
+        a=online_accounts.summary();self.assertEqual((a['advances'],a['pending'],a['revenue'],a['cogs']),(Decimal('100000.00'),0,Decimal('500.00'),0))
+        self.assertEqual(self.money(oo.online_branch(),'Bank Transfer'),Decimal('100500.00'))
         self.assertFalse(Document.objects.filter(kind='Journal Entry',data__has_key='charge_cancelled').exists());self.assertEqual(online_check.problems(),[])
     def test_a_delivered_order_never_has_its_delivery_charge_cancelled(self):
-        self.phone(self.branch);o=self.order([self.item()],delivery_fee='500');inv=oo.dispatch(o,self.user,'TCS','T')[0];oo.deliver(o,self.user);inv.refresh_from_db()
+        self.phone(self.branch);o=self.order([self.item()],delivery_fee='500');inv=self.ship(o)
         self.assertEqual(oo.cancel_uncollected_charges(inv,o,self.user),None);self.assertEqual(online_accounts.summary()['revenue'],Decimal('100500.00'))
 
 
@@ -148,13 +155,13 @@ class OneCustomerTwoWays(OrderBase):
     def test_the_same_mobile_number_written_two_ways_is_one_online_customer(self):
         self.phone(self.branch);self.phone(self.branch);online=oo.online_branch()
         a=self.order([self.item()],customer=dict(name='Ali Khan',phone='+92 300 1234567',city='Lahore'));b=self.order([self.item()],customer=dict(name='Ali Khan',phone='0300-1234567',city='Lahore'))
-        oo.dispatch(a,self.user,'TCS','1');oo.dispatch(b,self.user,'TCS','2')
+        self.ship(a,tracking='1');self.ship(b,tracking='2')
         self.assertEqual(Party.objects.filter(branch=online,kind='Customer').count(),1)
         self.assertEqual(Document.objects.filter(branch=online,kind='Sales Invoice').values('customer').distinct().count(),1)
     def test_different_numbers_stay_different_customers_even_with_one_name(self):
         self.phone(self.branch);self.phone(self.branch);online=oo.online_branch()
         a=self.order([self.item()],customer=dict(name='Ali Khan',phone='03001234567'));b=self.order([self.item()],customer=dict(name='Ali Khan',phone='03011234567'))
-        oo.dispatch(a,self.user,'TCS','1');oo.dispatch(b,self.user,'TCS','2');self.assertEqual(Party.objects.filter(branch=online,kind='Customer').count(),2)
+        self.ship(a,tracking='1');self.ship(b,tracking='2');self.assertEqual(Party.objects.filter(branch=online,kind='Customer').count(),2)
 
 
 class HeldStock(OrderBase):
@@ -170,8 +177,8 @@ class HeldStock(OrderBase):
         self.phone(self.branch,cost='80000');self.phone(self.other,cost='70000');self.accessories(self.branch,5);clean()
         o=self.order([self.item(qty=2),dict(product_id=str(self.cover.pk),quantity=3)],delivery_fee='400',discount=dict(amount='1000',code='EID'));clean()
         self.assertEqual(o.total,Decimal('200000')+Decimal('2400')-Decimal('1000')+Decimal('400'))
-        inv=oo.dispatch(o,self.user,'TCS','T-1')[0];clean();self.assertEqual(inv.total,o.total)
-        oo.set_stage(o,self.user,'In Transit');oo.deliver(o,self.user,'Cash');clean();inv.refresh_from_db();self.assertEqual(inv.outstanding,0)
+        oo.dispatch(o,self.user,'TCS','T-1');clean()
+        oo.set_stage(o,self.user,'In Transit');oo.deliver(o,self.user,'Cash');clean();inv=oo.invoices(o).get();self.assertEqual((inv.total,inv.outstanding),(o.total,0))
         a=online_accounts.summary();self.assertTrue(a['books_agree']);self.assertEqual(a['owed_total'],Decimal('80000')+Decimal('70000')+Decimal('900'))
     def test_cancelling_after_a_reassign_releases_everything_once(self):
         self.phone(self.branch);self.phone(self.other);o=self.order([self.item()])
@@ -201,15 +208,15 @@ class RealStockBooks(OrderBase):
     def test_a_refused_cash_on_delivery_parcel_with_a_delivery_charge_keeps_every_check_clean(self):
         d,bill=self.bought();self.assertEqual(all_problems(),[])
         o=self.sell(delivery_fee='450');self.assertEqual(all_problems(),[])
-        inv=oo.dispatch(o,self.user,'TCS','TRK-7')[0];self.assertEqual(all_problems(),[])
+        oo.dispatch(o,self.user,'TCS','TRK-7');self.assertEqual(all_problems(),[])
         oo.delivery_failed(o,self.user,'Customer refused');self.assertEqual(all_problems(),[])
         oo.receive_returned(o,self.user,shopdefaults.warehouse(self.branch),'Sealed box','approve');self.assertEqual(all_problems(),[])
-        inv.refresh_from_db();d.refresh_from_db();self.assertEqual((inv.outstanding,d.status,d.purchase_cost),(Decimal('0.00'),'Available',Decimal('120000')))
+        d.refresh_from_db();self.assertEqual((oo.invoices(o).count(),d.status,d.purchase_cost),(0,'Available',Decimal('120000')))
         again=self.sell(delivery_fee='450');oo.dispatch(again,self.user,'TCS','TRK-8');oo.deliver(again,self.user);self.assertEqual(all_problems(),[])      # the same phone sells again, cleanly
         a=online_accounts.summary();self.assertEqual((a['revenue'],a['cogs'],a['pending']),(Decimal('135450.00'),Decimal('120000.00'),0))
     def test_a_delivered_order_returned_by_the_customer_and_refunded_keeps_every_check_clean(self):
         from . import returns
-        d,bill=self.bought();o=self.sell(delivery_fee='450');inv=oo.dispatch(o,self.user,'TCS','TRK-9')[0];oo.deliver(o,self.user);oo.request_return(o,self.user,'Changed mind');self.assertEqual(all_problems(),[])
+        d,bill=self.bought();o=self.sell(delivery_fee='450');inv=self.ship(o,tracking='TRK-9');oo.request_return(o,self.user,'Changed mind');self.assertEqual(all_problems(),[])
         credit=s.submit(returns.create(inv,self.user,[str(d.pk)],'Opened box','Changed mind',warehouse=shopdefaults.warehouse(self.other)),self.user);self.assertEqual(all_problems(),[])
         d.refresh_from_db();self.assertEqual((d.status,d.branch_id,credit.outstanding),('Holding',self.other.pk,Decimal('-135000.00')))      # came back into the other shop; only the goods are credited
         o.refresh_from_db();self.assertEqual(oo.display_stage(o),'Returned')
@@ -252,7 +259,9 @@ class AccessoriesHeldForOnlineOrders(ShopStockBase):
         with self.assertRaises(ValidationError):s.cancel(self.bill,self.user) if False else s.cancel(self.receipt,self.user)
         self.assertEqual(self.stock()[0],5);self.assertEqual(online_check.problems(),[])
     def test_the_order_still_ships_after_all_of_that(self):
-        self.sell(2);inv=oo.dispatch(self.order_,self.user,'TCS','T-5')[0];oo.deliver(self.order_,self.user);self.assertEqual(self.stock(),(0,0));self.assertEqual(all_problems(),[])
+        self.sell(2);oo.dispatch(self.order_,self.user,'TCS','T-5');self.assertEqual(self.stock()[0],3);self.assertEqual(all_problems(),[])      # on the way: still on the shelf, still held
+        with self.assertRaises(ValidationError):self.sell(1)
+        oo.deliver(self.order_,self.user);self.assertEqual(self.stock(),(0,0));self.assertEqual(all_problems(),[])
 
 
 class AverageCostAccessories(ShopStockBase):
@@ -346,8 +355,9 @@ class ShopJourneys(OrderBase):
         with self.assertRaises(ValidationError):s.submit(self.draft(d),self.user)
         with self.assertRaises(ValidationError):s.cancel(bill,self.user)
         order=self.order([dict(product_id=str(self.product.pk),condition='Not Inspected',pta_status='Not recorded',device_type='Used',price='135000',quantity=1)])
-        with self.assertRaises(ValidationError):oo.dispatch(order,self.user,'TCS','T')                                                  # the shop that holds the phone is locked
-        d.refresh_from_db();order.refresh_from_db();self.assertEqual((d.status,order.status),('Reserved','New'))
+        oo.dispatch(order,self.user,'TCS','T')                                                                                          # dispatch posts nothing (D4), so a lock does not stop it...
+        with self.assertRaises(ValidationError):oo.deliver(order,self.user)                                                             # ...but the sale at delivery would post into the locked shop
+        d.refresh_from_db();order.refresh_from_db();self.assertEqual((d.status,order.status),('Reserved','Dispatched'))
         self.assertEqual(Document.objects.filter(kind='Sales Invoice').exclude(status='Draft').count(),0);self.assertEqual(online_check.problems(),[])
     def test_a_sold_phone_cannot_go_back_to_the_supplier_but_an_unsold_one_can(self):
         from . import purchase_returns
@@ -375,12 +385,12 @@ class OnlineReturnsAndExchanges(ShopStockBase):
     def test_an_exchange_is_paid_by_the_return_credit_and_collects_no_cash(self):
         from . import returns
         self.bought(n=80);self.bought(n=90);self.assertEqual(all_problems(),[])
-        first=self.order([self.phone_item()]);inv=oo.dispatch(first,self.user,'TCS','T-1')[0];oo.deliver(first,self.user);sold=inv.lines.get().device
+        first=self.order([self.phone_item()]);inv=self.ship(first);sold=inv.lines.get().device
         credit=s.submit(returns.create(inv,self.user,[str(sold.pk)],'Speaker fault','Exchange for another unit',warehouse=self.warehouse),self.user);self.assertEqual(all_problems(),[])
         cash_before=self.money(oo.online_branch(),'Cash')
         second,made=oo.create(dict(external_ref='MANUAL-EXCHANGE-1',customer=dict(name='Ali Khan',phone='0300 1234567'),payment_method='Cash on Delivery',items=[self.phone_item()]),self.user,'Manual',credit)
-        self.assertTrue(made);sale=oo.dispatch(second,self.user,'TCS','T-2')[0];credit.refresh_from_db();self.assertEqual((sale.outstanding,credit.outstanding,sale.customer_id),(0,0,inv.customer_id))
-        oo.deliver(second,self.user);self.assertEqual(self.money(oo.online_branch(),'Cash'),cash_before)                    # nothing more to collect
+        self.assertTrue(made);sale=self.ship(second,tracking='T-2');credit.refresh_from_db();self.assertEqual((sale.outstanding,credit.outstanding,sale.customer_id),(0,0,inv.customer_id))
+        self.assertEqual(self.money(oo.online_branch(),'Cash'),cash_before)                    # nothing more to collect: the return credit paid for it
         self.assertEqual(all_problems(),[]);sold.refresh_from_db();self.assertEqual(sold.status,'Holding')
         a=online_accounts.summary();self.assertEqual((a['revenue'],a['cogs'],a['pending'],a['credit_owed']),(Decimal('135000'),Decimal('120000'),0,0))
     def test_part_of_a_discounted_order_comes_back_and_is_refunded_to_the_paisa(self):
@@ -388,7 +398,7 @@ class OnlineReturnsAndExchanges(ShopStockBase):
         self.bought(n=80);self.buy(4,'300')
         order=self.order([self.phone_item(),dict(product_id=str(self.cover.pk),quantity=3)],delivery_fee='300',discount=dict(amount='1000',code='EID'))
         self.assertEqual(order.total,Decimal('135000')+Decimal('2400')-Decimal('1000')+Decimal('300'))
-        inv=oo.dispatch(order,self.user,'TCS','T-3')[0];oo.deliver(order,self.user);self.assertEqual(all_problems(),[])
+        inv=self.ship(order,tracking='T-3');self.assertEqual(all_problems(),[])
         line=inv.lines.get(product=self.cover);share=Decimal(line.snapshot['pricing']['total'])/3
         credit=s.submit(returns.create(inv,self.user,[],'Unopened','Ordered too many',{str(line.pk):'2'},warehouse=self.warehouse),self.user)
         self.assertEqual(credit.outstanding,-s.money(share*2));self.assertEqual(self.stock()[0],3);self.assertEqual(all_problems(),[])
@@ -622,7 +632,7 @@ class CustomerReturnsTheWholeOrder(OrderBase):
         super().setUp();from . import shop_accounts;self.web=shop_accounts.create_online_login('Web Team','web-team3','Strong-pass-for-WT-77!')
     def returned_order(self):
         from . import returns
-        d,_=self.bought();o=self.sell(delivery_fee='500');inv=oo.dispatch(o,self.user,'TCS','TRK-1')[0];oo.deliver(o,self.user);o.refresh_from_db()
+        d,_=self.bought();o=self.sell(delivery_fee='500');inv=self.ship(o,tracking='TRK-1');o.refresh_from_db()
         self.assertEqual(oo.order_status(o),'Fulfilled')
         credit=s.submit(returns.create(inv,self.user,[str(d.pk)],'Opened box','Changed mind',warehouse=shopdefaults.warehouse(self.branch)),self.user);o.refresh_from_db();d.refresh_from_db()
         return d,o,inv,credit

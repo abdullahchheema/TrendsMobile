@@ -26,6 +26,7 @@ class Base(TestCase):
         self.n+=1
         data=dict(branch=self.branch,party_name='Money Supplier',product=self.product,quantity=1,price=cost,asking_price=0,pta_status='PTA',device_type='Used',condition='Good',warehouse=self.warehouse,staff=self.buyer,handler=self.handler,
                   posting_date=self.today-timedelta(days=5),payment_status=status,method='Cash',imeis=[[imei(900+self.n)]])
+        if status=='full':self.fund(cost)      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         return easy_retail.purchase(data,self.user)
     def credit_sale(self,price=60000,name='Dues Customer',paid='unpaid',amount=None):
         bill=self.phone();device=bill.reference.lines.get().device

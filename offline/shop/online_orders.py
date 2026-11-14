@@ -3,10 +3,15 @@
 Life of an order
   New         stock is reserved from whichever shops hold it (phones become 'Reserved', accessories are counted as reserved). Nothing is
               sold yet, so the shops' books are untouched.
-  Dispatched  one sales invoice is posted in each shop that supplied stock (channel = Online): stock leaves the shop, cost of goods and
-              revenue are posted there, and the money is received (prepaid) or left owing (cash on delivery).
-  Delivered   cash on delivery is collected into a shop account.
+  Paid        (prepaid methods) the money is booked when someone confirms it arrived: Dr the Online Store's bank or wallet, Cr the customer's
+              account, as an advance (owner's decision D5, 14 Nov 2026).
+  Dispatched  the parcel leaves with the courier. Nothing is posted: the goods stay in the supplying shop's stock (still Reserved) until the
+              customer has them (owner's decision D4: online revenue is recognised at delivery).
+  Delivered   one sales invoice in the Online Store's books: revenue, cost of goods, the stock leaving the shop and the debt to the shop are all
+              posted now; cash on delivery is collected, or the advance is applied.
+  Delivery failed / Returned   nothing was sold, so nothing is reversed: the goods go back on the shelf of the shop that sent them.
   Cancelled   a New order is cancelled and its stock is released.
+Orders dispatched before 14 Nov 2026 were invoiced at dispatch; they keep that path (see _invoiced) until they are delivered or come back.
 Refunds and exchanges after dispatch use the normal Returns & Exchanges flow on the invoice, so the physical stock comes back to the shop.
 
 Prices always come from the ERP, never from the website. Variants of a phone are: product (model, storage, colour) + condition + PTA status +
@@ -24,6 +29,7 @@ ZERO=Decimal('0.00')
 METHODS={'Cash on Delivery':'Cash','Bank Transfer':'Bank Transfer','Easypaisa':'Easypaisa','JazzCash':'JazzCash','Card':'Card'}   # order method -> the Online Store's payment method
 MAX_LINES=40
 MAX_QTY=50
+HELD=('New','Dispatched')        # orders whose stock is still in a shop and promised to them (a dispatched parcel is posted only when delivered)
 DELIVERY_CODE='ONLINE-DELIVERY'
 
 
@@ -60,8 +66,8 @@ def compare_price(product,base):
 
 
 def reserved_qty(product,branch,exclude_order=None):
-    """Accessory units held by orders that are still New in this shop."""
-    rows=OnlineAllocation.objects.filter(product=product,branch=branch,device__isnull=True,line__order__status=OnlineOrder.NEW)
+    """Accessory units held in this shop by orders that are New or on their way to the customer."""
+    rows=OnlineAllocation.objects.filter(product=product,branch=branch,device__isnull=True,line__order__status__in=HELD)
     if exclude_order:rows=rows.exclude(line__order=exclude_order)
     return rows.aggregate(q=Sum('quantity'))['q'] or ZERO
 
@@ -102,7 +108,7 @@ def accessory_free(product_ids):
     shop_ids={b.pk for b in shops()};free={}
     for r in StockMovement.objects.filter(product_id__in=list(product_ids),product__serialized=False,warehouse__branch_id__in=shop_ids).values('product_id','warehouse__branch_id').annotate(q=Sum('quantity')):
         free[(r['product_id'],r['warehouse__branch_id'])]=r['q'] or ZERO
-    for r in OnlineAllocation.objects.filter(product_id__in=list(product_ids),device__isnull=True,line__order__status=OnlineOrder.NEW).values('product_id','branch_id').annotate(q=Sum('quantity')):
+    for r in OnlineAllocation.objects.filter(product_id__in=list(product_ids),device__isnull=True,line__order__status__in=HELD).values('product_id','branch_id').annotate(q=Sum('quantity')):
         key=(r['product_id'],r['branch_id'])
         if key in free:free[key]-=r['q'] or ZERO
     return {k:v for k,v in free.items() if v>0}
@@ -354,13 +360,16 @@ def create(data,user=None,source='Website',credit=None,strict=False):
     if data.get('expected_total') not in (None,'') and _amount(data['expected_total'])!=total:
         raise ValidationError(f'The total is now PKR {total:,.2f}, not PKR {_amount(data["expected_total"]):,.2f}. Prices or delivery changed; refresh and try again.')
     order=OnlineOrder.objects.create(code=s.code('OL'),source=source,external_ref=ref,customer_name=name,customer_phone=phone,customer_email=text['email'][:180],address=text['address'][:500],
-        city=text['city'][:100],payment_method=method,payment_status='Paid' if (data.get('payment_status')=='Paid' and method!='Cash on Delivery') else 'Unpaid',payment_reference=pay_ref[:180],
+        city=text['city'][:100],payment_method=method,payment_status='Unpaid',payment_reference=pay_ref[:180],
         delivery_fee=fee,subtotal=subtotal,total=total,notes=notes[:500],created_by=user if getattr(user,'is_authenticated',False) else None,exchange_credit=credit,
         alt_phone=(text['alt_phone'] or text['phone2'])[:40],postal_code=(text['postal_code'] or text['zip'])[:20],
         shipping_method=_text(data['shipping'].get('method') if isinstance(data.get('shipping'),dict) else data.get('shipping_method'),'the shipping method')[:100],discount_amount=discount,discount_code=code,extra=dict(_extra(data,cust),**({'client_ip':client_ip} if client_ip else {})))
     if getattr(user,'is_authenticated',False):order.seen_at=order.confirmed_at=timezone.now();order.confirmed_by=user;order.save(update_fields=['seen_at','confirmed_at','confirmed_by'])      # an order the team typed in after a call is already confirmed
     for l in lines:l['line']=OnlineOrderLine.objects.create(order=order,product=l['product'],condition=l['condition'],pta_status=l['pta_status'],device_type=l['device_type'],quantity=l['quantity'],unit_price=l['unit_price'])
     _reserve(order,plan(lines))
+    if data.get('payment_status')=='Paid' and method!='Cash on Delivery' and not strict and getattr(user,'is_authenticated',False):
+        _record_advance(order,user,pay_ref)          # the team typed in an order it was already paid for: the money is booked now (D5)
+        order.payment_status='Paid';order.save(update_fields=['payment_status'])
     event(order,user,'Order placed','','Confirmed' if order.confirmed_at else 'Unconfirmed',f'{source} order · {len(lines)} line(s) · total {total}')
     if getattr(user,'is_authenticated',False):s.audit(user,'Online order created',None,order=order.code,total=str(total))
     return order,True
@@ -560,7 +569,7 @@ def unseen_count():
 
 
 def shop_orders(branch):
-    """Online orders that hold stock in this shop (to pack), newest first. A shop sees only what it must pack: no customer money, no other shop."""
+    """Online orders that hold stock in this shop (to pack), newest first. A shop sees only what it must pack and where it goes (name, phone, address): no prices, no payments, no other shop."""
     return OnlineOrder.objects.filter(lines__allocations__branch=branch).filter(Q(status=OnlineOrder.NEW, confirmed_at__isnull=False) | Q(status=OnlineOrder.DISPATCHED)).distinct().order_by('-created')
 
 
@@ -591,16 +600,68 @@ def delivery_failed(order, user, reason):
 
 
 @transaction.atomic
-def receive_returned(order, user, warehouse, condition, resale='hold', note='', courier_charge=None, expense_account=None, method=None, when=None):
-    """A failed delivery came back to a shop. Posts the sales return (revenue, receivable and cost of goods sold are reversed; the phone goes into the
+def receive_returned(order, user, warehouse=None, condition='', resale='hold', note='', courier_charge=None, expense_account=None, method=None, when=None):
+    """A failed delivery came back. Nothing was sold (D4), so nothing is reversed: each phone and accessory goes back on the shelf of the shop that
+    sent it, at the cost it always had, with the inspection result:
+      approve  -> the phone is available for sale again      hold -> Holding until a manager accepts it
+      damaged  -> not for sale (Unavailable); its value stays on the books until the owner writes it off
+    A prepaid order keeps the delivery charge it paid for (the parcel was sent): a sales invoice for the delivery charge alone is posted and paid
+    from the advance; the rest of the advance is owed back to the customer. Courier return charges are a separate online expense.
+    `warehouse`, if given, must be a stock location of a shop that sent part of the order (a parcel is received where it came from)."""
+    order = _lock(order)
+    if order.status != OnlineOrder.DISPATCHED or order.stage != FAILED:
+        raise ValidationError('Record the failed delivery first; only then can the returned phone be received.')
+    if _invoiced(order) is not None:
+        return _receive_returned_invoiced(order, user, warehouse, condition, resale, note, courier_charge, expense_account, method, when)
+    if resale not in ('approve', 'hold', 'damaged'):
+        raise ValidationError('Choose what happens to the phone: approve for resale, keep on hold, or mark damaged.')
+    if not str(condition or '').strip():
+        raise ValidationError('Write the condition of the returned phone.')
+    allocations, phones = _held(order)
+    senders = {a.branch_id for a in allocations}
+    if warehouse is not None and warehouse.branch_id not in senders:
+        raise ValidationError('This parcel goes back to the shop that sent it: ' + ', '.join(sorted({a.branch.name for a in allocations})) + '. Receive it there; move it later with a stock transfer if needed.')
+    for d in phones:
+        d.details = dict(d.details or {}, inspection_notes=f'Returned delivery {order.code}: {condition}' + (f' · {note}' if note else ''))
+        d.status, d.inspection_status = {'approve': ('Available', 'Passed'), 'hold': ('Holding', 'Pending'), 'damaged': ('Unavailable', 'Failed')}[resale]
+        d.inspection_date = timezone.localdate() if resale != 'hold' else d.inspection_date
+        d.save()
+        s.audit(user, 'Returned delivery inspected', None, order=order.code, device=d.code, result=resale, shop=d.branch.name)
+    kept = None
+    if order.payment_method != 'Cash on Delivery' and order.delivery_fee > 0 and advances(order):
+        kept = _invoice(order, [], user, discount=0, note=f'Delivery charge of online order {order.code} (parcel sent, not delivered)')
+        _use_advances(order, kept, user)
+    _courier_charge(order, user, courier_charge, expense_account, method, when)
+    old = display_stage(order)
+    order.status = OnlineOrder.RETURNED
+    order.stage = 'Returned'
+    order.returned_on = timezone.localdate()
+    order.save(update_fields=['status', 'stage', 'returned_on', 'modified'])
+    owed = sum((s.money(d.data.get('unallocated')) for d in advances(order)), ZERO)
+    event(order, user, 'Returned to shop', old, 'Returned to shop', ', '.join(sorted({a.branch.name for a in allocations})) + f' · {condition} · {resale}' + (f' · {note}' if note else '')
+          + (f' · delivery charge kept, sale {kept.code}' if kept else '') + (f' · PKR {owed:,.2f} owed back to the customer' if owed else ''))
+    return kept
+
+
+def _courier_charge(order, user, courier_charge, expense_account, method, when):
+    if courier_charge in (None, '', 0, '0'):
+        return
+    from . import money, money_views
+    amount = s.payment_money(courier_charge)
+    if amount > 0:
+        if expense_account is None or not method:
+            raise ValidationError('Choose the expense category and the payment method for the courier charge.')
+        money_views._ensure_chart(user)
+        money.record_voucher(user, online_branch(), 'expense', expense_account, amount, method, when or timezone.localdate(), f'Courier return charges {order.code}')
+
+
+def _receive_returned_invoiced(order, user, warehouse, condition, resale='hold', note='', courier_charge=None, expense_account=None, method=None, when=None):
+    """An order dispatched before 14 Nov 2026 (invoiced at dispatch) came back. Posts the sales return (revenue, receivable and cost of goods sold are reversed; the phone goes into the
     chosen shop at its ORIGINAL cost, in Holding), then applies the inspection result:
       approve  -> the phone is available for sale again      hold -> stays in Holding until a manager accepts it
       damaged  -> not for sale (Unavailable); its value stays on the books until the owner writes it off
     The supplier's invoice is never touched. Courier return charges are recorded as a separate online expense."""
     from . import returns
-    order = _lock(order)
-    if order.status != OnlineOrder.DISPATCHED or order.stage != FAILED:
-        raise ValidationError('Record the failed delivery first; only then can the returned phone be received.')
     if resale not in ('approve', 'hold', 'damaged'):
         raise ValidationError('Choose what happens to the phone: approve for resale, keep on hold, or mark damaged.')
     if not str(condition or '').strip():
@@ -631,14 +692,7 @@ def receive_returned(order, user, warehouse, condition, resale='hold', note='', 
             d.inspection_date = timezone.localdate()
         d.save()
         s.audit(user, 'Returned delivery inspected', None, order=order.code, device=d.code, result=resale)
-    if courier_charge not in (None, '', 0, '0'):
-        from . import money, money_views
-        amount = s.payment_money(courier_charge)
-        if amount > 0:
-            if expense_account is None or not method:
-                raise ValidationError('Choose the expense category and the payment method for the courier charge.')
-            money_views._ensure_chart(user)
-            money.record_voucher(user, online_branch(), 'expense', expense_account, amount, method, when or timezone.localdate(), f'Courier return charges {order.code}')
+    _courier_charge(order, user, courier_charge, expense_account, method, when)
     old = display_stage(order)
     order.status = OnlineOrder.RETURNED
     order.stage = 'Returned'
@@ -703,7 +757,9 @@ def after_return(doc):
 
 def returned_devices(order):
     """Phones of this order that came back and are waiting in Holding for someone to check them."""
-    ids = Line.objects.filter(document__online_order=order, document__is_return=True, document__status='Submitted', device__isnull=False).values_list('device_id', flat=True)
+    ids = set(Line.objects.filter(document__online_order=order, document__is_return=True, document__status='Submitted', device__isnull=False).values_list('device_id', flat=True))
+    if order.status == OnlineOrder.RETURNED:       # a failed delivery received back (nothing was sold): the phones of the order itself
+        ids |= set(OnlineAllocation.objects.filter(line__order=order, device__isnull=False).values_list('device_id', flat=True))
     return list(Device.objects.filter(pk__in=list(ids), status='Holding').select_related('product', 'branch'))
 
 
@@ -800,7 +856,26 @@ def cancel(order,user,reason):
     if order.status!=OnlineOrder.NEW:raise ValidationError('Only a new order can be cancelled. For a dispatched order use Return / exchange.')
     if not str(reason or '').strip():raise ValidationError('Give a reason for cancelling.')
     old=display_stage(order);release(order);order.status=OnlineOrder.CANCELLED;order.stage='Cancelled';order.cancel_reason=str(reason).strip()[:240];order.save(update_fields=['status','stage','cancel_reason','modified']);event(order,user,'Cancelled',old,'Cancelled',order.cancel_reason)
+    paid=sum((s.money(d.data.get('unallocated')) for d in advances(order)),ZERO)
+    if paid:event(order,user,'Refund owed',note=f'PKR {paid:,.2f} paid in advance is owed back to the customer. Refund it from Online Finance, Money Out, Refund a customer.')
     s.audit(user,'Online order cancelled',None,order=order.code,reason=order.cancel_reason);return order
+
+
+def _record_advance(order,user,reference=''):
+    """The customer's money for a prepaid order, booked when someone confirms it arrived: Dr the Online Store's account for that method, Cr the
+    customer's account (an advance, not income). It is applied to the sale when the order is delivered, or refunded if the order is cancelled."""
+    if order.total<=0:return None
+    branch=online_branch();method=shop_method(branch,order)
+    pe=s.new_doc('Payment Entry',branch,customer=party_for(branch,order),handler=shopdefaults.shop_person(branch),channel='Online',online_order=order,
+                 notes=f'Paid in advance for online order {order.code}',data=dict(amount=str(order.total),direction='Receive',mode=method,reference=str(reference or '')[:180]))
+    return s.submit(pe,user)
+
+
+def advances(order,lock=False):
+    """The order's advance payments that are not used yet."""
+    rows=Document.objects.filter(online_order=order,kind='Payment Entry',status='Submitted',reference__isnull=True,data__direction='Receive').order_by('created')
+    if lock:rows=rows.select_for_update()
+    return [d for d in rows if s.money(d.data.get('unallocated'))>0]
 
 
 @transaction.atomic
@@ -809,9 +884,12 @@ def mark_paid(order,user,reference=''):
     if order.status in (OnlineOrder.CANCELLED,):raise ValidationError('This order is cancelled.')
     if order.payment_method=='Cash on Delivery':raise ValidationError('Cash on delivery is collected when the order is delivered.')
     if order.status!=OnlineOrder.NEW:raise ValidationError('Payment can only be confirmed before dispatch.')
-    order.payment_status='Paid';order.payment_reference=str(reference or order.payment_reference)[:180]
-    order.save(update_fields=['payment_status','payment_reference','modified']);event(order,user,'Payment confirmed','','',order.payment_reference)
-    s.audit(user,'Online payment confirmed',None,order=order.code,method=order.payment_method);return order
+    if order.payment_status=='Paid':return order                 # pressed twice: the money is booked once
+    order.payment_reference=str(reference or order.payment_reference)[:180];order.save(update_fields=['payment_reference','modified'])
+    pe=_record_advance(order,user,order.payment_reference)
+    order.payment_status='Paid';order.save(update_fields=['payment_status','modified'])
+    event(order,user,'Payment confirmed','','',' · '.join(x for x in (order.payment_reference,f'booked as an advance {pe.code}' if pe else '') if x))
+    s.audit(user,'Online payment confirmed',pe,order=order.code,method=order.payment_method,amount=str(order.total));return order
 
 
 def party_for(branch,order):
@@ -839,43 +917,60 @@ def shop_method(branch,order):
     return name
 
 
+def _invoiced(order):
+    """The order's sales invoice, if it has one: every delivered order, and orders dispatched before 14 Nov 2026 (invoiced at dispatch then)."""
+    return Document.objects.filter(online_order=order,kind__in=list(s.SELL),is_return=False,status='Submitted').first()
+
+
+def _invoice(order,allocations,user,discount=None,delivery=True,note=''):
+    """Post one sales invoice in the Online Store's books for the given stock (and the delivery charge). The stock leaves the shops that held it and
+    each shop is owed its cost by the Online Store (see services.post_supply)."""
+    branch=online_branch();person=shopdefaults.shop_person(branch)
+    doc=s.new_doc('Sales Invoice',branch,customer=party_for(branch,order),seller=person,channel='Online',online_order=order,notes=note or f'Online order {order.code}'+(f' · {order.notes}' if order.notes else ''),
+                  data=dict(channel='Online',online_order=order.code))
+    pricing.inputs(doc,'amount',str(order.discount_amount or 0) if discount is None else str(discount),'','');doc.save()
+    for a in allocations:
+        if a.device_id:Line.objects.create(document=doc,product=a.product,device=a.device,warehouse=a.device.warehouse,quantity=1,rate=a.line.unit_price)
+        else:Line.objects.create(document=doc,product=a.product,warehouse=shopdefaults.warehouse(a.branch),quantity=a.quantity,rate=a.line.unit_price)
+    if delivery and order.delivery_fee>0:Line.objects.create(document=doc,product=delivery_product(),warehouse=shopdefaults.warehouse(branch),quantity=1,rate=order.delivery_fee)
+    doc.save()
+    return s.checkout(doc,user,[],person)
+
+
+def _use_advances(order,sale,user):
+    """Apply what the customer paid in advance to the sale, oldest payment first."""
+    used=ZERO
+    for adv in advances(order,lock=True):
+        sale.refresh_from_db();take=min(s.money(adv.data.get('unallocated')),sale.outstanding)
+        if take>0:s.allocate_advance(adv,sale,take,user);used+=take
+    sale.refresh_from_db();return used
+
+
+def _held(order):
+    """(allocations, exact phones) of an order whose stock is still on the shops' books, phones locked and checked to be still Reserved."""
+    list(Product.objects.select_for_update().filter(pk__in=OnlineOrderLine.objects.filter(order=order).values('product_id')).order_by('pk'))      # an arriving order waits here
+    allocations=list(OnlineAllocation.objects.select_for_update(of=('self',)).filter(line__order=order).select_related('line','product','device','branch'))
+    if not allocations:raise ValidationError('This order has no reserved stock.')
+    phones=list(Device.objects.select_for_update().filter(pk__in=[a.device_id for a in allocations if a.device_id]))
+    for d in phones:
+        if d.status!='Reserved':raise ValidationError(f'{d.code} is no longer reserved for this order. Cancel the order and create it again.')
+    return allocations,phones
+
+
 @transaction.atomic
 def dispatch(order,user,courier='',tracking='',notes=''):
-    """Post the sale. One invoice in the Online Store's books holds the whole order: the customer, the revenue, the money. The stock leaves the
-    shops that held it, and each shop is owed its cost by the Online Store (see services.post_supply). Prepaid orders are received at once;
-    cash on delivery stays owing until delivery."""
+    """The parcel is handed to the courier. Nothing is posted (D4): the goods stay in the supplying shops' stock, Reserved for this order, until the
+    order is delivered. Prepaid orders need their payment confirmed (and booked) first."""
     order=_lock(order)
     if order.status!=OnlineOrder.NEW:raise ValidationError('Only a new order can be dispatched.')
     if order.confirmed_at is None:raise ValidationError('Call the customer and confirm the order before shipping it.')
     if order.payment_method!='Cash on Delivery' and order.payment_status!='Paid':raise ValidationError('Confirm that the payment arrived before dispatching.')
-    list(Product.objects.select_for_update().filter(pk__in=OnlineOrderLine.objects.filter(order=order).values('product_id')).order_by('pk'))      # an arriving order waits here, so it never counts this order's accessories as both reserved and still on the shelf
-    allocations=list(OnlineAllocation.objects.select_for_update(of=('self',)).filter(line__order=order).select_related('line','product','device','branch'))
-    if not allocations:raise ValidationError('This order has no reserved stock.')
-    for d in Device.objects.select_for_update().filter(pk__in=[a.device_id for a in allocations if a.device_id]):
-        if d.status!='Reserved':raise ValidationError(f'{d.code} is no longer reserved for this order. Cancel the order and create it again.')
-    for a in allocations:                     # the reservation ends here: the invoice sells the exact phones
-        if a.device_id:Device.objects.filter(pk=a.device_id).update(status='Available')
-    OnlineAllocation.objects.filter(pk__in=[a.pk for a in allocations if not a.device_id]).delete()   # accessories: counted again by the invoice itself
-    branch=online_branch();person=shopdefaults.shop_person(branch)
-    method=shop_method(branch,order) if order.payment_method!='Cash on Delivery' else None
-    doc=s.new_doc('Sales Invoice',branch,customer=party_for(branch,order),seller=person,channel='Online',online_order=order,notes=f'Online order {order.code}'+(f' · {order.notes}' if order.notes else ''),
-                  data=dict(channel='Online',online_order=order.code))
-    pricing.inputs(doc,'amount',str(order.discount_amount or 0),'','');doc.save()
-    for a in allocations:
-        if a.device_id:Line.objects.create(document=doc,product=a.product,device=a.device,warehouse=a.device.warehouse,quantity=1,rate=a.line.unit_price)
-        else:Line.objects.create(document=doc,product=a.product,warehouse=shopdefaults.warehouse(a.branch),quantity=a.quantity,rate=a.line.unit_price)
-    if order.delivery_fee>0:Line.objects.create(document=doc,product=delivery_product(),warehouse=shopdefaults.warehouse(branch),quantity=1,rate=order.delivery_fee)
-    doc.save()
-    sale=s.checkout(doc,user,[],person)
-    if order.exchange_credit_id:
-        from . import returns
-        returns.apply_to_sale(Document.objects.get(pk=order.exchange_credit_id),sale,user);sale.refresh_from_db()
-    if method and sale.outstanding>0:_receive(sale,order,method,user,order.payment_reference)
-    sale.refresh_from_db()
+    _held(order)
+    online_branch()                               # the Online Store's books exist from the first parcel on, so its dashboard can show what is on its way
     old=display_stage(order)
     order.status=OnlineOrder.DISPATCHED;order.stage='Dispatched';order.dispatched_on=timezone.localdate();order.courier=str(courier or '')[:100];order.tracking=str(tracking or '')[:100];order.dispatch_notes=str(notes or '')[:1000]
     order.save(update_fields=['status','stage','dispatched_on','courier','tracking','dispatch_notes','modified']);event(order,user,'Dispatched',old,'Dispatched',f'{order.courier} {order.tracking}'.strip()+(f' · {notes}' if notes else ''))
-    s.audit(user,'Online order dispatched',None,order=order.code,invoices=[sale.code]);return [sale]
+    s.audit(user,'Online order dispatched',None,order=order.code);return []
 
 
 def _receive(inv,order,method,user,reference=''):
@@ -886,18 +981,32 @@ def _receive(inv,order,method,user,reference=''):
 
 @transaction.atomic
 def deliver(order,user,method='Cash'):
-    """Delivered. Cash on delivery is collected now into the chosen Online Store account."""
+    """Delivered: the sale is posted now (D4). Cash on delivery is collected into the chosen Online Store account; a prepaid order uses its advance."""
     order=_lock(order)
     if order.status!=OnlineOrder.DISPATCHED:raise ValidationError('Only a dispatched order can be marked delivered.')
     if order.stage==FAILED:raise ValidationError('This delivery failed. Mark it In Transit again if the courier retries, or receive the returned phone.')
-    for inv in Document.objects.select_for_update().filter(online_order=order,kind__in=list(s.SELL),is_return=False,status='Submitted'):
-        if inv.outstanding>0:
-            conf=ShopSettings.objects.filter(branch=inv.branch).first()
-            if not conf or method not in conf.payment_methods:raise ValidationError(f'The Online Store has no “{method}” payment method set up.')
-            _receive(inv,order,method,user,f'Delivery of {order.code}')
+    branch=online_branch();conf=ShopSettings.objects.filter(branch=branch).first()
+    cod=order.payment_method=='Cash on Delivery'
+    if cod and (not conf or method not in conf.payment_methods):raise ValidationError(f'The Online Store has no “{method}” payment method set up.')
+    sale=Document.objects.select_for_update().filter(online_order=order,kind__in=list(s.SELL),is_return=False,status='Submitted').first()
+    if sale is None:                                          # the normal path: nothing was posted at dispatch
+        allocations,phones=_held(order)
+        Device.objects.filter(pk__in=[d.pk for d in phones]).update(status='Available')        # the reservation ends here: the invoice sells the exact phones
+        OnlineAllocation.objects.filter(pk__in=[a.pk for a in allocations if not a.device_id]).delete()   # accessories: counted again by the invoice itself
+        sale=_invoice(order,allocations,user)
+        if order.exchange_credit_id:
+            from . import returns
+            returns.apply_to_sale(Document.objects.get(pk=order.exchange_credit_id),sale,user);sale.refresh_from_db()
+        had_advance=bool(advances(order))
+        if not cod:_use_advances(order,sale,user)
+        if sale.outstanding>0 and (cod or not had_advance):     # a prepaid order confirmed before 14 Nov 2026 has no advance: its money is received now, as it was then
+            _receive(sale,order,method if cod else shop_method(branch,order),user,f'Delivery of {order.code}' if cod else order.payment_reference)
+    elif sale.outstanding>0:                                  # invoiced at dispatch (before 14 Nov 2026)
+        if not conf or method not in conf.payment_methods:raise ValidationError(f'The Online Store has no “{method}” payment method set up.')
+        _receive(sale,order,method,user,f'Delivery of {order.code}')
     old=display_stage(order)
     order.status=OnlineOrder.DELIVERED;order.stage='Delivered';order.payment_status='Paid';order.delivered_on=timezone.localdate()
-    order.save(update_fields=['status','stage','payment_status','delivered_on','modified']);event(order,user,'Delivered',old,'Delivered');s.audit(user,'Online order delivered',None,order=order.code);return order
+    order.save(update_fields=['status','stage','payment_status','delivered_on','modified']);event(order,user,'Delivered',old,'Delivered',f'Sale {sale.code}');s.audit(user,'Online order delivered',sale,order=order.code);return order
 
 
 def invoices(order):

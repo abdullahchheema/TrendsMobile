@@ -1,0 +1,822 @@
+{
+ "taken": "2026-11-13 23:58:09 +0500",
+ "database": "local PostgreSQL staging (isolated)",
+ "before": {
+  "documents": 4677,
+  "ledger_rows": 11752,
+  "stock_movements": 3962,
+  "phones": 1439,
+  "imeis": 1872,
+  "parties": 421,
+  "products": 55,
+  "online_orders": 3,
+  "audit_rows": 6447
+ },
+ "growth": [],
+ "published": 0,
+ "after": {
+  "documents": 4677,
+  "ledger_rows": 11752,
+  "stock_movements": 3962,
+  "phones": 1439,
+  "imeis": 1872,
+  "parties": 421,
+  "products": 55,
+  "online_orders": 3,
+  "audit_rows": 6447
+ },
+ "pages": [
+  {
+   "role": "owner",
+   "page": "Dashboard (all shops)",
+   "status": 200,
+   "queries": 39,
+   "db_ms": 78.0,
+   "median_ms": 140.7,
+   "p95_ms": 176.3,
+   "max_ms": 176.3,
+   "kb": 23.2
+  },
+  {
+   "role": "shop",
+   "page": "Dashboard",
+   "status": 200,
+   "queries": 38,
+   "db_ms": 46.0,
+   "median_ms": 106.1,
+   "p95_ms": 127.7,
+   "max_ms": 127.7,
+   "kb": 19.0
+  },
+  {
+   "role": "shop",
+   "page": "New Sale (POS)",
+   "status": 200,
+   "queries": 41,
+   "db_ms": 0.0,
+   "median_ms": 70.8,
+   "p95_ms": 77.1,
+   "max_ms": 77.1,
+   "kb": 32.7
+  },
+  {
+   "role": "owner",
+   "page": "New Sale (all shops)",
+   "status": 200,
+   "queries": 63,
+   "db_ms": 15.0,
+   "median_ms": 98.1,
+   "p95_ms": 105.8,
+   "max_ms": 105.8,
+   "kb": 48.6
+  },
+  {
+   "role": "shop",
+   "page": "Phone inventory",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 0.0,
+   "median_ms": 25.3,
+   "p95_ms": 29.8,
+   "max_ms": 29.8,
+   "kb": 11.4
+  },
+  {
+   "role": "shop",
+   "page": "Sales history",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 47.0,
+   "median_ms": 82.9,
+   "p95_ms": 111.8,
+   "max_ms": 111.8,
+   "kb": 20.4
+  },
+  {
+   "role": "shop",
+   "page": "Sales history page 3",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 16.0,
+   "median_ms": 85.1,
+   "p95_ms": 108.5,
+   "max_ms": 108.5,
+   "kb": 20.4
+  },
+  {
+   "role": "shop",
+   "page": "Sales history search",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 15.0,
+   "median_ms": 90.6,
+   "p95_ms": 122.3,
+   "max_ms": 122.3,
+   "kb": 20.5
+  },
+  {
+   "role": "shop",
+   "page": "Purchase history",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 0.0,
+   "median_ms": 41.5,
+   "p95_ms": 61.7,
+   "max_ms": 61.7,
+   "kb": 21.3
+  },
+  {
+   "role": "shop",
+   "page": "Payments list",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 31.0,
+   "median_ms": 115.8,
+   "p95_ms": 155.5,
+   "max_ms": 155.5,
+   "kb": 18.7
+  },
+  {
+   "role": "shop",
+   "page": "Customers",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 15.0,
+   "median_ms": 33.0,
+   "p95_ms": 41.7,
+   "max_ms": 41.7,
+   "kb": 26.9
+  },
+  {
+   "role": "shop",
+   "page": "IMEI search (exact)",
+   "status": 302,
+   "queries": 8,
+   "db_ms": 15.0,
+   "median_ms": 19.2,
+   "p95_ms": 20.1,
+   "max_ms": 20.1,
+   "kb": 0.0
+  },
+  {
+   "role": "shop",
+   "page": "IMEI search (partial)",
+   "status": 200,
+   "queries": 10,
+   "db_ms": 16.0,
+   "median_ms": 28.7,
+   "p95_ms": 32.3,
+   "max_ms": 32.3,
+   "kb": 11.4
+  },
+  {
+   "role": "shop",
+   "page": "Global search",
+   "status": 200,
+   "queries": 9,
+   "db_ms": 16.0,
+   "median_ms": 25.0,
+   "p95_ms": 26.5,
+   "max_ms": 26.5,
+   "kb": 1.1
+  },
+  {
+   "role": "shop",
+   "page": "Sale detail",
+   "status": 200,
+   "queries": 20,
+   "db_ms": 16.0,
+   "median_ms": 39.4,
+   "p95_ms": 43.8,
+   "max_ms": 43.8,
+   "kb": 15.0
+  },
+  {
+   "role": "shop",
+   "page": "Receipt",
+   "status": 200,
+   "queries": 14,
+   "db_ms": 16.0,
+   "median_ms": 26.2,
+   "p95_ms": 38.3,
+   "max_ms": 38.3,
+   "kb": 1.9
+  },
+  {
+   "role": "shop",
+   "page": "Phone history",
+   "status": 200,
+   "queries": 12,
+   "db_ms": 15.0,
+   "median_ms": 36.3,
+   "p95_ms": 59.1,
+   "max_ms": 59.1,
+   "kb": 12.3
+  },
+  {
+   "role": "shop",
+   "page": "Customer account",
+   "status": 200,
+   "queries": 15,
+   "db_ms": 32.0,
+   "median_ms": 40.1,
+   "p95_ms": 44.4,
+   "max_ms": 44.4,
+   "kb": 16.9
+  },
+  {
+   "role": "shop",
+   "page": "Transaction history",
+   "status": 200,
+   "queries": 11,
+   "db_ms": 63.0,
+   "median_ms": 341.1,
+   "p95_ms": 376.2,
+   "max_ms": 376.2,
+   "kb": 29.9
+  },
+  {
+   "role": "shop",
+   "page": "Cash and bank",
+   "status": 200,
+   "queries": 14,
+   "db_ms": 79.0,
+   "median_ms": 325.4,
+   "p95_ms": 463.4,
+   "max_ms": 463.4,
+   "kb": 19.2
+  },
+  {
+   "role": "shop",
+   "page": "Customer dues",
+   "status": 200,
+   "queries": 12,
+   "db_ms": 15.0,
+   "median_ms": 77.6,
+   "p95_ms": 92.7,
+   "max_ms": 92.7,
+   "kb": 29.6
+  },
+  {
+   "role": "shop",
+   "page": "Supplier dues",
+   "status": 200,
+   "queries": 12,
+   "db_ms": 15.0,
+   "median_ms": 30.1,
+   "p95_ms": 44.0,
+   "max_ms": 44.0,
+   "kb": 15.1
+  },
+  {
+   "role": "shop",
+   "page": "Accessories",
+   "status": 200,
+   "queries": 11,
+   "db_ms": 0.0,
+   "median_ms": 21.5,
+   "p95_ms": 26.0,
+   "max_ms": 26.0,
+   "kb": 13.8
+  },
+  {
+   "role": "shop",
+   "page": "Returns: find a sale",
+   "status": 200,
+   "queries": 49,
+   "db_ms": 47.0,
+   "median_ms": 74.9,
+   "p95_ms": 108.1,
+   "max_ms": 108.1,
+   "kb": 22.4
+  },
+  {
+   "role": "shop",
+   "page": "Stock in all shops",
+   "status": 200,
+   "queries": 11,
+   "db_ms": 0.0,
+   "median_ms": 21.0,
+   "p95_ms": 26.3,
+   "max_ms": 26.3,
+   "kb": 11.4
+  },
+  {
+   "role": "shop",
+   "page": "Overdue payments",
+   "status": 200,
+   "queries": 9,
+   "db_ms": 15.0,
+   "median_ms": 48.7,
+   "p95_ms": 51.7,
+   "max_ms": 51.7,
+   "kb": 61.8
+  },
+  {
+   "role": "owner",
+   "page": "Profit and loss (1 year)",
+   "status": 200,
+   "queries": 14,
+   "db_ms": 0.0,
+   "median_ms": 39.4,
+   "p95_ms": 43.1,
+   "max_ms": 43.1,
+   "kb": 20.8
+  },
+  {
+   "role": "owner",
+   "page": "Trial balance",
+   "status": 200,
+   "queries": 15,
+   "db_ms": 16.0,
+   "median_ms": 48.8,
+   "p95_ms": 50.1,
+   "max_ms": 50.1,
+   "kb": 32.9
+  },
+  {
+   "role": "owner",
+   "page": "Balance sheet",
+   "status": 200,
+   "queries": 14,
+   "db_ms": 0.0,
+   "median_ms": 40.0,
+   "p95_ms": 42.3,
+   "max_ms": 42.3,
+   "kb": 20.9
+  },
+  {
+   "role": "owner",
+   "page": "General ledger (1 year)",
+   "status": 200,
+   "queries": 12,
+   "db_ms": 219.0,
+   "median_ms": 1920.5,
+   "p95_ms": 2108.7,
+   "max_ms": 2108.7,
+   "kb": 1784.4
+  },
+  {
+   "role": "owner",
+   "page": "Sales register (1 year)",
+   "status": 200,
+   "queries": 11,
+   "db_ms": 48.0,
+   "median_ms": 318.2,
+   "p95_ms": 356.1,
+   "max_ms": 356.1,
+   "kb": 261.8
+  },
+  {
+   "role": "owner",
+   "page": "Stock ledger",
+   "status": 200,
+   "queries": 12,
+   "db_ms": 110.0,
+   "median_ms": 734.4,
+   "p95_ms": 811.8,
+   "max_ms": 811.8,
+   "kb": 473.7
+  },
+  {
+   "role": "owner",
+   "page": "Mobile inventory report",
+   "status": 200,
+   "queries": 12,
+   "db_ms": 32.0,
+   "median_ms": 364.1,
+   "p95_ms": 370.9,
+   "max_ms": 370.9,
+   "kb": 218.7
+  },
+  {
+   "role": "owner",
+   "page": "Device profit",
+   "status": 200,
+   "queries": 12,
+   "db_ms": 63.0,
+   "median_ms": 399.3,
+   "p95_ms": 418.4,
+   "max_ms": 418.4,
+   "kb": 286.9
+  },
+  {
+   "role": "owner",
+   "page": "Branch comparison",
+   "status": 200,
+   "queries": 18,
+   "db_ms": 16.0,
+   "median_ms": 54.3,
+   "p95_ms": 87.8,
+   "max_ms": 87.8,
+   "kb": 18.4
+  },
+  {
+   "role": "owner",
+   "page": "Staff and commission",
+   "status": 200,
+   "queries": 6,
+   "db_ms": 0.0,
+   "median_ms": 13.6,
+   "p95_ms": 14.6,
+   "max_ms": 14.6,
+   "kb": 14.3
+  },
+  {
+   "role": "owner",
+   "page": "Audit log",
+   "status": 200,
+   "queries": 7,
+   "db_ms": 16.0,
+   "median_ms": 58.3,
+   "p95_ms": 77.5,
+   "max_ms": 77.5,
+   "kb": 28.2
+  },
+  {
+   "role": "owner",
+   "page": "Stock transfers",
+   "status": 200,
+   "queries": 13,
+   "db_ms": 0.0,
+   "median_ms": 33.4,
+   "p95_ms": 36.7,
+   "max_ms": 36.7,
+   "kb": 21.5
+  },
+  {
+   "role": "owner",
+   "page": "Chart of accounts",
+   "status": 200,
+   "queries": 7,
+   "db_ms": 0.0,
+   "median_ms": 34.8,
+   "p95_ms": 39.8,
+   "max_ms": 39.8,
+   "kb": 31.8
+  },
+  {
+   "role": "online",
+   "page": "Online dashboard",
+   "status": 200,
+   "queries": 260,
+   "db_ms": 94.0,
+   "median_ms": 339.2,
+   "p95_ms": 348.6,
+   "max_ms": 348.6,
+   "kb": 19.4
+  },
+  {
+   "role": "online",
+   "page": "Online orders",
+   "status": 200,
+   "queries": 17,
+   "db_ms": 0.0,
+   "median_ms": 27.4,
+   "p95_ms": 30.4,
+   "max_ms": 30.4,
+   "kb": 11.4
+  },
+  {
+   "role": "online",
+   "page": "Online stock",
+   "status": 200,
+   "queries": 25,
+   "db_ms": 0.0,
+   "median_ms": 44.8,
+   "p95_ms": 50.2,
+   "max_ms": 50.2,
+   "kb": 19.4
+  },
+  {
+   "role": "online",
+   "page": "Products and photos",
+   "status": 200,
+   "queries": 238,
+   "db_ms": 139.0,
+   "median_ms": 313.4,
+   "p95_ms": 334.8,
+   "max_ms": 334.8,
+   "kb": 22.2
+  },
+  {
+   "role": "online",
+   "page": "New online order",
+   "status": 200,
+   "queries": 29,
+   "db_ms": 31.0,
+   "median_ms": 44.8,
+   "p95_ms": 48.1,
+   "max_ms": 48.1,
+   "kb": 15.2
+  },
+  {
+   "role": "shop",
+   "page": "Live badge poll",
+   "status": 200,
+   "queries": 15,
+   "db_ms": 16.0,
+   "median_ms": 21.2,
+   "p95_ms": 24.0,
+   "max_ms": 24.0,
+   "kb": 0.0
+  },
+  {
+   "role": "shop",
+   "page": "Orders to pack",
+   "status": 200,
+   "queries": 8,
+   "db_ms": 16.0,
+   "median_ms": 18.8,
+   "p95_ms": 20.7,
+   "max_ms": 20.7,
+   "kb": 10.9
+  }
+ ],
+ "load": [
+  {
+   "concurrency": 1,
+   "requests": 170,
+   "seconds": 25.9,
+   "per_second": 6.6,
+   "stocked": 80,
+   "sold_at_counter": 23,
+   "held_for_online_orders": 50,
+   "still_free": 7,
+   "server_errors": 0,
+   "crashes": [],
+   "kinds": {
+    "online order": {
+     "count": 50,
+     "statuses": {
+      "201": 50
+     },
+     "median_ms": 126.1,
+     "p95_ms": 346.7,
+     "p99_ms": 449.8,
+     "max_ms": 449.8
+    },
+    "counter sale": {
+     "count": 40,
+     "statuses": {
+      "200": 23,
+      "400": 17
+     },
+     "median_ms": 194.3,
+     "p95_ms": 317.7,
+     "p99_ms": 376.1,
+     "max_ms": 376.1
+    },
+    "IMEI search": {
+     "count": 40,
+     "statuses": {
+      "200": 22,
+      "302": 18
+     },
+     "median_ms": 106.7,
+     "p95_ms": 226.2,
+     "p99_ms": 256.7,
+     "max_ms": 256.7
+    },
+    "payment": {
+     "count": 40,
+     "statuses": {
+      "200": 40
+     },
+     "median_ms": 100.4,
+     "p95_ms": 214.1,
+     "p99_ms": 248.6,
+     "max_ms": 248.6
+    }
+   }
+  },
+  {
+   "concurrency": 4,
+   "requests": 170,
+   "seconds": 14.6,
+   "per_second": 11.6,
+   "stocked": 80,
+   "sold_at_counter": 22,
+   "held_for_online_orders": 50,
+   "still_free": 8,
+   "server_errors": 0,
+   "crashes": [],
+   "kinds": {
+    "online order": {
+     "count": 50,
+     "statuses": {
+      "201": 50
+     },
+     "median_ms": 356.8,
+     "p95_ms": 493.9,
+     "p99_ms": 592.3,
+     "max_ms": 592.3
+    },
+    "counter sale": {
+     "count": 40,
+     "statuses": {
+      "200": 22,
+      "400": 18
+     },
+     "median_ms": 501.1,
+     "p95_ms": 634.9,
+     "p99_ms": 736.5,
+     "max_ms": 736.5
+    },
+    "IMEI search": {
+     "count": 40,
+     "statuses": {
+      "200": 19,
+      "302": 21
+     },
+     "median_ms": 219.3,
+     "p95_ms": 351.0,
+     "p99_ms": 434.8,
+     "max_ms": 434.8
+    },
+    "payment": {
+     "count": 40,
+     "statuses": {
+      "200": 40
+     },
+     "median_ms": 242.2,
+     "p95_ms": 489.3,
+     "p99_ms": 580.9,
+     "max_ms": 580.9
+    }
+   }
+  },
+  {
+   "concurrency": 8,
+   "requests": 170,
+   "seconds": 14.9,
+   "per_second": 11.4,
+   "stocked": 80,
+   "sold_at_counter": 20,
+   "held_for_online_orders": 47,
+   "still_free": 13,
+   "server_errors": 0,
+   "crashes": [],
+   "kinds": {
+    "online order": {
+     "count": 50,
+     "statuses": {
+      "201": 50
+     },
+     "median_ms": 486.5,
+     "p95_ms": 924.6,
+     "p99_ms": 1217.7,
+     "max_ms": 1217.7
+    },
+    "counter sale": {
+     "count": 40,
+     "statuses": {
+      "200": 20,
+      "400": 20
+     },
+     "median_ms": 1351.4,
+     "p95_ms": 1749.0,
+     "p99_ms": 1824.6,
+     "max_ms": 1824.6
+    },
+    "IMEI search": {
+     "count": 40,
+     "statuses": {
+      "200": 22,
+      "302": 18
+     },
+     "median_ms": 281.6,
+     "p95_ms": 409.0,
+     "p99_ms": 462.4,
+     "max_ms": 462.4
+    },
+    "payment": {
+     "count": 40,
+     "statuses": {
+      "200": 40
+     },
+     "median_ms": 606.9,
+     "p95_ms": 1391.9,
+     "p99_ms": 1454.4,
+     "max_ms": 1454.4
+    }
+   }
+  },
+  {
+   "concurrency": 16,
+   "requests": 170,
+   "seconds": 18.8,
+   "per_second": 9.0,
+   "stocked": 80,
+   "sold_at_counter": 20,
+   "held_for_online_orders": 49,
+   "still_free": 11,
+   "server_errors": 0,
+   "crashes": [],
+   "kinds": {
+    "online order": {
+     "count": 50,
+     "statuses": {
+      "201": 50
+     },
+     "median_ms": 820.1,
+     "p95_ms": 2672.3,
+     "p99_ms": 2983.6,
+     "max_ms": 2983.6
+    },
+    "counter sale": {
+     "count": 40,
+     "statuses": {
+      "200": 20,
+      "400": 20
+     },
+     "median_ms": 2896.1,
+     "p95_ms": 6204.3,
+     "p99_ms": 6346.9,
+     "max_ms": 6346.9
+    },
+    "IMEI search": {
+     "count": 40,
+     "statuses": {
+      "200": 21,
+      "302": 19
+     },
+     "median_ms": 348.5,
+     "p95_ms": 504.3,
+     "p99_ms": 990.6,
+     "max_ms": 990.6
+    },
+    "payment": {
+     "count": 40,
+     "statuses": {
+      "200": 40
+     },
+     "median_ms": 1103.9,
+     "p95_ms": 5218.1,
+     "p99_ms": 5939.8,
+     "max_ms": 5939.8
+    }
+   }
+  },
+  {
+   "concurrency": 32,
+   "requests": 170,
+   "seconds": 16.7,
+   "per_second": 10.2,
+   "stocked": 80,
+   "sold_at_counter": 34,
+   "held_for_online_orders": 15,
+   "still_free": 31,
+   "server_errors": 0,
+   "crashes": [],
+   "kinds": {
+    "online order": {
+     "count": 50,
+     "statuses": {
+      "201": 50
+     },
+     "median_ms": 2186.5,
+     "p95_ms": 4766.2,
+     "p99_ms": 4937.9,
+     "max_ms": 4937.9
+    },
+    "counter sale": {
+     "count": 40,
+     "statuses": {
+      "200": 34,
+      "400": 6
+     },
+     "median_ms": 4567.1,
+     "p95_ms": 10067.5,
+     "p99_ms": 10240.1,
+     "max_ms": 10240.1
+    },
+    "IMEI search": {
+     "count": 40,
+     "statuses": {
+      "200": 19,
+      "302": 21
+     },
+     "median_ms": 340.2,
+     "p95_ms": 1735.3,
+     "p99_ms": 2028.0,
+     "max_ms": 2028.0
+    },
+    "payment": {
+     "count": 40,
+     "statuses": {
+      "200": 40
+     },
+     "median_ms": 2249.2,
+     "p95_ms": 8595.5,
+     "p99_ms": 9755.2,
+     "max_ms": 9755.2
+    }
+   }
+  }
+ ],
+ "books_after_load": {
+  "problems": 0,
+  "first": []
+ }
+}

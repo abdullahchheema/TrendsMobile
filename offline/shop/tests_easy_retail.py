@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import easy_retail,services as s,financial_reports
 
 
@@ -22,7 +22,7 @@ class EasyRetail(TestCase):
         payload={key:str(value.pk) if hasattr(value,'pk') else str(value) for key,value in data.items()};payload.setdefault('request_key',str(uuid.uuid4()))
         return self.client.post(reverse('easy_entry',args=[kind]),payload),payload
     def test_purchase_saves_stock_supplier_bill_and_partial_payment_together(self):
-        data=self.purchase_data();data.update(quantity=2,payment_status='part',amount_paid=20000)
+        data=self.purchase_data();data.update(quantity=2,payment_status='part',amount_paid=20000);fund(self.branch,self.user,'20000')      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         bill=easy_retail.purchase(data,self.user);self.assertEqual(bill.total,100000);self.assertEqual(bill.outstanding,80000)
         self.assertEqual(Device.objects.count(),2);self.assertEqual(IMEI.objects.count(),0);self.assertTrue(all(phone.pta_status=='Non-PTA' for phone in Device.objects.all()))
         totals=LedgerEntry.objects.aggregate(dr=Sum('debit'),cr=Sum('credit'));self.assertEqual(totals['dr'],totals['cr'])

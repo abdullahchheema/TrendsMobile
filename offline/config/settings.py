@@ -63,8 +63,10 @@ if os.environ.get('VERCEL'):
     # Vercel always serves over HTTPS and sets this header itself, so Django must see the request as secure; otherwise its
     # same-origin check compares the browser's https:// origin with http:// and rejects valid form posts.
     SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
+if deploy.secure_cookies(os.environ):
+    SESSION_COOKIE_SECURE=CSRF_COOKIE_SECURE=True
 if os.environ.get('COVISON_HTTPS')=='1':
-    SESSION_COOKIE_SECURE=CSRF_COOKIE_SECURE=SECURE_SSL_REDIRECT=True
+    SECURE_SSL_REDIRECT=True
     SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
     SECURE_HSTS_SECONDS=31536000
     SECURE_REFERRER_POLICY='same-origin'

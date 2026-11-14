@@ -1,0 +1,163 @@
+Calculation,Input,Independently expected,Actual result,Difference,Status
+Gain on selling an asset above cost,"cost 100000, sold 150000",65000.00,65000.00,0.00,PASS
+Straight-line depreciation past the end of life,"10000 less 1000 over 6 months, 12+ months later",9000.00,9000.00,0.00,PASS
+Reducing-balance depreciation,90000 at 30% a year,25240.65,25240.65,0.00,PASS
+Trial balance: total debits = total credits,full period,4470040.57,4470040.57,0.00,PASS
+Cash,full period dataset,1134914.50,1134914.50,0.00,PASS
+Bank,full period dataset,862000.00,862000.00,0.00,PASS
+Customer receivables,full period dataset,50000.00,50000.00,0.00,PASS
+Supplier payables,full period dataset,95000.50,95000.50,0.00,PASS
+Inventory value,full period dataset,58666.53,58666.53,0.00,PASS
+Sales tax payable,full period dataset,956.25,956.25,0.00,PASS
+Loan balance,full period dataset,250000.00,250000.00,0.00,PASS
+Owner capital,full period dataset,2000000.00,2000000.00,0.00,PASS
+Owner drawings,full period dataset,20000.00,20000.00,0.00,PASS
+Fixed asset at cost,full period dataset,120000.00,120000.00,0.00,PASS
+Accumulated depreciation,full period dataset,13500.00,13500.00,0.00,PASS
+Prepaid balance,full period dataset,30000.00,30000.00,0.00,PASS
+Accrued expenses,full period dataset,0.00,0.00,0.00,PASS
+Stock loss,full period dataset,222.22,222.22,0.00,PASS
+Net profit,income - cost of goods - expenses,-83875.72,-83875.72,0.00,PASS
+Profit and loss report: net profit,application report,-83875.72,-83875.72,0.00,PASS
+Year-end close: profit moved to retained earnings,period through yesterday,-86722.97,-86722.97,0.00,PASS
+Commission after a full return across a rate change,"sale at 2%, return after the rate became 5%",0.00,0.00,0.00,PASS
+Commission base excludes tax and discount,"2000 - 200 discount + 17% tax, rate 2%",36.00,36.00,0.00,PASS
+Staff commission across three rates,2% then 5% then 1.5%,10050.02,10050.02,0.00,PASS
+Customer due after a part payment,1000 - 300 - 200,500.00,500.00,0.00,PASS
+Thirty lines: subtotal,30 line(s); discount 12.5 percent; tax 17%,1131.15,1131.15,0.00,PASS
+Thirty lines: discount,30 line(s); discount 12.5 percent; tax 17%,141.39,141.39,0.00,PASS
+Thirty lines: net,30 line(s); discount 12.5 percent; tax 17%,989.76,989.76,0.00,PASS
+Thirty lines: tax,30 line(s); discount 12.5 percent; tax 17%,168.26,168.26,0.00,PASS
+Thirty lines: total,30 line(s); discount 12.5 percent; tax 17%,1158.02,1158.02,0.00,PASS
+Thirty lines: discount shared over lines,30 line(s); discount 12.5 percent; tax 17%,141.39,141.39,0.00,PASS
+Thirty lines: tax posted to the tax account,30 line(s); discount 12.5 percent; tax 17%,168.26,168.26,0.00,PASS
+Thirty lines: customer due after payments,30 line(s); discount 12.5 percent; tax 17%,1158.02,1158.02,0.00,PASS
+One paisa: subtotal,1 line(s); discount 0 amount; tax 17%,0.01,0.01,0.00,PASS
+One paisa: discount,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+One paisa: net,1 line(s); discount 0 amount; tax 17%,0.01,0.01,0.00,PASS
+One paisa: tax,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+One paisa: total,1 line(s); discount 0 amount; tax 17%,0.01,0.01,0.00,PASS
+One paisa: discount shared over lines,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+One paisa: tax posted to the tax account,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+One paisa: customer due after payments,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Five paisa: subtotal,1 line(s); discount 0 amount; tax 17%,0.05,0.05,0.00,PASS
+Five paisa: discount,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Five paisa: net,1 line(s); discount 0 amount; tax 17%,0.05,0.05,0.00,PASS
+Five paisa: tax,1 line(s); discount 0 amount; tax 17%,0.01,0.01,0.00,PASS
+Five paisa: total,1 line(s); discount 0 amount; tax 17%,0.06,0.06,0.00,PASS
+Five paisa: discount shared over lines,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Five paisa: tax posted to the tax account,1 line(s); discount 0 amount; tax 17%,0.01,0.01,0.00,PASS
+Five paisa: customer due after payments,1 line(s); discount 0 amount; tax 17%,0.01,0.01,0.00,PASS
+Ten paisa: subtotal,1 line(s); discount 0 amount; tax 17%,0.10,0.10,0.00,PASS
+Ten paisa: discount,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Ten paisa: net,1 line(s); discount 0 amount; tax 17%,0.10,0.10,0.00,PASS
+Ten paisa: tax,1 line(s); discount 0 amount; tax 17%,0.02,0.02,0.00,PASS
+Ten paisa: total,1 line(s); discount 0 amount; tax 17%,0.12,0.12,0.00,PASS
+Ten paisa: discount shared over lines,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Ten paisa: tax posted to the tax account,1 line(s); discount 0 amount; tax 17%,0.02,0.02,0.00,PASS
+Ten paisa: customer due after payments,1 line(s); discount 0 amount; tax 17%,0.02,0.02,0.00,PASS
+Ninety-nine paisa: subtotal,1 line(s); discount 0 amount; tax 17%,0.99,0.99,0.00,PASS
+Ninety-nine paisa: discount,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Ninety-nine paisa: net,1 line(s); discount 0 amount; tax 17%,0.99,0.99,0.00,PASS
+Ninety-nine paisa: tax,1 line(s); discount 0 amount; tax 17%,0.17,0.17,0.00,PASS
+Ninety-nine paisa: total,1 line(s); discount 0 amount; tax 17%,1.16,1.16,0.00,PASS
+Ninety-nine paisa: discount shared over lines,1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Ninety-nine paisa: tax posted to the tax account,1 line(s); discount 0 amount; tax 17%,0.17,0.17,0.00,PASS
+Ninety-nine paisa: customer due after payments,1 line(s); discount 0 amount; tax 17%,0.17,0.17,0.00,PASS
+Repeating decimal share: subtotal,3 line(s); discount 10 amount; tax 0%,30.00,30.00,0.00,PASS
+Repeating decimal share: discount,3 line(s); discount 10 amount; tax 0%,10.00,10.00,0.00,PASS
+Repeating decimal share: net,3 line(s); discount 10 amount; tax 0%,20.00,20.00,0.00,PASS
+Repeating decimal share: tax,3 line(s); discount 10 amount; tax 0%,0.00,0.00,0.00,PASS
+Repeating decimal share: total,3 line(s); discount 10 amount; tax 0%,20.00,20.00,0.00,PASS
+Repeating decimal share: discount shared over lines,3 line(s); discount 10 amount; tax 0%,10.00,10.00,0.00,PASS
+Repeating decimal share: tax posted to the tax account,3 line(s); discount 10 amount; tax 0%,0.00,0.00,0.00,PASS
+Repeating decimal share: customer due after payments,3 line(s); discount 10 amount; tax 0%,20.00,20.00,0.00,PASS
+Full discount: subtotal,1 line(s); discount 100 percent; tax 0%,500.00,500.00,0.00,PASS
+Full discount: discount,1 line(s); discount 100 percent; tax 0%,500.00,500.00,0.00,PASS
+Full discount: net,1 line(s); discount 100 percent; tax 0%,0.00,0.00,0.00,PASS
+Full discount: tax,1 line(s); discount 100 percent; tax 0%,0.00,0.00,0.00,PASS
+Full discount: total,1 line(s); discount 100 percent; tax 0%,0.00,0.00,0.00,PASS
+Full discount: discount shared over lines,1 line(s); discount 100 percent; tax 0%,500.00,500.00,0.00,PASS
+Full discount: tax posted to the tax account,1 line(s); discount 100 percent; tax 0%,0.00,0.00,0.00,PASS
+Full discount: customer due after payments,1 line(s); discount 100 percent; tax 0%,0.00,0.00,0.00,PASS
+Half paisa tie: subtotal,1 line(s); discount 5 percent; tax 0%,1000.50,1000.50,0.00,PASS
+Half paisa tie: discount,1 line(s); discount 5 percent; tax 0%,50.02,50.02,0.00,PASS
+Half paisa tie: net,1 line(s); discount 5 percent; tax 0%,950.48,950.48,0.00,PASS
+Half paisa tie: tax,1 line(s); discount 5 percent; tax 0%,0.00,0.00,0.00,PASS
+Half paisa tie: total,1 line(s); discount 5 percent; tax 0%,950.48,950.48,0.00,PASS
+Half paisa tie: discount shared over lines,1 line(s); discount 5 percent; tax 0%,50.02,50.02,0.00,PASS
+Half paisa tie: tax posted to the tax account,1 line(s); discount 5 percent; tax 0%,0.00,0.00,0.00,PASS
+Half paisa tie: customer due after payments,1 line(s); discount 5 percent; tax 0%,950.48,950.48,0.00,PASS
+Half a unit: subtotal,2 line(s); discount 3.33 percent; tax 17%,279.15,279.15,0.00,PASS
+Half a unit: discount,2 line(s); discount 3.33 percent; tax 17%,9.30,9.30,0.00,PASS
+Half a unit: net,2 line(s); discount 3.33 percent; tax 17%,269.85,269.85,0.00,PASS
+Half a unit: tax,2 line(s); discount 3.33 percent; tax 17%,45.87,45.87,0.00,PASS
+Half a unit: total,2 line(s); discount 3.33 percent; tax 17%,315.72,315.72,0.00,PASS
+Half a unit: discount shared over lines,2 line(s); discount 3.33 percent; tax 17%,9.30,9.30,0.00,PASS
+Half a unit: tax posted to the tax account,2 line(s); discount 3.33 percent; tax 17%,45.87,45.87,0.00,PASS
+Half a unit: customer due after payments,2 line(s); discount 3.33 percent; tax 17%,315.72,315.72,0.00,PASS
+One phone: subtotal,1 line(s); discount 0 amount; tax 0%,100000.00,100000.00,0.00,PASS
+One phone: discount,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+One phone: net,1 line(s); discount 0 amount; tax 0%,100000.00,100000.00,0.00,PASS
+One phone: tax,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+One phone: total,1 line(s); discount 0 amount; tax 0%,100000.00,100000.00,0.00,PASS
+One phone: discount shared over lines,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+One phone: tax posted to the tax account,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+One phone: customer due after payments,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+Phone profit,"sold 100000, cost 80000",20000.00,20000.00,0.00,PASS
+Percent discount with tax: subtotal,4 line(s); discount 7.5 percent; tax 17%,336.41,336.41,0.00,PASS
+Percent discount with tax: discount,4 line(s); discount 7.5 percent; tax 17%,25.23,25.23,0.00,PASS
+Percent discount with tax: net,4 line(s); discount 7.5 percent; tax 17%,311.18,311.18,0.00,PASS
+Percent discount with tax: tax,4 line(s); discount 7.5 percent; tax 17%,52.90,52.90,0.00,PASS
+Percent discount with tax: total,4 line(s); discount 7.5 percent; tax 17%,364.08,364.08,0.00,PASS
+Percent discount with tax: discount shared over lines,4 line(s); discount 7.5 percent; tax 17%,25.23,25.23,0.00,PASS
+Percent discount with tax: tax posted to the tax account,4 line(s); discount 7.5 percent; tax 17%,52.90,52.90,0.00,PASS
+Percent discount with tax: customer due after payments,4 line(s); discount 7.5 percent; tax 17%,364.08,364.08,0.00,PASS
+"Tax, no discount: subtotal",1 line(s); discount 0 amount; tax 17%,1000.00,1000.00,0.00,PASS
+"Tax, no discount: discount",1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+"Tax, no discount: net",1 line(s); discount 0 amount; tax 17%,1000.00,1000.00,0.00,PASS
+"Tax, no discount: tax",1 line(s); discount 0 amount; tax 17%,170.00,170.00,0.00,PASS
+"Tax, no discount: total",1 line(s); discount 0 amount; tax 17%,1170.00,1170.00,0.00,PASS
+"Tax, no discount: discount shared over lines",1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+"Tax, no discount: tax posted to the tax account",1 line(s); discount 0 amount; tax 17%,170.00,170.00,0.00,PASS
+"Tax, no discount: customer due after payments",1 line(s); discount 0 amount; tax 17%,0.00,0.00,0.00,PASS
+Zero tax rate: subtotal,1 line(s); discount 0 amount; tax 0%,250.00,250.00,0.00,PASS
+Zero tax rate: discount,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+Zero tax rate: net,1 line(s); discount 0 amount; tax 0%,250.00,250.00,0.00,PASS
+Zero tax rate: tax,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+Zero tax rate: total,1 line(s); discount 0 amount; tax 0%,250.00,250.00,0.00,PASS
+Zero tax rate: discount shared over lines,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+Zero tax rate: tax posted to the tax account,1 line(s); discount 0 amount; tax 0%,0.00,0.00,0.00,PASS
+Zero tax rate: customer due after payments,1 line(s); discount 0 amount; tax 0%,250.00,250.00,0.00,PASS
+Residual one paisa: subtotal,3 line(s); discount 0.01 amount; tax 0%,300.00,300.00,0.00,PASS
+Residual one paisa: discount,3 line(s); discount 0.01 amount; tax 0%,0.01,0.01,0.00,PASS
+Residual one paisa: net,3 line(s); discount 0.01 amount; tax 0%,299.99,299.99,0.00,PASS
+Residual one paisa: tax,3 line(s); discount 0.01 amount; tax 0%,0.00,0.00,0.00,PASS
+Residual one paisa: total,3 line(s); discount 0.01 amount; tax 0%,299.99,299.99,0.00,PASS
+Residual one paisa: discount shared over lines,3 line(s); discount 0.01 amount; tax 0%,0.01,0.01,0.00,PASS
+Residual one paisa: tax posted to the tax account,3 line(s); discount 0.01 amount; tax 0%,0.00,0.00,0.00,PASS
+Residual one paisa: customer due after payments,3 line(s); discount 0.01 amount; tax 0%,299.99,299.99,0.00,PASS
+Residual two paisa: subtotal,3 line(s); discount 0.02 amount; tax 0%,300.00,300.00,0.00,PASS
+Residual two paisa: discount,3 line(s); discount 0.02 amount; tax 0%,0.02,0.02,0.00,PASS
+Residual two paisa: net,3 line(s); discount 0.02 amount; tax 0%,299.98,299.98,0.00,PASS
+Residual two paisa: tax,3 line(s); discount 0.02 amount; tax 0%,0.00,0.00,0.00,PASS
+Residual two paisa: total,3 line(s); discount 0.02 amount; tax 0%,299.98,299.98,0.00,PASS
+Residual two paisa: discount shared over lines,3 line(s); discount 0.02 amount; tax 0%,0.02,0.02,0.00,PASS
+Residual two paisa: tax posted to the tax account,3 line(s); discount 0.02 amount; tax 0%,0.00,0.00,0.00,PASS
+Residual two paisa: customer due after payments,3 line(s); discount 0.02 amount; tax 0%,299.98,299.98,0.00,PASS
+"Phones and accessories, amount discount: subtotal",4 line(s); discount 1000.01 amount; tax 0%,156949.97,156949.97,0.00,PASS
+"Phones and accessories, amount discount: discount",4 line(s); discount 1000.01 amount; tax 0%,1000.01,1000.01,0.00,PASS
+"Phones and accessories, amount discount: net",4 line(s); discount 1000.01 amount; tax 0%,155949.96,155949.96,0.00,PASS
+"Phones and accessories, amount discount: tax",4 line(s); discount 1000.01 amount; tax 0%,0.00,0.00,0.00,PASS
+"Phones and accessories, amount discount: total",4 line(s); discount 1000.01 amount; tax 0%,155949.96,155949.96,0.00,PASS
+"Phones and accessories, amount discount: discount shared over lines",4 line(s); discount 1000.01 amount; tax 0%,1000.01,1000.01,0.00,PASS
+"Phones and accessories, amount discount: tax posted to the tax account",4 line(s); discount 1000.01 amount; tax 0%,0.00,0.00,0.00,PASS
+"Phones and accessories, amount discount: customer due after payments",4 line(s); discount 1000.01 amount; tax 0%,45949.96,45949.96,0.00,PASS
+Split payment (all cash): remaining receivable,total 1000.00,0.00,0.00,0.00,PASS
+Split payment (all bank): remaining receivable,total 1000.00,0.00,0.00,0.00,PASS
+Split payment (cash and bank): remaining receivable,total 1000.00,0.00,0.00,0.00,PASS
+Split payment (cash and credit): remaining receivable,total 1000.00,749.50,749.50,0.00,PASS
+Split payment (bank and credit): remaining receivable,total 1000.00,0.01,0.01,0.00,PASS
+Split payment (three methods): remaining receivable,total 1000.00,400.00,400.00,0.00,PASS
+Split payment (nothing paid): remaining receivable,total 1000.00,1000.00,1000.00,0.00,PASS
+Supplier due after a part payment,60000.75 - 10000.25,50000.50,50000.50,0.00,PASS

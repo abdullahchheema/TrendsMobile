@@ -1,0 +1,477 @@
+{
+ "base": "https://trends-mobile.vercel.app",
+ "samples": 12,
+ "taken": "2026-11-13 23:34:04 +0500",
+ "rows": [
+  {
+   "path": "/health/",
+   "method": "GET",
+   "statuses": [
+    "200"
+   ],
+   "expected": [
+    200
+   ],
+   "ok": true,
+   "first_ms": 1397.9,
+   "median_ms": 551.1,
+   "p95_ms": 1402.9,
+   "max_ms": 1402.9,
+   "bytes": 184,
+   "location": "",
+   "cache_control": "no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/login/",
+   "method": "GET",
+   "statuses": [
+    "200"
+   ],
+   "expected": [
+    200
+   ],
+   "ok": true,
+   "first_ms": 913.3,
+   "median_ms": 620.9,
+   "p95_ms": 866.5,
+   "max_ms": 866.5,
+   "bytes": 1480,
+   "location": "",
+   "cache_control": "max-age=0, no-cache, no-store, must-revalidate, private",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": "expires=Fri, 12 Nov 2027 18:31:20 GMT; Max-Age=31449600; Path=/; SameSite=Lax"
+  },
+  {
+   "path": "/",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 783.6,
+   "median_ms": 522.9,
+   "p95_ms": 670.9,
+   "max_ms": 670.9,
+   "bytes": 0,
+   "location": "/login/?next=/",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/desk/mobile-shop",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 463.0,
+   "median_ms": 475.3,
+   "p95_ms": 706.5,
+   "max_ms": 706.5,
+   "bytes": 0,
+   "location": "/login/?next=/desk/mobile-shop",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/desk/point-of-sale",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 450.2,
+   "median_ms": 451.6,
+   "p95_ms": 480.6,
+   "max_ms": 480.6,
+   "bytes": 0,
+   "location": "/login/?next=/desk/point-of-sale",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/records/Sales%20Invoice/",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 434.2,
+   "median_ms": 459.4,
+   "p95_ms": 507.9,
+   "max_ms": 507.9,
+   "bytes": 0,
+   "location": "/login/?next=/records/Sales%2520Invoice/",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/money/cash-and-bank/",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 427.5,
+   "median_ms": 461.0,
+   "p95_ms": 489.2,
+   "max_ms": 489.2,
+   "bytes": 0,
+   "location": "/login/?next=/money/cash-and-bank/",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/online/orders/",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 434.9,
+   "median_ms": 445.2,
+   "p95_ms": 473.3,
+   "max_ms": 473.3,
+   "bytes": 0,
+   "location": "/login/?next=/online/orders/",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/accounting/chart/",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 423.9,
+   "median_ms": 438.6,
+   "p95_ms": 484.7,
+   "max_ms": 484.7,
+   "bytes": 0,
+   "location": "/login/?next=/accounting/chart/",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/audit/",
+   "method": "GET",
+   "statuses": [
+    "302"
+   ],
+   "expected": [
+    302
+   ],
+   "ok": true,
+   "first_ms": 517.0,
+   "median_ms": 448.2,
+   "p95_ms": 472.6,
+   "max_ms": 472.6,
+   "bytes": 0,
+   "location": "/login/?next=/audit/",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/api/online/config/",
+   "method": "GET",
+   "statuses": [
+    "401"
+   ],
+   "expected": [
+    401
+   ],
+   "ok": true,
+   "first_ms": 438.2,
+   "median_ms": 451.0,
+   "p95_ms": 503.4,
+   "max_ms": 503.4,
+   "bytes": 40,
+   "location": "",
+   "cache_control": "public, max-age=0, must-revalidate",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/api/online/orders/TM-DOESNOTEXIST-ABCDEF/",
+   "method": "GET",
+   "statuses": [
+    "401"
+   ],
+   "expected": [
+    401
+   ],
+   "ok": true,
+   "first_ms": 469.0,
+   "median_ms": 459.5,
+   "p95_ms": 508.5,
+   "max_ms": 508.5,
+   "bytes": 40,
+   "location": "",
+   "cache_control": "public, max-age=0, must-revalidate",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/api/online/orders/",
+   "method": "GET",
+   "statuses": [
+    "405"
+   ],
+   "expected": [
+    401,
+    405
+   ],
+   "ok": true,
+   "first_ms": 521.2,
+   "median_ms": 441.1,
+   "p95_ms": 540.9,
+   "max_ms": 540.9,
+   "bytes": 0,
+   "location": "",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/static/pos.js",
+   "method": "GET",
+   "statuses": [
+    "200"
+   ],
+   "expected": [
+    200
+   ],
+   "ok": true,
+   "first_ms": 471.3,
+   "median_ms": 365.1,
+   "p95_ms": 420.3,
+   "max_ms": 420.3,
+   "bytes": 23562,
+   "location": "",
+   "cache_control": "max-age=60, public",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/product-images/products/x.jpg",
+   "method": "GET",
+   "statuses": [
+    "404"
+   ],
+   "expected": [
+    404
+   ],
+   "ok": true,
+   "first_ms": 428.6,
+   "median_ms": 452.0,
+   "p95_ms": 595.2,
+   "max_ms": 595.2,
+   "bytes": 179,
+   "location": "",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/admin/",
+   "method": "GET",
+   "statuses": [
+    "404"
+   ],
+   "expected": [
+    404
+   ],
+   "ok": true,
+   "first_ms": 441.2,
+   "median_ms": 457.6,
+   "p95_ms": 517.7,
+   "max_ms": 517.7,
+   "bytes": 179,
+   "location": "",
+   "cache_control": "private, no-store",
+   "security_headers": {
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/.env",
+   "method": "GET",
+   "statuses": [
+    "403",
+    "404"
+   ],
+   "expected": [
+    404
+   ],
+   "ok": false,
+   "first_ms": 461.7,
+   "median_ms": 401.1,
+   "p95_ms": 612.8,
+   "max_ms": 612.8,
+   "bytes": 24766,
+   "location": "",
+   "cache_control": "private, no-store, max-age=0",
+   "security_headers": {
+    "strict-transport-security": "",
+    "x-content-type-options": "",
+    "x-frame-options": "",
+    "referrer-policy": "",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  },
+  {
+   "path": "/.git/config",
+   "method": "GET",
+   "statuses": [
+    "403"
+   ],
+   "expected": [
+    404
+   ],
+   "ok": false,
+   "first_ms": 347.0,
+   "median_ms": 357.4,
+   "p95_ms": 426.4,
+   "max_ms": 426.4,
+   "bytes": 24774,
+   "location": "",
+   "cache_control": "private, no-store, max-age=0",
+   "security_headers": {
+    "strict-transport-security": "",
+    "x-content-type-options": "",
+    "x-frame-options": "",
+    "referrer-policy": "",
+    "content-security-policy": ""
+   },
+   "set_cookie_flags": ""
+  }
+ ]
+}

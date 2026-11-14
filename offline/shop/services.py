@@ -15,6 +15,7 @@ BUY={'Mobile Intake','Purchase Receipt','Purchase Invoice','Purchase Order'}
 SELL={'Sales Invoice','POS Invoice'}
 MANAGER={'Journal Entry','Mobile Exchange','Mobile Daily Closing','Stock Entry','Stock Adjustment'}
 ADJUST_REASONS=('Damaged','Lost / stolen','Count correction','Other')
+WRITE_OFF_FROM=('Available','Holding','Unavailable')       # a phone the shop holds: on sale, waiting to be checked after a return, or marked damaged. Never one that is reserved, in transit or sold
 
 def money(value):
     try:result=Decimal(str(value or 0))
@@ -296,9 +297,10 @@ def _adjust(doc):
         if product.serialized:
             if not line.device_id or qty!=-1 or line.device_id in seen:raise ValidationError('Write off one exact phone per line.')
             device=Device.objects.select_for_update().get(pk=line.device_id);seen.add(device.pk)
-            if device.product_id!=product.pk or device.status!='Available' or device.warehouse_id!=place.pk:raise ValidationError('This exact phone is not available in that stock location.')
+            if device.product_id!=product.pk or device.status not in WRITE_OFF_FROM or device.warehouse_id!=place.pk:raise ValidationError('This exact phone is not in that stock location (it may be sold, reserved for an order or a transfer, or already written off).')
             value=-money(device.purchase_cost);line.cost=device.purchase_cost
-            device.status='Written off';device.warehouse=None;device.details=dict(device.details,written_off=dict(document=doc.code,reason=doc.data['reason']));device.save()
+            device.details=dict(device.details,written_off=dict(document=doc.code,reason=doc.data['reason'],was=device.status))      # `was`: what cancelling the write-off puts it back to
+            device.status='Written off';device.warehouse=None;device.save()
         else:
             on_hand_qty,on_hand_value=on_hand(product,place)
             if qty<0:
@@ -495,6 +497,12 @@ def _payment(doc):
     if not conf:raise ValidationError('Configure this payment method first.')
     cash=Account.objects.get(pk=conf)
     if cash.account_type not in ('Cash','Bank') or not cash.enabled or cash.is_group:raise ValidationError('Select an enabled cash or bank account.')
+    if direction=='Pay':
+        # Money cannot leave an account that does not hold it (owner's decision D8, 14 Nov 2026): a purchase paid at the Buy screens, a supplier bill,
+        # an exchange difference and a refund are all checked, like expenses and Money Out. The shop row is locked by submit(), so two payments
+        # cannot both spend the same balance.
+        available=account_balance(doc.branch,cash)
+        if available<amount:raise ValidationError(f'{method} has only PKR {available:,.2f} recorded for this shop, so PKR {amount:,.2f} cannot be paid from it. Record owner capital or a deposit into {method} first, or choose “Pay later”.')
     shift=doc.pos_shift or active_shift(doc.branch,doc.posted_by)
     if shift:
         shift=Document.objects.select_for_update().get(pk=shift.pk)
@@ -834,7 +842,8 @@ def cancel(doc,user):
             if line.device_id:
                 device=Device.objects.select_for_update().get(pk=line.device_id)
                 if device.status!='Written off':raise ValidationError('The written-off phone has subsequent stock activity.')
-                device.status='Available';device.warehouse=line.warehouse or doc.warehouse;device.details={k:v for k,v in device.details.items() if k!='written_off'};device.save()
+                before=(device.details.get('written_off') or {}).get('was')       # a damaged or unchecked phone goes back to being exactly that, not straight back on sale
+                device.status=before if before in WRITE_OFF_FROM else 'Available';device.warehouse=line.warehouse or doc.warehouse;device.details={k:v for k,v in device.details.items() if k!='written_off'};device.save()
             else:
                 product=Product.objects.select_for_update().get(pk=line.product_id)
                 if line.quantity>0:

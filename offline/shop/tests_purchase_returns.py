@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import coa,vouchers,easy_retail,purchase_returns as pr,services as s
 
 
@@ -19,6 +19,7 @@ class ReturnBase(TestCase):
         data=dict(branch=self.branch,party_name='Return Supplier',product=self.product,quantity=len(numbers),price=cost,asking_price=90000,pta_status='PTA',device_type='Used',condition='Good',warehouse=self.warehouse,staff=self.buyer,handler=self.handler,
                   posting_date=self.today,payment_status=paid,method='Cash',imeis=[[imei(n)] for n in numbers])
         if amount:data['amount_paid']=amount
+        if paid!='unpaid':fund(self.branch,self.user,cost*len(numbers) if paid=='full' else amount)      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         return easy_retail.purchase(data,self.user)
     def payable(self,supplier):
         control=ShopSettings.objects.get(branch=self.branch).accounts['payable']

@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import services as s,reports
 
 class ScreenParity(TestCase):
@@ -59,7 +59,7 @@ class ScreenParity(TestCase):
         self.assertEqual(len(now),1)
     def test_payables_as_of_date_excludes_later_supplier_payment(self):
         phone=self.phone();receipt=Line.objects.get(device=phone,document__kind='Purchase Receipt').document
-        bill=s.supplier_bill(receipt,self.user);bill.posting_date=receipt.posting_date;bill.save();bill=s.submit(bill,self.user)
+        bill=s.supplier_bill(receipt,self.user);bill.posting_date=receipt.posting_date;bill.save();bill=s.submit(bill,self.user);fund(self.branch,self.user,'20000')      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         s.submit(s.new_doc('Payment Entry',self.branch,supplier=self.supplier,reference=bill,handler=self.handler,data=dict(amount='20000',direction='Pay',mode='Cash')),self.user)
         _,past=reports.run('Accounts Payable',self.user,{'to_date':str(timezone.localdate()-timedelta(days=1))})
         _,now=reports.run('Accounts Payable',self.user,{})

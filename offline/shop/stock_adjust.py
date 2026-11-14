@@ -24,9 +24,9 @@ class StockAdjustForm(forms.Form):
         from . import shopdefaults
         self.default_warehouse=shopdefaults.warehouse(branch);self.fields['warehouse']=forms.ModelChoiceField(queryset=places,initial=self.default_warehouse.pk,required=False,widget=forms.HiddenInput())
         self.fields['reason']=forms.ChoiceField(label='Reason',choices=[('','Choose a reason')]+[(r,r) for r in s.ADJUST_REASONS])
-        phones=Device.objects.filter(branch=branch,status='Available',warehouse__isnull=False).select_related('product').prefetch_related('imeis').order_by('product__name')
+        phones=Device.objects.filter(branch=branch,status__in=s.WRITE_OFF_FROM,warehouse__isnull=False).select_related('product').prefetch_related('imeis').order_by('product__name')      # also phones that came back damaged or are still waiting to be checked
         self.fields['phone']=forms.ModelChoiceField(label='Write off a phone',queryset=phones,required=False,empty_label='— not a phone —')
-        self.fields['phone'].label_from_instance=lambda d:f'{d.product.name} · '+(('IMEI '+' / '.join(i.number for i in d.imeis.all())) if d.imeis.all() else d.code)+f' · cost PKR {d.purchase_cost:,.0f}'
+        self.fields['phone'].label_from_instance=lambda d:f'{d.product.name} · '+(('IMEI '+' / '.join(i.number for i in d.imeis.all())) if d.imeis.all() else d.code)+f' · cost PKR {d.purchase_cost:,.0f}'+('' if d.status=='Available' else ' · damaged, not for sale' if d.status=='Unavailable' else ' · in Holding')
         self.fields['product']=forms.ModelChoiceField(label='Or adjust accessory / other stock',queryset=Product.objects.filter(enabled=True,stock_item=True,serialized=False).order_by('name'),required=False,empty_label='— not an accessory —')
         self.fields['change']=forms.DecimalField(label='Change in quantity (use − to remove)',required=False,max_digits=12,decimal_places=3,help_text='Example: -2 removes two damaged units; 3 adds three units found in a count.')
         self.fields['unit_cost']=forms.DecimalField(label='Unit cost (only when adding stock that has no history)',required=False,min_value=Decimal('0'),max_digits=15,decimal_places=2)

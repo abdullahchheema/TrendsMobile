@@ -78,7 +78,6 @@ export async function POST(req: Request) {
       external_ref: b.orderId,                      // YOUR order number; stable across retries
       customer: { name: b.name, phone: b.phone, alt_phone: b.altPhone, email: b.email, address: b.address, city: b.city, postal_code: b.postalCode },   // any extra customer keys are stored too
       payment_method: b.paymentMethod,              // see list below
-      payment_status: b.paid ? 'Paid' : undefined,  // only for prepaid methods you have verified
       payment_reference: b.paymentRef,
       delivery_fee: b.deliveryFee,
       expected_total: b.total,                      // what the customer saw (items + delivery)
@@ -98,7 +97,7 @@ export async function POST(req: Request) {
 ```
 
 **Fields**
-* `payment_method`: `Cash on Delivery`, `Bank Transfer`, `Easypaisa`, `JazzCash` or `Card`. `payment_status: "Paid"` only for a prepaid method the website has verified (the ERP then lets the team dispatch; for unpaid prepaid orders the team confirms payment manually). Cash on Delivery is collected on delivery.
+* `payment_method`: `Cash on Delivery`, `Bank Transfer`, `Easypaisa`, `JazzCash` or `Card`. A prepaid order always arrives unpaid: the online team confirms the payment in the ERP, which books the money. A `payment_status` sent by the website is ignored (since 14 Nov 2026). Cash on Delivery is collected on delivery.
 * Phones: send `condition`, `pta_status`, `device_type`, `price` exactly as in the `web_variants` row. Accessories: only `product_id`, `quantity` (price optional; if sent it must match).
 * Rules: customer `name` and `phone` (≥ 10 digits) required; 1–50 per line, up to 40 lines; the same variant twice → combine into one line with a quantity. `delivery_fee` 0–100000.
 
@@ -120,7 +119,7 @@ Prices and totals are always recomputed by the ERP from its own data; the websit
 
 ## 4. What the ERP does with an order (so the storefront matches reality)
 1. Order arrives → the exact phones are **reserved** (removed from the website and from the shops' POS); accessories are held back. Stock may come from several shops; the website never needs to know which.
-2. The online team dispatches it (courier, tracking), later marks it delivered; cash on delivery is collected then.
+2. The online team dispatches it (courier, tracking), later marks it delivered. The sale is recorded at delivery; cash on delivery is collected then.
 3. Refunds / returns / exchanges are handled **in the ERP** by the online team; the returned phone goes back into the chosen shop's stock automatically.
 4. Accounting is done in the ERP (the Online Store has its own books). The website does nothing for finance.
 
@@ -151,4 +150,4 @@ Prices and totals are always recomputed by the ERP from its own data; the websit
 * **Retry with the same `external_ref`.** If the answer to an order is lost (timeout, network), send it again with the same reference: the ERP returns the order it already created. Before telling a customer "sold out" on a retry, ask `GET /api/online/orders/{external_ref}/`: the phone may be gone because *their own* order took it.
 * **Order limits (429).** The ERP counts website orders in its own database, which every copy of the website shares: at most 3 orders per phone number that are still waiting for the confirmation call, 6 per phone number per hour and 12 per internet address per hour. Send the customer's address as `client_ip` (the website does) so the last limit can work. A refused order gets status `429` with a message written for the customer, and nothing is reserved. A retry of an order that already exists (same `external_ref`) is never refused. Orders typed in by the shop team are not limited.
 * **One customer, one account.** `0300 1234567` and `+92 300 1234567` are the same customer in the Online Store's books (matched on the last ten digits).
-* **A refused cash-on-delivery parcel** leaves no debt: when the parcel is received back, the goods are credited and the delivery charge that was never collected is taken off the customer's account and out of income. For a prepaid order the goods become a credit to refund; the delivery that was paid for and attempted is kept.
+* **A refused cash-on-delivery parcel** leaves no debt: nothing is sold before delivery, so when the parcel is received back it simply goes back on the shelf of the shop that sent it. For a prepaid order the delivery that was paid for and attempted is kept and the rest of the payment is refunded.

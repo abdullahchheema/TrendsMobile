@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import easy_retail,returns,services as s
 
 
@@ -15,6 +15,7 @@ class LookupBase(TestCase):
     def stock(self,number,cost=50000):
         data=dict(branch=self.branch,party_name='History Supplier',product=self.product,quantity=1,price=cost,asking_price=80000,pta_status='PTA',device_type='Used',condition='Good',warehouse=self.warehouse,staff=self.buyer,handler=self.handler,
                   posting_date=self.today,payment_status='full',method='Cash',imeis=[[imei(number)]])
+        fund(self.branch,self.user,cost)      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
         bill=easy_retail.purchase(data,self.user);return bill,bill.reference.lines.get().device
     def sell(self,device,price=70000):
         return easy_retail.sale(dict(branch=self.branch,party_name='History Buyer',phone=device,price=price,pta_status='PTA',staff=self.seller,handler=self.handler,posting_date=self.today,payment_status='full',method='Cash'),self.user)

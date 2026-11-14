@@ -49,7 +49,7 @@ def owed_to_shops(online=None):
 
 def summary(start=None,end=None):
     online=_online()
-    empty=dict(goods_sales=ZERO,goods_revenue=ZERO,product_profit=ZERO,delivery_kept=ZERO,sales=ZERO,returned=ZERO,net_sales=ZERO,revenue=ZERO,cogs=ZERO,gross_profit=ZERO,expenses=ZERO,net_profit=ZERO,received=ZERO,refunded=ZERO,net_received=ZERO,pending=ZERO,credit_owed=ZERO,
+    empty=dict(advances=ZERO,goods_sales=ZERO,goods_revenue=ZERO,product_profit=ZERO,delivery_kept=ZERO,sales=ZERO,returned=ZERO,net_sales=ZERO,revenue=ZERO,cogs=ZERO,gross_profit=ZERO,expenses=ZERO,net_profit=ZERO,received=ZERO,refunded=ZERO,net_received=ZERO,pending=ZERO,credit_owed=ZERO,
                methods=[],balances=[],owed=[],owed_total=ZERO,books_agree=True,shops=[],orders={},order_count=0,invoices=0,branch=None)
     if not online:return empty
     docs=Document.objects.filter(branch=online,status='Submitted')
@@ -81,11 +81,14 @@ def summary(start=None,end=None):
     received=sum((m['received'] for m in methods.values()),ZERO);refunded=sum((m['refunded'] for m in methods.values()),ZERO)
     live=Document.objects.filter(branch=online,status='Submitted',kind__in=list(s.SELL))
     pending=live.filter(is_return=False,outstanding__gt=0).aggregate(t=Sum('outstanding'))['t'] or ZERO
+    invoiced=Document.objects.filter(online_order__isnull=False,kind__in=list(s.SELL),is_return=False,status='Submitted').values('online_order_id')
+    pending+=OnlineOrder.objects.filter(status=OnlineOrder.DISPATCHED,payment_method='Cash on Delivery').exclude(pk__in=invoiced).aggregate(t=Sum('total'))['t'] or ZERO      # on its way: the sale and the cash are recorded at delivery
+    advances=sum((s.money(p.data.get('unallocated')) for p in Document.objects.filter(branch=online,kind='Payment Entry',status='Submitted',reference__isnull=True,data__direction='Receive')),ZERO)
     credit_owed=-(live.filter(is_return=True,outstanding__lt=0).aggregate(t=Sum('outstanding'))['t'] or ZERO)
     owed,own=owed_to_shops(online);owed_total=sum((r['owed'] for r in owed),ZERO)
     status={r['status']:r['n'] for r in OnlineOrder.objects.values('status').annotate(n=Count('id'))}
     return dict(branch=online,goods_sales=goods_sales,goods_revenue=goods_revenue,product_profit=goods_revenue-cogs,delivery_kept=delivery_kept,sales=sales,returned=returned,net_sales=sales-returned,revenue=revenue,cogs=cogs,gross_profit=revenue-cogs,expenses=expenses,net_profit=revenue-cogs-expenses,
-                received=received,refunded=refunded,net_received=received-refunded,pending=pending,credit_owed=credit_owed,methods=sorted(({'method':k,**v} for k,v in methods.items()),key=lambda r:r['method']),
+                received=received,refunded=refunded,net_received=received-refunded,pending=pending,credit_owed=credit_owed,advances=advances,methods=sorted(({'method':k,**v} for k,v in methods.items()),key=lambda r:r['method']),
                 balances=money.balances([online]),owed=owed,owed_total=owed_total,books_agree=owed_total==own,shops=[],orders=status,order_count=sum(status.values()),invoices=invoices.count())
 
 

@@ -45,6 +45,12 @@ def uses_database_cache(environ):
     return bool(environ.get('DATABASE_URL')) or environ.get('COVISON_CACHE')=='db'
 
 
+def secure_cookies(environ):
+    """Sign-in and form cookies are sent over HTTPS only. Vercel never serves plain HTTP, so there it does not depend on anyone remembering
+    to set COVISON_HTTPS (the live site was found without it: its cookies were not marked Secure)."""
+    return bool(environ.get('VERCEL')) or environ.get('COVISON_HTTPS')=='1'
+
+
 def static_from_finders(environ):
     """Vercel has no build step for the Python runtime, so WhiteNoise serves straight from the static/ folder."""
     return bool(environ.get('VERCEL')) or environ.get('COVISON_STATIC_FINDERS')=='1'

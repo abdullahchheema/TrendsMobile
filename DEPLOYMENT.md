@@ -128,6 +128,11 @@ Push to `main` and Vercel redeploys. When a release adds database changes, run
 `powershell -ExecutionPolicy Bypass -File supabase\hosted\update-database.ps1` from the project folder (it asks only for the
 Project URL, pooler host and database password) **before** or right after the deploy. The release notes say when it is needed.
 
+When a release changes the website views (the release notes say so; migration `0034_web_views_v5` does), the order is:
+1. run `supabase/hosted/web-views-drop.sql` in the Supabase SQL editor (the website cannot read its catalogue until step 3);
+2. run `update-database.ps1`;
+3. run `supabase/hosted/web-views.sql` in the SQL editor.
+
 ## Local development without Supabase
 
 Set only `DJANGO_SECRET_KEY` and `DATABASE_URL` (or the `DATABASE_*` variables) and leave `SUPABASE_URL` empty: the app then uses plain

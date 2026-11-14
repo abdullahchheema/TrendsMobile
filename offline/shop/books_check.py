@@ -44,7 +44,8 @@ def device_stock_vs_movements():
     out=[];sums=defaultdict(lambda:defaultdict(lambda:ZERO))
     for r in StockMovement.objects.filter(device__isnull=False).values('device_id','warehouse_id').annotate(q=Sum('quantity')):sums[r['device_id']][r['warehouse_id']]+=r['q']
     for d in Device.objects.select_related('product'):
-        by=sums.get(d.pk,{});total=sum(by.values(),ZERO);expected=1 if d.status in ('Available','Reserved','Holding') else 0
+        by=sums.get(d.pk,{});total=sum(by.values(),ZERO)
+        expected=1 if d.status in ('Available','Reserved','Holding') or (d.status=='Unavailable' and d.warehouse_id) else 0      # a phone that came back damaged is still in the shop, and in its stock value, until it is written off
         if total!=expected:out.append(f'{d.code} ({d.status}): stock movements add up to {total}, expected {expected}')
         elif expected==1:
             where=[w for w,q in by.items() if q==1]
@@ -116,7 +117,10 @@ def document_totals_vs_ledger():
         entries=LedgerEntry.objects.filter(document=d,account_id=account)
         net=(_sum(entries,'credit')-_sum(entries,'debit')) if d.kind=='Purchase Invoice' else (_sum(entries,'debit')-_sum(entries,'credit'))
         if d.status=='Submitted' and abs(net-d.total)>=CENT:out.append(f'{d.kind} {d.code}: total {d.total} but ledger {net}')
-        if d.status=='Submitted' and not d.is_return and not (ZERO-CENT<=d.outstanding<=d.total+CENT):out.append(f'{d.code}: outstanding {d.outstanding} outside 0..{d.total}')
+        # A supplier bill that was paid and whose stock then went back shows a negative balance: the supplier owes the shop, at most what the bill was
+        # for. That is a real, correct state (it stays until the supplier refunds or the credit is used), not an error. A sale is never below zero.
+        lowest=-d.total if d.kind=='Purchase Invoice' else ZERO
+        if d.status=='Submitted' and not d.is_return and not (lowest-CENT<=d.outstanding<=d.total+CENT):out.append(f'{d.code}: outstanding {d.outstanding} outside {lowest}..{d.total}')
         if d.status=='Submitted' and d.is_return and d.outstanding>CENT:out.append(f'{d.code}: return has positive outstanding {d.outstanding}')
     return out
 

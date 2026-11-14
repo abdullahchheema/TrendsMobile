@@ -20,7 +20,9 @@ class Money(OrderBase):
         """A real purchase: receive the phone, bill the supplier (credit), optionally pay the supplier in full at once."""
         _,receipt,device=base_tests.Workflows.intake(self,n,cost=cost)
         bill=s.submit(s.supplier_bill(receipt,self.user),self.user)
-        if pay_cash:
+        if pay_cash:          # money cannot leave an account that does not hold it (D8): the owner puts the cash in first
+            from . import money
+            money.record_voucher(self.user,self.branch,'capital',Account.objects.get(code='COA-3100'),str(cost),'Cash',timezone.localdate(),'Owner funds for the purchase')
             s.submit(s.new_doc('Payment Entry',self.branch,supplier=self.supplier,handler=self.handler,reference=bill,data=dict(amount=str(cost),direction='Pay',mode='Cash')),self.user);bill.refresh_from_db()
         Product.objects.filter(pk=self.product.pk).update(online_visible=True,slug='iphone-13')
         Device.objects.filter(pk=device.pk).update(online_price=Decimal('135000'));device.refresh_from_db()
@@ -53,20 +55,22 @@ class Money(OrderBase):
         self.assertEqual(bill.outstanding,120000)                                                         # selling the phone does not pay the supplier
         self.assertEqual((self.shop_sales(),self.shop_income(),self.inventory(self.branch)),(0,0,Decimal('0')));self.balanced()
 
-    def test_a_failed_delivery_reverses_the_sale_and_restores_the_original_cost_only_after_the_phone_is_back_and_approved(self):
+    def test_a_failed_delivery_sells_nothing_and_the_phone_is_for_sale_again_only_after_it_is_back_and_approved(self):
         d,bill=self.bought(pay_cash=False);o=self.sell();oo.dispatch(o,self.user,'TCS','TRK-9');oo.delivery_failed(o,self.user,'Customer refused');o.refresh_from_db()
         self.assertEqual((o.status,oo.display_stage(o),o.failed_reason),('Dispatched','Delivery Failed','Customer refused'))
-        d.refresh_from_db();self.assertEqual((d.status,self.web_qty()),('Sold',0))                      # still out with the courier: not stock, not for sale
+        d.refresh_from_db();self.assertEqual((d.status,self.web_qty()),('Reserved',0))                  # out with the courier: still the shop's stock in the books (nothing is sold before delivery, D4), not for sale
+        self.assertEqual((self.inventory(self.branch),self.clearing(self.branch),oo.invoices(o).count()),(Decimal('120000'),0,0))
         with self.assertRaises(ValidationError):oo.deliver(o,self.user)                                  # a failed delivery cannot be marked delivered
         wh=shopdefaults.warehouse(self.branch);cat=money_views._accounts('Expense',('COA-6950','COA-5200')).order_by('code').first()
         with self.assertRaises(ValidationError):oo.receive_returned(o,self.user,wh,'','approve')         # the condition must be written
         from . import money
         money_views._ensure_chart(self.user);money.record_voucher(self.user,oo.online_branch(),'capital',money_views._by_code('COA-3100'),'5000','Cash',timezone.localdate(),'Owner money for courier costs')
-        credit=oo.receive_returned(o,self.user,wh,'Sealed box','hold',courier_charge='350',expense_account=cat,method='Cash')
+        with self.assertRaisesMessage(ValidationError,'goes back to the shop that sent it'):oo.receive_returned(o,self.user,shopdefaults.warehouse(self.other),'Sealed box','hold')
+        self.assertIsNone(oo.receive_returned(o,self.user,wh,'Sealed box','hold',courier_charge='350',expense_account=cat,method='Cash'))      # cash on delivery: nothing is invoiced
         o.refresh_from_db();d.refresh_from_db()
         self.assertEqual((o.status,o.tracking,o.courier,o.lines.get().unit_price,o.total),('Returned','TRK-9','TCS',Decimal('135000.00'),Decimal('135000.00')))   # the order and its tracking stay as they were
         self.assertEqual((d.status,d.branch_id,d.purchase_cost,self.web_qty()),('Holding',self.branch.pk,Decimal('120000'),0))   # back in the shop at its original cost, but not for sale yet
-        self.assertEqual(self.inventory(self.branch),Decimal('120000'))                                  # inventory is restored at the ORIGINAL cost, never expensed twice
+        self.assertEqual(self.inventory(self.branch),Decimal('120000'))                                  # inventory never left: still the ORIGINAL cost, never expensed
         bill.refresh_from_db();self.assertEqual(bill.outstanding,120000)                                  # the supplier's invoice is untouched
         a=online_accounts.summary();self.assertEqual((a['revenue'],a['cogs'],a['gross_profit'],a['expenses'],a['net_profit']),(0,0,0,Decimal('350'),Decimal('-350')))   # no profit from a failed sale; the courier charge is its own cost
         self.assertEqual(self.clearing(self.branch),Decimal('0'));self.assertEqual((self.shop_sales(),self.shop_income()),(0,0));self.assertTrue(a['books_agree']);self.balanced()

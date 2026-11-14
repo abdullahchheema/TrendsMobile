@@ -32,7 +32,7 @@ class ExtraReports(CreditBase):
         self.phone(50000);self.sale(60000,paid='full')
         _,rows=self.rep('Branch Comparison');row=next(r for r in rows if r['Shop']==self.branch.name)
         self.assertEqual(row['Net sales'],Decimal('60000.00'));self.assertEqual(row['Gross profit'],Decimal('10000.00'));self.assertEqual(row['Phones sold'],1)
-        self.assertEqual(row['Gross margin %'],Decimal('16.7'));self.assertEqual(row['Cash and bank'],Decimal('-40000.00'))     # two phones bought for 50,000 cash, one sold for 60,000
+        self.assertEqual(row['Gross margin %'],Decimal('16.7'));self.assertEqual(row['Cash and bank'],Decimal('60000.00'))     # owner put in 100,000; two phones bought for 50,000 cash; one sold for 60,000 (a till can no longer go below zero, D8)
         columns,pl=reports.run('Profit and Loss Statement',self.user,{});self.assertIn(Decimal('60000.00'),[r.get('Amount') for r in pl])
     def test_branch_comparison_shows_what_customers_owe(self):
         self.sale(60000);_,rows=self.rep('Branch Comparison');self.assertEqual(rows[0]['Customers owe'],Decimal('60000.00'))

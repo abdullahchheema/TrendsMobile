@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from .models import *
-from .tests import fixtures,imei
+from .tests import fund,fixtures,imei
 from . import bulk,catalog_entry,easy_retail
 
 
@@ -38,7 +38,9 @@ class Screens(TestCase):
     def single(self,**extra):
         data=dict(branch=self.branch,party_name='Typed Seller',brand='iPhone',model='12 Pro Max',storage='512GB',colour='Grey',quantity=1,price=Decimal('90000'),asking_price=Decimal('110000'),pta_status='PTA',device_type='Used',condition='Good',
                   warehouse=self.warehouse,staff=self.buyer,handler=self.handler,posting_date=self.today,payment_status='full',method='Cash',imeis=[[imei(701)]],phone_notes='Battery changed, display replaced')
-        data['variant']=catalog_entry.check(data);data.update(extra);return easy_retail.purchase(data,self.user)
+        data['variant']=catalog_entry.check(data);data.update(extra)
+        if data['payment_status']=='full':fund(self.branch,self.user,data['price']*data['quantity'])      # money cannot leave an empty till (D8): the owner puts in what this purchase pays
+        return easy_retail.purchase(data,self.user)
     def test_single_purchase_creates_the_variant_and_keeps_the_notes(self):
         bill=self.single();device=bill.reference.lines.get().device
         self.assertEqual((device.product.model.brand,device.product.model.name,device.product.storage,device.product.colour,device.pta_status),('iPhone','12 Pro Max','512GB','Grey','PTA'))

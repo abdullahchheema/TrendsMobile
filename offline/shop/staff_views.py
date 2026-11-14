@@ -117,11 +117,12 @@ def _range(request):
 def staff_detail(request,pk):
     """One person's full record: every sale and purchase they made, what was sold net of returns, and the commission it earns."""
     _owner(request);person=get_object_or_404(Staff,pk=pk);start,end=_range(request)
-    sales=list(Document.objects.filter(seller=person,kind__in=list(s.SELL),status='Submitted',posting_date__range=[start,end]).select_related('customer','branch').order_by('-posting_date','-created'))
+    sales=list(Document.objects.filter(seller=person,kind__in=list(s.SELL),status='Submitted',posting_date__range=[start,end]).select_related('customer','branch','reference').order_by('-posting_date','-created'))
     buys=list(Document.objects.filter(buyer=person,kind='Purchase Receipt',status='Submitted',posting_date__range=[start,end]).select_related('supplier','branch').order_by('-posting_date','-created'))
     table=rate_table(person);sale_rows=[];net=ZERO;commission=ZERO
     for d in sales:            # net of discount and tax (the tax belongs to the government), at the rate that was in force on the day of the sale
-        amount=pricing.net_amount(d);rate=rate_on(table,d.posting_date);earned=(amount*rate/Decimal(100)).quantize(Decimal('0.01'))
+        earned_on=d.reference.posting_date if d.is_return and d.reference_id else d.posting_date      # a return gives back exactly what its sale earned, so it uses the rate of the day of that sale
+        amount=pricing.net_amount(d);rate=rate_on(table,earned_on);earned=(amount*rate/Decimal(100)).quantize(Decimal('0.01'))
         sale_rows.append(dict(d=d,net=amount,rate=rate,earned=earned));net+=amount;commission+=earned
     bought=sum((d.total for d in buys),ZERO)
     return render(request,'staff_detail.html',dict(title=person.name,person=person,sales=sale_rows,buys=buys,net=net,bought=bought,commission=commission,start=start,end=end,

@@ -26,10 +26,13 @@ Each shop has its own books, so online sales cannot simply be posted in whicheve
 
 ## 3. Orders
 * A website order arrives through the API and **reserves stock** at once (phones become *Reserved*; accessory units are held back), from whichever shops hold it: one shop if it can supply everything, otherwise split. The order page shows the shop and the exact phones (IMEI); a New order can be moved to another shop that holds everything.
-* **Dispatch** posts one invoice in the Online Store's books; the stock leaves the shops. **Delivered** collects cash on delivery into the Online Store.
+* **Payment confirmed** (prepaid methods): the money is booked into the Online Store's account at once, as the customer's advance (not a sale).
+* **Dispatch** records the courier and tracking number. Nothing is posted: the phones stay in their shop's stock, still *Reserved*, until the customer has them.
+* **Delivered** posts the sale: one invoice in the Online Store's books, the stock leaves the shops at cost and each shop is owed that cost. Cash on delivery is collected into the Online Store; a prepaid order uses its advance. (Online revenue is recognised at delivery: owner's decision, 14 Nov 2026.)
 * A phone sold in a shop disappears from the website at once; an online order takes it out of the shop's stock.
 * **Refund / exchange:** on the order, *Return / exchange* on the invoice. Choose which **shop takes the stock back** (default: the shop it came from). The phone goes to *Holding* there; the refund comes out of the Online Store's money. An exchange creates a replacement order paid by the credit and can be supplied by any shop.
-* **A parcel that was not delivered** (*Delivery failed*, then *Returned phone received*): the sale is reversed and the phone is back in the chosen shop at its original cost. For cash on delivery the customer then owes nothing: the delivery charge that was never collected is cancelled as well (a small journal in the Online Store's books, shown in the order history). For a prepaid order the price of the goods becomes a credit to refund; the delivery that was paid for and attempted is kept.
+* **A parcel that was not delivered** (*Delivery failed*, then *Receive returned parcel*): nothing was sold, so nothing is reversed. The phones go back on the shelf of the shop that sent them, at their original cost (*Holding*, *Available* or *damaged*, by the inspection result); move them later with a stock transfer if needed. For cash on delivery the customer owes nothing. For a prepaid order the delivery that was paid for and attempted is kept (a small invoice for the delivery charge, paid from the advance) and the rest of the advance is owed back: refund it from Online Finance, Money Out, *Refund a customer*.
+* **A paid order that is cancelled** keeps its money as the customer's advance; the order history says it is owed back. Refund it the same way.
 * **Accessory units held for online orders stay on the shelf:** a shop cannot sell them, write them off, send them back to the supplier, cancel their purchase or move them while a new online order holds them. The message says how many are held; cancel the order or supply it from another shop first.
 * **One customer, one account:** `0300 1234567` and `+92 300 1234567` are the same online customer (matched on the last ten digits).
 * **Check at any time:** `python manage.py online_check` (orders against stock, including a phone that is Reserved with nothing holding it) and `python manage.py verify_books` (every books check, including that an empty accessory shelf carries no value).
@@ -43,11 +46,10 @@ Set `ONLINE_API_KEY` in Vercel to a long random secret (without it the API is of
 { "external_ref": "WEB-1001",
   "customer": {"name": "Sara", "phone": "03211234567", "email": "", "address": "Street 1", "city": "Karachi"},
   "payment_method": "Cash on Delivery",
-  "payment_status": "Paid",
   "payment_reference": "TRX-77", "delivery_fee": "300", "notes": "", "expected_total": "100300",
   "items": [ {"product_id": "<web_variants.product_id>", "condition": "New", "pta_status": "PTA", "device_type": "New", "price": "100000", "quantity": 1} ] }
 ```
-`payment_method`: Cash on Delivery, Bank Transfer, Easypaisa, JazzCash or Card (`payment_status: Paid` only for a prepaid method the website verified). Prices always come from the ERP; the price sent must match the variant's current price (the discounted price) or the order is refused with **409**. Re-sending the same `external_ref` returns the same order (safe to retry). `GET /api/online/orders/<external_ref>/` returns status, courier and tracking.
+`payment_method`: Cash on Delivery, Bank Transfer, Easypaisa, JazzCash or Card. A prepaid order always arrives unpaid: the online team confirms the payment on the order page, which books the money (a `payment_status` sent by the website is ignored since 14 Nov 2026). Prices always come from the ERP; the price sent must match the variant's current price (the discounted price) or the order is refused with **409**. Re-sending the same `external_ref` returns the same order (safe to retry). `GET /api/online/orders/<external_ref>/` returns status, courier and tracking.
 
 ## 5. Read-only database views for the website
 | View | Rows |
